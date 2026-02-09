@@ -1,9 +1,9 @@
 <?php
 class Conexion {
     private $host = "localhost"; // En Hostinger suele ser 'localhost'
-    private $db = "db2lgnr4esjpur"; 
-    private $user = "ugvvfjlvfpnnr"; 
-    private $password = "x6uxzpgugrpo";
+    private $db = "u373487989_maldeojo"; 
+    private $user = "u373487989_mikel"; 
+    private $password = "R4;vk+3pT>Nq";
     private $charset = "utf8mb4";
     public $pdo;
 
