@@ -22,22 +22,26 @@ $acciones_navbar = $acciones_navbar ?? [];
 
   <!-- Bootstrap Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+  
+  <!-- Font Awesome 6 -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 
   <!-- Estilos propios -->
   <link href="../assets/css/style.css" rel="stylesheet">
 </head>
-<body class="bg-light">
+<body>
 
   <!-- NAVBAR -->
-  <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+  <nav class="navbar navbar-expand-lg">
     <div class="container-fluid">
       <!-- Logo y Email del Usuario -->
-      <a class="navbar-brand d-flex align-items-center" href="#">
-        <i class="bi bi-person-circle me-2"></i>
-        <?= htmlspecialchars($_SESSION['usuario_email'] ?? '') ?>
+      <a class="navbar-brand d-flex align-items-center text-white" href="#">
+        <i class="fas fa-circle-user fa-lg me-2 text-white-50"></i>
+        <span><?= htmlspecialchars($_SESSION['usuario_email'] ?? '') ?></span>
       </a>
+      
       <!-- Toggle móvil -->
-      <button class="navbar-toggler" type="button"
+      <button class="navbar-toggler border-white" type="button"
               data-bs-toggle="collapse"
               data-bs-target="#navbarNav"
               aria-controls="navbarNav"
@@ -45,14 +49,15 @@ $acciones_navbar = $acciones_navbar ?? [];
               aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
       </button>
+
       <!-- Enlaces -->
       <div class="collapse navbar-collapse" id="navbarNav">
-        <ul class="navbar-nav ms-auto">
+        <ul class="navbar-nav ms-auto gap-2">
           <?php foreach ($acciones_navbar as $accion): ?>
             <li class="nav-item">
-              <a class="btn btn-outline-light me-2"
+              <a class="btn btn-nav"
                  href="<?= htmlspecialchars($accion['url']) ?>">
-                <i class="bi <?= htmlspecialchars($accion['icono']) ?>"></i>
+                <i class="bi <?= htmlspecialchars($accion['icono']) ?> me-1"></i>
                 <?= htmlspecialchars($accion['nombre']) ?>
               </a>
             </li>
@@ -60,21 +65,21 @@ $acciones_navbar = $acciones_navbar ?? [];
           
           <?php if ($is_admin): ?>
             <li class="nav-item">
-              <a class="btn btn-outline-light me-2" href="gestionar_mensajes.php">
-                <i class="bi bi-chat-dots"></i> Mensajes WhatsApp
+              <a class="btn btn-nav" href="gestionar_mensajes.php">
+                <i class="bi bi-whatsapp me-1"></i> Mensajes
               </a>
             </li>
           <?php endif; ?>
 
           <li class="nav-item">
-            <a class="btn btn-outline-light me-2" href="../home.php">
-              <i class="bi bi-house-door"></i> Volver al Inicio
+            <a class="btn btn-nav" href="../home.php">
+              <i class="bi bi-grid-fill me-1"></i> Portal
             </a>
           </li>
 
           <li class="nav-item">
-            <a class="btn btn-outline-light" href="../logout.php">
-              <i class="bi bi-box-arrow-right"></i> Cerrar Sesión
+            <a class="btn btn-nav bg-danger border-0" href="../logout.php">
+              <i class="bi bi-box-arrow-right me-1"></i> Salir
             </a>
           </li>
         </ul>

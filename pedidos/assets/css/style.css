@@ -1,204 +1,169 @@
-/* General */
+/* Optikamaldeojo Modern Design System */
+
+:root {
+    --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --card-bg: rgba(255, 255, 255, 0.95);
+    --glass-bg: rgba(255, 255, 255, 0.85);
+    --primary-color: #5a67d8;
+    --success-color: #48bb78;
+    --warning-color: #ecc94b;
+    --danger-color: #f56565;
+    --text-main: #2d3748;
+    --text-muted: #718096;
+    --border-radius: 15px;
+    --shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+
 body {
-    background-color: #f8f9fa; /* Default body background */
-    color: #212529; /* Default text color */
-}
-
-/* Login Page Specific Styles */
-body.login-page-body {
-    background: linear-gradient(to bottom right, #343a40, #495057); /* Dark gray gradient fallback */
+    background: var(--primary-gradient);
     background-attachment: fixed;
-    background-size: cover;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     min-height: 100vh;
-    margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    color: var(--text-main);
 }
 
-.login-container {
-    background-color: rgba(0, 0, 0, 0.65); /* Semi-transparent dark background */
-    padding: 2rem 2.5rem;
-    border-radius: 0.5rem; /* Rounded corners */
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-    color: #f8f9fa; /* Light text color for contrast */
-    max-width: 420px;
-    width: 100%;
-}
-
-.login-container .form-label {
-    color: #f8f9fa; /* Ensure labels are light */
-}
-
-.login-container .form-control {
-    background-color: rgba(255, 255, 255, 0.1); /* Slightly transparent input fields */
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: #fff;
-}
-
-.login-container .form-control:focus {
-    background-color: rgba(255, 255, 255, 0.2);
-    border-color: rgba(255, 255, 255, 0.5);
-    color: #fff;
-    box-shadow: 0 0 0 0.25rem rgba(255, 255, 255, 0.25); /* Lighter focus ring */
-}
-
-.login-container .btn-primary {
-    background-color: #007bff;
-    border-color: #007bff;
-    /* Minor adjustments if needed, but Bootstrap primary usually works well */
-}
-
-.login-container .alert-danger {
-    background-color: rgba(220, 53, 69, 0.8); /* More thematic error message */
-    border-color: rgba(220, 53, 69, 0.9);
-    color: #fff;
-}
-
-
+/* Navbar Modernization */
 .navbar {
-    background-color: #343a40 !important; /* New: Dark Gray/Black for Navbar */
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Subtle box shadow */
+    background: rgba(255, 255, 255, 0.1) !important;
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 15px 0;
 }
 
-/* Styling for user email in navbar to prevent overflow */
-.navbar .navbar-brand {
-    max-width: 200px; /* Adjust as needed */
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.navbar-brand {
+    font-weight: 700;
+    font-size: 1.2rem;
 }
 
-/* Using more specific selectors to try and avoid !important */
-tr.fondo-hoy, .fondo-hoy {
-    background-color: #E0F2F7; /* New: Light Cyan/Blue */
+.btn-nav {
+    border-radius: 10px;
+    padding: 8px 20px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white !important;
 }
 
-tr.fondo-pasado, .fondo-pasado {
-    background-color: #F5C6CB; /* New: Light Pink/Muted Red */
+.btn-nav:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateY(-2px);
 }
 
-tr.fondo-sin-fecha, .fondo-sin-fecha {
-    background-color: #FFF3CD; /* New: Light Amber/Yellow */
+/* Modern Cards */
+.modern-card {
+    background: var(--card-bg);
+    border-radius: var(--border-radius);
+    border: none;
+    box-shadow: var(--shadow);
+    padding: 25px;
+    margin-bottom: 30px;
+    animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Table Stylization */
+.table-container {
+    overflow-x: auto;
+    border-radius: 12px;
+}
+
+.table {
+    margin-bottom: 0;
 }
 
 .table thead th {
-    text-align: center !important; /* Keep for now, review later if possible */
+    background: #f7fafc;
+    border-bottom: 2px solid #edf2f7;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 15px;
 }
 
-.table th a {
-    color: #007bff; /* Standard Bootstrap blue for links */
-    text-decoration: none;
+.table tbody td {
+    padding: 15px;
+    vertical-align: middle;
+    border-top: 1px solid #edf2f7;
 }
 
-.table th a:hover {
-    text-decoration: underline;
+.table-hover tbody tr:hover {
+    background-color: #f8fafc;
 }
 
-.table .btn {
-    margin: 0 2px;
+/* Status Colors (Overrides) */
+tr.fondo-hoy, .fondo-hoy {
+    background-color: rgba(66, 153, 225, 0.1) !important;
+    border-left: 5px solid #4299e1;
 }
 
-/* Attempting to remove !important by ensuring specificity or rule order */
-.btn-recibido {
-    background-color: #28a745; /* New: Green for success state */
-    border-color: #28a745;
-    color: #fff; /* Adding white text for better contrast on green */
+tr.fondo-pasado, .fondo-pasado {
+    background-color: rgba(245, 101, 101, 0.1) !important;
+    border-left: 5px solid #f56565;
 }
 
-.btn-recibido:hover {
-    background-color: #218838; /* Darker green on hover */
-    border-color: #1e7e34;
+tr.fondo-sin-fecha, .fondo-sin-fecha {
+    background-color: rgba(236, 201, 75, 0.1) !important;
+    border-left: 5px solid #ecc94b;
 }
 
-
-.text-center {
-    text-align: center !important; /* Keep for now */
+/* Buttons */
+.btn-action {
+    border-radius: 8px;
+    padding: 6px 15px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
 }
 
-.text-muted {
-    color: #6c757d !important; /* Keep for now */
+.btn-action:hover {
+    transform: scale(1.05);
 }
 
+/* Form Styles */
+.modern-form .form-label {
+    font-weight: 600;
+    color: var(--text-main);
+    margin-bottom: 8px;
+}
 
-/*********** Página de redirección (whatsapp_redirect.php) ***********/
-
-/* Contenedor principal */
-.redirect-container {
-    text-align: center;
-    background-color: #ffffff;
-    padding: 2rem 3rem;
+.modern-form .form-control {
     border-radius: 10px;
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
-    max-width: 400px;
-    width: 100%;
-    margin: 50px auto;
+    border: 2px solid #e2e8f0;
+    padding: 12px;
+    transition: all 0.3s ease;
 }
 
-/* Título */
-.redirect-container h1 {
-    font-size: 24px;
-    margin-bottom: 1rem;
-    color: #25D366; /* Verde WhatsApp - Keep as is, specific to this page */
+.modern-form .form-control:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(90, 103, 216, 0.1);
 }
 
-/* Texto de información */
-.redirect-container p {
-    font-size: 16px;
-    margin-bottom: 1rem;
-    color: #555;
+/* Sections */
+h1, h2 {
+    color: white;
+    font-weight: 700;
+    margin-bottom: 25px;
 }
 
-/* Spinner de carga */
-.redirect-spinner {
-    border: 4px solid #f3f3f3;
-    border-top: 4px solid #25D366; /* Verde WhatsApp - Keep as is */
-    border-radius: 50%;
-    width: 50px;
-    height: 50px;
-    animation: spin 1s linear infinite;
-    margin: 20px auto;
+.section-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-/* Botón personalizado */
-.redirect-btn {
-    display: inline-block;
-    padding: 10px 20px;
-    font-size: 14px;
-    font-weight: bold;
-    color: #fff;
-    background-color: #25D366; /* Verde WhatsApp - Keep as is */
-    border: none;
-    border-radius: 5px;
-    text-decoration: none;
-    transition: background-color 0.3s ease-in-out;
-    margin-top: 10px;
-}
-
-.redirect-btn:hover {
-    background-color: #1da851;
-}
-
-.redirect-btn:active {
-    transform: scale(0.98);
+.section-title i {
+    font-size: 1.5rem;
 }
 
 .slide {
-  max-height: 1000px; /* Default height for expanded state */
-  overflow: hidden;
-  transition: max-height 0.35s ease-in-out; /* Smoother transition for max-height */
+  transition: all 0.3s ease-in-out;
 }
 
 .slide.is-collapsed {
-  max-height: 0;
-}
-
-.hidden {
-  display: none !important; /* This !important is likely necessary for JS toggling */
+  display: none;
 }

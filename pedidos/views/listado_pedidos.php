@@ -121,74 +121,112 @@ $stmt->execute();
 $pedidos_recibidos = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
-<h1 class="text-center mb-4">Listado de Pedidos</h1>
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-5">
+        <h1 class="mb-0 section-title">
+            <i class="fas fa-boxes-stacked"></i> Listado de Pedidos
+        </h1>
+        <div class="search-box">
+            <form action="" method="GET" class="d-flex">
+                <input type="text" name="filtro" class="form-control me-2" placeholder="Buscar por referencia..." value="<?= htmlspecialchars($filtro_referencia) ?>">
+                <button type="submit" class="btn btn-nav bg-white text-primary border-0">
+                    <i class="fas fa-search"></i>
+                </button>
+            </form>
+        </div>
+    </div>
 
-<!-- 1) Pedidos Pendientes de Pedir -->
-<h2 class="mt-4">Pedidos Pendientes de Pedir</h2>
-<button id="btn-por-pedir" class="btn btn-primary mb-2"
-        onclick="toggleTable('tabla-por-pedir','btn-por-pedir', 'Pedidos Pendientes de Pedir')">
-  Ocultar Pedidos Pendientes de Pedir
-</button>
-<div id="tabla-por-pedir" class="slide">
-  <?php mostrarTabla(
-    $pedidos_por_pedir,
-    2,
-    "No hay pedidos pendientes de pedir.",
-    true,
-    $orden_columna,
-    $orden_direccion
-  ); ?>
-</div>
+    <!-- 1) Pedidos Pendientes de Pedir -->
+    <div class="modern-card">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="text-dark mb-0 section-title">
+                <i class="fas fa-clock text-warning"></i> Pendientes de Pedir
+            </h2>
+            <button id="btn-por-pedir" class="btn btn-action btn-outline-primary"
+                    onclick="toggleTable('tabla-por-pedir','btn-por-pedir', 'Pendientes de Pedir')">
+                <i class="fas fa-eye-slash me-1"></i> Ocultar
+            </button>
+        </div>
+        <div id="tabla-por-pedir" class="slide">
+            <?php mostrarTabla(
+                $pedidos_por_pedir,
+                2,
+                "No hay pedidos pendientes de pedir.",
+                true,
+                $orden_columna,
+                $orden_direccion
+            ); ?>
+        </div>
+    </div>
 
-<!-- 2) Pedidos Atrasados -->
-<h2 class="mt-4">Pedidos Atrasados</h2>
-<button id="btn-atrasados" class="btn btn-primary mb-2"
-        onclick="toggleTable('tabla-atrasados','btn-atrasados', 'Pedidos Atrasados')">
-  Ocultar Pedidos Atrasados
-</button>
-<div id="tabla-atrasados" class="slide">
-  <?php mostrarTabla(
-    $pedidos_atrasados,
-    1,
-    "No hay pedidos atrasados.",
-    true,
-    $orden_columna,
-    $orden_direccion
-  ); ?>
-</div>
+    <!-- 2) Pedidos Atrasados -->
+    <div class="modern-card">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="text-dark mb-0 section-title">
+                <i class="fas fa-exclamation-triangle text-danger"></i> Pedidos Atrasados
+            </h2>
+            <button id="btn-atrasados" class="btn btn-action btn-outline-primary"
+                    onclick="toggleTable('tabla-atrasados','btn-atrasados', 'Pedidos Atrasados')">
+                <i class="fas fa-eye-slash me-1"></i> Ocultar
+            </button>
+        </div>
+        <div id="tabla-atrasados" class="slide">
+            <?php mostrarTabla(
+                $pedidos_atrasados,
+                1,
+                "No hay pedidos atrasados.",
+                true,
+                $orden_columna,
+                $orden_direccion
+            ); ?>
+        </div>
+    </div>
 
-<!-- 3) Pedidos Pendientes de Recibir -->
-<h2 class="mt-4">Pedidos Pendientes de Recibir</h2>
-<button id="btn-pendientes" class="btn btn-primary mb-2"
-        onclick="toggleTable('tabla-pendientes','btn-pendientes', 'Pedidos Pendientes de Recibir')">
-  Ocultar Pedidos Pendientes de Recibir
-</button>
-<div id="tabla-pendientes" class="slide">
-  <?php mostrarTabla(
-    $pedidos_pendientes,
-    2,
-    "No hay pedidos pendientes de recibir.",
-    true,
-    $orden_columna,
-    $orden_direccion
-  ); ?>
-</div>
+    <!-- 3) Pedidos Pendientes de Recibir -->
+    <div class="modern-card">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="text-dark mb-0 section-title">
+                <i class="fas fa-truck-loading text-primary"></i> Pendientes de Recibir
+            </h2>
+            <button id="btn-pendientes" class="btn btn-action btn-outline-primary"
+                    onclick="toggleTable('tabla-pendientes','btn-pendientes', 'Pendientes de Recibir')">
+                <i class="fas fa-eye-slash me-1"></i> Ocultar
+            </button>
+        </div>
+        <div id="tabla-pendientes" class="slide">
+            <?php mostrarTabla(
+                $pedidos_pendientes,
+                2,
+                "No hay pedidos pendientes de recibir.",
+                true,
+                $orden_columna,
+                $orden_direccion
+            ); ?>
+        </div>
+    </div>
 
-<!-- 4) Pedidos Finalizados -->
-<h2 class="mt-4 text-success">Pedidos Finalizados</h2>
-<button id="btn-finalizados" class="btn btn-primary mb-2"
-        onclick="toggleTable('tabla-finalizados','btn-finalizados', 'Pedidos Finalizados')">
-  Ocultar Pedidos Finalizados
-</button>
-<div id="tabla-finalizados" class="slide">
-  <?php mostrarTabla(
-    $pedidos_recibidos,
-    3,
-    "No hay pedidos finalizados.",
-    true,
-    $orden_columna,
-    $orden_direccion
-  ); ?>
+    <!-- 4) Pedidos Finalizados -->
+    <div class="modern-card">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="text-success mb-0 section-title">
+                <i class="fas fa-check-circle"></i> Pedidos Finalizados
+            </h2>
+            <button id="btn-finalizados" class="btn btn-action btn-outline-primary"
+                    onclick="toggleTable('tabla-finalizados','btn-finalizados', 'Pedidos Finalizados')">
+                <i class="fas fa-eye-slash me-1"></i> Ocultar
+            </button>
+        </div>
+        <div id="tabla-finalizados" class="slide">
+            <?php mostrarTabla(
+                $pedidos_recibidos,
+                3,
+                "No hay pedidos finalizados.",
+                true,
+                $orden_columna,
+                $orden_direccion
+            ); ?>
+        </div>
+    </div>
 </div>
 
 <?php

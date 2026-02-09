@@ -27,7 +27,8 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
         return;
     }
 
-    echo '<table class="table table-striped table-bordered table-hover datatable">';
+    echo '<div class="table-responsive">';
+    echo '<table class="table table-hover">';
     echo '<thead><tr>';
     echo '<th class="text-center">ID</th>';
     echo '<th class="text-center">Cliente</th>';
@@ -77,50 +78,32 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
             if ($tipo < 3) {
                 echo '<form action="../controllers/marcar_recibido.php" method="POST" class="d-inline">';
                 echo '<input type="hidden" name="pedido_id" value="'.htmlspecialchars($p['id']).'">';
-                echo '<button type="submit" class="btn btn-warning btn-sm">MARCAR COMO RECIBIDO</button>';
+                echo '<button type="submit" class="btn btn-success btn-sm btn-action"><i class="fas fa-check me-1"></i> RECIBIDO</button>';
                 echo '</form>';
             } else {
                 echo '<form action="../controllers/cambiar_estado_pedido.php" method="POST" class="d-inline">';
                 echo '<input type="hidden" name="pedido_id" value="'.htmlspecialchars($p['id']).'">';
                 echo '<input type="hidden" name="recibido" value="0">';
-                echo '<button type="submit" class="btn btn-danger btn-sm">MARCAR COMO NO RECIBIDO</button>';
+                echo '<button type="submit" class="btn btn-danger btn-sm btn-action"><i class="fas fa-undo me-1"></i> DESHACER</button>';
                 echo '</form>';
             }
         }
         echo '</td>';
 
-        // WhatsApp (ES/EU)
-        $tipoMensaje = match($tipo) {
-            1 => 'atrasado',
-            2 => 'por_pedir',
-            3 => 'recibido',
-            default => 'pendiente'
-        };
-        $cliente = $p['referencia_cliente'];
-        $producto = $p['lc_gafa_recambio'];
-
-        // Mensaje ES
-        $baseES = obtenerMensajeWhatsApp($tipoMensaje, 'es');
-        $msgES = str_replace(['{cliente}', '{producto}'], [$cliente, $producto], $baseES);
-
-        // Mensaje EU
-        $baseEU = obtenerMensajeWhatsApp($tipoMensaje, 'eu');
-        $msgEU = str_replace(['{cliente}', '{producto}'], [$cliente, $producto], $baseEU);
-
-        // Botones
+        // WhatsApp
         $tel = urlencode($p['telefono']);
-        echo '<td class="text-center">';
-        echo '<a href="../includes/whatsapp_redirect.php?telefono='.$tel.'&mensaje='.urlencode($msgES).'" class="btn btn-success btn-sm mb-1">WhatsApp (ES)</a><br>';
-        echo '<a href="../includes/whatsapp_redirect.php?telefono='.$tel.'&mensaje='.urlencode($msgEU).'" class="btn btn-secondary btn-sm">WhatsApp (EU)</a>';
+        echo '<td class="text-center d-flex flex-column gap-1 align-items-center">';
+        echo '<a href="../includes/whatsapp_redirect.php?telefono='.$tel.'&mensaje='.urlencode($msgES).'" class="btn btn-outline-success btn-sm w-100" title="Notificar en Castellano"><i class="fab fa-whatsapp"></i> ES</a>';
+        echo '<a href="../includes/whatsapp_redirect.php?telefono='.$tel.'&mensaje='.urlencode($msgEU).'" class="btn btn-outline-secondary btn-sm w-100" title="Notificar en Euskera"><i class="fab fa-whatsapp"></i> EU</a>';
         echo '</td>';
 
-        // Editar
+        // Acciones
         echo '<td class="text-center">';
-        echo '<a href="../controllers/editar_pedido.php?id='.htmlspecialchars($p['id']).'" class="btn btn-info btn-sm">✏️</a>';
+        echo '<a href="../controllers/editar_pedido.php?id='.htmlspecialchars($p['id']).'" class="btn btn-light btn-sm" title="Editar Pedido"><i class="fas fa-edit text-primary"></i></a>';
         echo '</td>';
 
         echo '</tr>';
     }
 
-    echo '</tbody></table>';
+    echo '</tbody></table></div>';
 }
