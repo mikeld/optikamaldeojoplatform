@@ -27,22 +27,22 @@ $acciones_navbar = $acciones_navbar ?? [];
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 
   <!-- Estilos propios -->
-  <link href="../assets/css/style.css?v=<?= time() ?>" rel="stylesheet">
+  <link href="../assets/css/style.css?v=<?= filemtime('../assets/css/style.css') ?>" rel="stylesheet">
 </head>
 <body>
 
   <!-- NAVBAR -->
   <nav class="navbar navbar-expand-xl navbar-dark main-header">
     <div class="container-fluid px-lg-5">
-      <!-- Logo y Email del Usuario -->
+      <!-- Logo y Info del Usuario -->
       <a class="navbar-brand d-flex align-items-center" href="#">
         <div class="user-avatar-shell me-3">
             <i class="fas fa-user-circle"></i>
         </div>
         <div class="d-none d-md-block">
-            <div class="navbar-user-welcome">Bienvenido/a</div>
+            <div class="navbar-user-welcome">SISTEMA</div>
             <div class="navbar-user-info">
-                <?= htmlspecialchars($_SESSION['usuario_nombre'] ?? 'Usuario') ?>
+                <?= htmlspecialchars($_SESSION['usuario_nombre'] ?? 'Invitado') ?>
             </div>
         </div>
       </a>
