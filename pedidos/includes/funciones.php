@@ -30,20 +30,20 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
     echo '<div class="table-responsive">';
     echo '<table class="table table-hover">';
     echo '<thead><tr>';
-    echo '<th class="text-center">ID</th>';
-    echo '<th class="text-center">Cliente</th>';
-    echo '<th class="text-center">LC / Gafa / Recambio</th>';
-    echo '<th class="text-center">RX</th>';
-    echo '<th class="text-center">Fecha Pedido</th>';
-    echo '<th class="text-center">Vía</th>';
-    echo '<th class="text-center">Observaciones</th>';
-    echo '<th class="text-center">Fecha Llegada</th>';
+    echo '<th style="width: 50px;">ID</th>';
+    echo '<th>Cliente</th>';
+    echo '<th>Producto</th>';
+    echo '<th style="width: 80px;">RX</th>';
+    echo '<th style="width: 100px;">Pedido</th>';
+    echo '<th style="width: 70px;">Vía</th>';
+    echo '<th>Obs.</th>';
+    echo '<th style="width: 100px;">Llegada</th>';
     if ($tipo === 1) {
-        echo '<th class="text-center">Días de Atraso</th>';
+        echo '<th>Atraso</th>';
     }
-    echo '<th class="text-center">Estado del Pedido</th>';
-    echo '<th class="text-center">WhatsApp</th>';
-    echo '<th class="text-center">Editar</th>';
+    echo '<th class="text-center" style="width: 120px;">Estado</th>';
+    echo '<th class="text-center" style="width: 120px;">WhatsApp</th>';
+    echo '<th class="text-center" style="width: 50px;"></th>';
     echo '</tr></thead><tbody>';
 
     $hoy = new DateTime();

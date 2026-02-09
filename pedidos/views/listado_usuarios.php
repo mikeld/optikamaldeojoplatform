@@ -28,69 +28,67 @@ try {
 }
 ?>
 
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Listado de Clientes</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="bg-light">
-    <div class="container mt-5">
-        <h1 class="text-center mb-4">Listado de Clientes</h1>
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-5">
+        <h1 class="mb-0 section-title">
+            <i class="fas fa-users"></i> Listado de Clientes
+        </h1>
+        <a href="formulario_usuarios.php" class="btn btn-nav bg-white text-primary border-0">
+            <i class="fas fa-user-plus me-1"></i> Nuevo Cliente
+        </a>
+    </div>
 
-        <!-- Tabla de clientes -->
-        <div class="card shadow-sm">
-            <div class="card-body">
-                <table class="table table-striped">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Referencia</th>
-                            <th>Teléfono</th>
-                            <th>Email</th>
-                            <th>Dirección</th>
-                            <th>Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (count($clientes) > 0): ?>
-                            <?php foreach ($clientes as $cliente): ?>
-                                <tr>
-                                    <td><?= htmlspecialchars($cliente['id']) ?></td>
-                                    <td><?= htmlspecialchars($cliente['referencia']) ?></td>
-                                    <td><?= htmlspecialchars($cliente['telefono']) ?></td>
-                                    <td><?= htmlspecialchars($cliente['email']) ?></td>
-                                    <td><?= htmlspecialchars($cliente['direccion']) ?></td>
-                                    <td>
+    <div class="modern-card">
+        <div class="table-container">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Referencia</th>
+                        <th>Teléfono</th>
+                        <th>Email</th>
+                        <th>Dirección</th>
+                        <th class="text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (count($clientes) > 0): ?>
+                        <?php foreach ($clientes as $cliente): ?>
+                            <tr>
+                                <td><?= htmlspecialchars($cliente['id']) ?></td>
+                                <td><span class="fw-bold"><?= htmlspecialchars($cliente['referencia']) ?></span></td>
+                                <td><?= htmlspecialchars($cliente['telefono']) ?></td>
+                                <td><?= htmlspecialchars($cliente['email']) ?></td>
+                                <td><small class="text-muted"><?= htmlspecialchars($cliente['direccion']) ?></small></td>
+                                <td class="text-center">
+                                    <div class="d-flex justify-content-center gap-2">
                                         <!-- Botón Editar -->
-                                        <a href="formulario_usuarios.php?id=<?= $cliente['id'] ?>" class="btn btn-info btn-sm">
-                                            <i class="bi bi-pencil-square"></i> Editar
+                                        <a href="formulario_usuarios.php?id=<?= $cliente['id'] ?>" class="btn btn-light btn-sm" title="Editar">
+                                            <i class="fas fa-edit text-primary"></i>
                                         </a>
 
                                         <!-- Botón Eliminar -->
                                         <form action="../controllers/eliminar_usuario.php" method="POST" class="d-inline" onsubmit="return confirm('¿Estás seguro de que deseas eliminar este cliente?');">
                                             <input type="hidden" name="id" value="<?= $cliente['id'] ?>">
-                                            <button type="submit" class="btn btn-danger btn-sm">
-                                                <i class="bi bi-trash"></i> Eliminar
+                                            <button type="submit" class="btn btn-light btn-sm" title="Eliminar">
+                                                <i class="fas fa-trash text-danger"></i>
                                             </button>
                                         </form>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <tr>
-                                <td colspan="6" class="text-center text-muted">No hay clientes registrados</td>
+                                    </div>
+                                </td>
                             </tr>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-5">
+                                <i class="fas fa-info-circle me-1"></i> No hay clientes registrados
+                            </td>
+                        </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
         </div>
-        <br>
     </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
+</div>
 </body>
 </html>

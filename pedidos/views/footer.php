@@ -25,9 +25,9 @@
 
     // Update button text
     if (tabla.classList.contains('is-collapsed')) {
-      boton.textContent = 'Mostrar ' + tableName;
+      boton.innerHTML = '<i class="fas fa-eye me-1"></i> Mostrar ' + tableName;
     } else {
-      boton.textContent = 'Ocultar ' + tableName;
+      boton.innerHTML = '<i class="fas fa-eye-slash me-1"></i> Ocultar ' + tableName;
     }
   }
   </script>

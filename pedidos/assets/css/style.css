@@ -1,52 +1,77 @@
 /* Optikamaldeojo Modern Design System */
 
 :root {
-    --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    --card-bg: rgba(255, 255, 255, 0.95);
-    --glass-bg: rgba(255, 255, 255, 0.85);
+    --primary-gradient: linear-gradient(135deg, #4c51bf 0%, #6b46c1 100%);
+    --card-bg: rgba(255, 255, 255, 0.98);
+    --glass-bg: rgba(255, 255, 255, 0.1);
     --primary-color: #5a67d8;
     --success-color: #48bb78;
     --warning-color: #ecc94b;
     --danger-color: #f56565;
     --text-main: #2d3748;
+    --text-white: #ffffff;
     --text-muted: #718096;
-    --border-radius: 15px;
-    --shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    --border-radius: 20px;
+    --shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
 }
 
 body {
-    background: var(--primary-gradient);
-    background-attachment: fixed;
+    background: var(--primary-gradient) no-repeat center center fixed;
+    background-size: cover;
     min-height: 100vh;
-    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
     color: var(--text-main);
 }
 
 /* Navbar Modernization */
 .navbar {
-    background: rgba(255, 255, 255, 0.1) !important;
-    backdrop-filter: blur(10px);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-    padding: 15px 0;
+    background: rgba(255, 255, 255, 0.05) !important;
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 12px 0;
 }
 
 .navbar-brand {
     font-weight: 700;
-    font-size: 1.2rem;
+    font-size: 1.1rem;
+    color: white !important;
+}
+
+.navbar-brand span {
+    max-width: 150px;
+    display: inline-block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+    opacity: 0.9;
 }
 
 .btn-nav {
-    border-radius: 10px;
-    padding: 8px 20px;
+    border-radius: 12px;
+    padding: 8px 16px;
     font-weight: 600;
-    transition: all 0.3s ease;
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    font-size: 0.85rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.1);
     color: white !important;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .btn-nav:hover {
     background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.4);
     transform: translateY(-2px);
+    color: white !important;
+}
+
+.btn-nav i {
+    font-size: 1.1rem;
+    opacity: 0.8;
 }
 
 /* Modern Cards */
@@ -61,34 +86,46 @@ body {
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* Table Stylization */
 .table-container {
-    overflow-x: auto;
+    background: white;
     border-radius: 12px;
+    padding: 5px;
 }
 
 .table {
     margin-bottom: 0;
+    font-size: 0.82rem;
+    /* Reduce font size to fit more columns */
 }
 
 .table thead th {
-    background: #f7fafc;
+    background: #f8fafc;
     border-bottom: 2px solid #edf2f7;
-    color: var(--text-muted);
-    font-size: 0.85rem;
+    color: #4a5568;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: 15px;
+    letter-spacing: 0.025em;
+    padding: 12px 8px;
+    white-space: nowrap;
 }
 
 .table tbody td {
-    padding: 15px;
+    padding: 10px 8px;
     vertical-align: middle;
-    border-top: 1px solid #edf2f7;
+    border-top: 1px solid #f1f5f9;
+    color: #444;
 }
 
 .table-hover tbody tr:hover {
@@ -96,17 +133,20 @@ body {
 }
 
 /* Status Colors (Overrides) */
-tr.fondo-hoy, .fondo-hoy {
+tr.fondo-hoy,
+.fondo-hoy {
     background-color: rgba(66, 153, 225, 0.1) !important;
     border-left: 5px solid #4299e1;
 }
 
-tr.fondo-pasado, .fondo-pasado {
+tr.fondo-pasado,
+.fondo-pasado {
     background-color: rgba(245, 101, 101, 0.1) !important;
     border-left: 5px solid #f56565;
 }
 
-tr.fondo-sin-fecha, .fondo-sin-fecha {
+tr.fondo-sin-fecha,
+.fondo-sin-fecha {
     background-color: rgba(236, 201, 75, 0.1) !important;
     border-left: 5px solid #ecc94b;
 }
@@ -144,7 +184,8 @@ tr.fondo-sin-fecha, .fondo-sin-fecha {
 }
 
 /* Sections */
-h1, h2 {
+h1,
+h2 {
     color: white;
     font-weight: 700;
     margin-bottom: 25px;
@@ -161,9 +202,9 @@ h1, h2 {
 }
 
 .slide {
-  transition: all 0.3s ease-in-out;
+    transition: all 0.3s ease-in-out;
 }
 
 .slide.is-collapsed {
-  display: none;
+    display: none;
 }

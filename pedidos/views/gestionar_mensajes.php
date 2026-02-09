@@ -52,40 +52,60 @@ foreach ($stmt as $fila) {
   $mensajes[$fila['tipo']][$fila['idioma']] = $fila['mensaje'];
 }
 ?>
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <title>Gestionar Mensajes WhatsApp</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="bg-light">
-<div class="container mt-5">
-  <h1 class="mb-4">Mensajes de WhatsApp por tipo de pedido</h1>
-  <?php if (!empty($guardado)): ?>
-    <div class="alert alert-success">✅ Mensajes guardados correctamente.</div>
-  <?php endif; ?>
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <h1 class="text-center mb-5 section-title justify-content-center">
+                <i class="fas fa-comment-dots"></i> Mensajes de WhatsApp
+            </h1>
+            
+            <?php if (!empty($guardado)): ?>
+                <div class="alert alert-success modern-card border-0 mb-4 py-3 d-flex align-items-center">
+                    <i class="fas fa-check-circle fa-lg me-3 text-success"></i>
+                    <span>Mensajes actualizados con éxito.</span>
+                </div>
+            <?php endif; ?>
 
-  <form method="POST">
-    <?php foreach ($tipos as $tipo => $label): ?>
-      <div class="card mb-4">
-        <div class="card-header bg-primary text-white"><?= $label ?></div>
-        <div class="card-body">
-          <?php foreach ($idiomas as $idioma => $idioma_label): ?>
-            <div class="mb-3">
-              <label class="form-label"><?= $idioma_label ?>:</label>
-              <textarea class="form-control"
-                        name="<?= "{$tipo}_{$idioma}" ?>"
-                        rows="2"><?= htmlspecialchars($mensajes[$tipo][$idioma] ?? '') ?></textarea>
-              <small class="text-muted">Puedes usar <code>{cliente}</code> y <code>{producto}</code> como variables.</small>
-            </div>
-          <?php endforeach; ?>
+            <form method="POST">
+                <div class="row">
+                    <?php foreach ($tipos as $tipo => $label): ?>
+                        <div class="col-md-6 mb-4">
+                            <div class="modern-card h-100">
+                                <h3 class="text-dark mb-4 section-title small border-bottom pb-2">
+                                    <i class="fas fa-tag text-primary"></i> <?= $label ?>
+                                </h3>
+                                
+                                <?php foreach ($idiomas as $idioma => $idioma_label): ?>
+                                    <div class="mb-4">
+                                        <label class="form-label d-flex justify-content-between">
+                                            <span><?= $idioma_label ?></span>
+                                            <span class="badge bg-light text-muted fw-normal"><?= strtoupper($idioma) ?></span>
+                                        </label>
+                                        <textarea class="form-control"
+                                                  name="<?= "{$tipo}_{$idioma}" ?>"
+                                                  rows="3"
+                                                  placeholder="Escribe el mensaje aquí..."><?= htmlspecialchars($mensajes[$tipo][$idioma] ?? '') ?></textarea>
+                                    </div>
+                                <?php endforeach; ?>
+                                
+                                <div class="mt-auto">
+                                    <small class="text-muted d-block bg-light p-2 rounded border">
+                                        <i class="fas fa-info-circle me-1"></i> Variables: <code>{cliente}</code>, <code>{producto}</code>
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+
+                <div class="text-center mt-4">
+                    <button type="submit" class="btn btn-login px-5 py-3">
+                        <i class="fas fa-save me-2"></i> Guardar Todos los Mensajes
+                    </button>
+                </div>
+            </form>
         </div>
-      </div>
-    <?php endforeach; ?>
-
-    <button type="submit" class="btn btn-success">Guardar todos los mensajes</button>
-  </form>
+    </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

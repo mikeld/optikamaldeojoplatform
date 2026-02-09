@@ -43,61 +43,70 @@ if (isset($_GET['id']) && is_numeric($_GET['id'])) {
 }
 ?>
 
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $id ? 'Editar Cliente' : 'Nuevo Cliente' ?> - Optikamaldeojo</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="bg-light">
-    <div class="container mt-5">
-        <h1 class="text-center mb-4"><?= $id ? 'Editar Cliente' : 'Nuevo Cliente' ?></h1>
-        <div class="card shadow-sm">
-            <div class="card-body">
-                <form action="../controllers/guardar_usuario.php" method="POST" onsubmit="return validarFormulario()">
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <h1 class="text-center mb-5 section-title justify-content-center">
+                <i class="fas <?= $id ? 'fa-user-edit' : 'fa-user-plus' ?>"></i> <?= $id ? 'Editar Cliente' : 'Nuevo Cliente' ?>
+            </h1>
+            <div class="modern-card">
+                <form action="../controllers/guardar_usuario.php" method="POST" onsubmit="return validarFormulario()" class="modern-form">
                     <!-- ID oculto solo para editar -->
                     <?php if ($id): ?>
                         <input type="hidden" name="id" value="<?= $id ?>">
                     <?php endif; ?>
 
                     <!-- Referencia -->
-                    <div class="mb-3">
-                        <label for="referencia" class="form-label">Referencia (obligatorio):</label>
-                        <input type="text" id="referencia" name="referencia" class="form-control" value="<?= htmlspecialchars($referencia) ?>" required>
+                    <div class="mb-4">
+                        <label for="referencia" class="form-label">Referencia del Cliente</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-white border-2 border-end-0"><i class="fas fa-tag text-muted"></i></span>
+                            <input type="text" id="referencia" name="referencia" class="form-control border-start-0" value="<?= htmlspecialchars($referencia) ?>" placeholder="Ej: REF123" required>
+                        </div>
                     </div>
 
                     <!-- Teléfono -->
-                    <div class="mb-3">
-                        <label for="telefono" class="form-label">Teléfono (obligatorio):</label>
-                        <input type="text" id="telefono" name="telefono" 
-                               class="form-control" 
-                               value="<?= htmlspecialchars($telefono) ?>" 
-                               required 
-                               pattern="^(\+?\d{1,3}|00\d{1,3})?\d{9}$" 
-                               title="El teléfono debe tener 9 dígitos o incluir el prefijo internacional (+34 o 0034).">
+                    <div class="mb-4">
+                        <label for="telefono" class="form-label">Teléfono de Contacto</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-white border-2 border-end-0"><i class="fas fa-phone text-muted"></i></span>
+                            <input type="text" id="telefono" name="telefono" 
+                                   class="form-control border-start-0" 
+                                   value="<?= htmlspecialchars($telefono) ?>" 
+                                   placeholder="Ej: +34 600000000"
+                                   required 
+                                   pattern="^(\+?\d{1,3}|00\d{1,3})?\d{9}$" 
+                                   title="El teléfono debe tener 9 dígitos o incluir el prefijo internacional (+34 o 0034).">
+                        </div>
                     </div>
 
                     <!-- Email -->
-                    <div class="mb-3">
-                        <label for="email" class="form-label">Email (opcional):</label>
-                        <input type="email" id="email" name="email" class="form-control" value="<?= htmlspecialchars($email) ?>">
+                    <div class="mb-4">
+                        <label for="email" class="form-label">Correo Electrónico</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-white border-2 border-end-0"><i class="fas fa-envelope text-muted"></i></span>
+                            <input type="email" id="email" name="email" class="form-control border-start-0" value="<?= htmlspecialchars($email) ?>" placeholder="ejemplo@email.com">
+                        </div>
                     </div>
 
                     <!-- Dirección -->
-                    <div class="mb-3">
-                        <label for="direccion" class="form-label">Dirección (opcional):</label>
-                        <textarea id="direccion" name="direccion" class="form-control"><?= htmlspecialchars($direccion) ?></textarea>
+                    <div class="mb-5">
+                        <label for="direccion" class="form-label">Dirección Postal</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-white border-2 border-end-0"><i class="fas fa-map-marker-alt text-muted"></i></span>
+                            <textarea id="direccion" name="direccion" class="form-control border-start-0" rows="2" placeholder="Dirección completa..."><?= htmlspecialchars($direccion) ?></textarea>
+                        </div>
                     </div>
 
                     <!-- Botón Enviar -->
-                    <button type="submit" class="btn btn-primary w-100"><?= $id ? 'Actualizar Cliente' : 'Guardar Cliente' ?></button>
+                    <button type="submit" class="btn btn-login w-100 py-3">
+                        <i class="fas fa-save me-2"></i> <?= $id ? 'Actualizar Cliente' : 'Guardar Cliente' ?>
+                    </button>
                 </form>               
             </div>
         </div>
-        <br>
     </div>
+</div>
 
     <script>
         function validarFormulario() {

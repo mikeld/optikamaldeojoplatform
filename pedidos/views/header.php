@@ -32,22 +32,26 @@ $acciones_navbar = $acciones_navbar ?? [];
 <body>
 
   <!-- NAVBAR -->
-  <nav class="navbar navbar-expand-lg">
-    <div class="container-fluid">
+  <nav class="navbar navbar-expand-xl navbar-dark">
+    <div class="container-fluid px-lg-4">
       <!-- Logo y Email del Usuario -->
-      <a class="navbar-brand d-flex align-items-center text-white" href="#">
-        <i class="fas fa-circle-user fa-lg me-2 text-white-50"></i>
-        <span><?= htmlspecialchars($_SESSION['usuario_email'] ?? '') ?></span>
+      <a class="navbar-brand d-flex align-items-center" href="#">
+        <div class="bg-white bg-opacity-10 p-2 rounded-circle me-2 d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+            <i class="fas fa-user text-white"></i>
+        </div>
+        <span title="<?= htmlspecialchars($_SESSION['usuario_email'] ?? '') ?>">
+            <?= htmlspecialchars($_SESSION['usuario_email'] ?? '') ?>
+        </span>
       </a>
       
       <!-- Toggle móvil -->
-      <button class="navbar-toggler border-white" type="button"
+      <button class="navbar-toggler border-0 shadow-none" type="button"
               data-bs-toggle="collapse"
               data-bs-target="#navbarNav"
               aria-controls="navbarNav"
               aria-expanded="false"
               aria-label="Toggle navigation">
-        <span class="navbar-toggler-icon"></span>
+        <i class="fas fa-bars text-white"></i>
       </button>
 
       <!-- Enlaces -->
@@ -72,13 +76,13 @@ $acciones_navbar = $acciones_navbar ?? [];
           <?php endif; ?>
 
           <li class="nav-item">
-            <a class="btn btn-nav" href="../home.php">
+            <a class="btn btn-nav" href="../../home.php">
               <i class="bi bi-grid-fill me-1"></i> Portal
             </a>
           </li>
 
           <li class="nav-item">
-            <a class="btn btn-nav bg-danger border-0" href="../logout.php">
+            <a class="btn btn-nav bg-danger border-0" href="../../logout.php">
               <i class="bi bi-box-arrow-right me-1"></i> Salir
             </a>
           </li>
