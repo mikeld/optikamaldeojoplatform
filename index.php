@@ -194,7 +194,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
     <div class="login-container">
         <div class="logo-container">
-            <img src="assets/images/logo_placeholder.png" alt="Optikamaldeojo Logo">
+            <img src="assets/images/logo.png" alt="Optikamaldeojo Logo" style="width: 250px; height: auto;">
             <h1>Portal Optikamaldeojo</h1>
             <p>Accede a tus aplicaciones</p>
         </div>

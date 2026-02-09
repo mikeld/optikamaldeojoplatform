@@ -1,9 +1,9 @@
 <?php
 class Conexion {
-    private $host = "localhost";
-    private $db = "db2lgnr4esjpur";
-    private $user = "ugvvfjlvfpnnr"; // Cambiar según el usuario de tu MySQL
-    private $password = "x6uxzpgugrpo"; // Cambiar según tu configuración
+    private $host = "localhost"; // En Hostinger suele ser 'localhost'
+    private $db = "PON_AQUI_EL_NOMBRE_DE_TU_BD"; 
+    private $user = "PON_AQUI_TU_USUARIO_DE_BD"; 
+    private $password = "PON_AQUI_TU_PASSWORD_DE_BD";
     private $charset = "utf8mb4";
     public $pdo;
 

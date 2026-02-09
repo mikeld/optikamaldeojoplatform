@@ -197,7 +197,7 @@ Auth::verificarSesion();
 <body>
     <div class="home-container">
         <div class="header">
-            <img src="assets/images/logo_placeholder.png" alt="Optikamaldeojo Logo">
+            <img src="assets/images/logo.png" alt="Optikamaldeojo Logo" style="width: 200px; height: auto;">
             <h1>Portal Optikamaldeojo</h1>
             <div class="user-info">
                 <i class="fas fa-user-circle"></i>
