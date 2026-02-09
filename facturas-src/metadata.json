@@ -1,0 +1,7 @@
+{
+  "name": "Sistema de Auditoría de Facturas",
+  "description": "Una aplicación avanzada para la validación de precios en facturas mediante OCR y comparación inteligente con base de datos de productos.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
