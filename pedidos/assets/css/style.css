@@ -23,55 +23,78 @@ body {
     color: var(--text-main);
 }
 
-/* Navbar Modernization */
-.navbar {
-    background: rgba(255, 255, 255, 0.05) !important;
-    backdrop-filter: blur(15px);
-    -webkit-backdrop-filter: blur(15px);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 12px 0;
+/* Navbar Modernization - Vibrant Edition */
+.navbar.main-header {
+    background: rgba(255, 255, 255, 0.12) !important;
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 10px 0;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
 }
 
-.navbar-brand {
-    font-weight: 700;
-    font-size: 1.1rem;
-    color: white !important;
-}
-
-.navbar-brand span {
-    max-width: 150px;
-    display: inline-block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    vertical-align: bottom;
-    opacity: 0.9;
-}
-
-.btn-nav {
-    border-radius: 12px;
-    padding: 8px 16px;
-    font-weight: 600;
-    font-size: 0.85rem;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    background: rgba(255, 255, 255, 0.1);
-    color: white !important;
+.user-avatar-shell {
+    width: 45px;
+    height: 45px;
+    background: linear-gradient(135deg, #ffffff 0%, #e0e7ff 100%);
+    border-radius: 14px;
     display: flex;
     align-items: center;
-    gap: 8px;
+    justify-content: center;
+    color: var(--primary-color);
+    font-size: 1.4rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-.btn-nav:hover {
-    background: rgba(255, 255, 255, 0.2);
-    border-color: rgba(255, 255, 255, 0.4);
-    transform: translateY(-2px);
+.navbar-user-welcome {
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.7);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 700;
+}
+
+.navbar-user-email {
+    font-size: 0.95rem;
+    color: white;
+    font-weight: 600;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.btn-nav-modern {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     color: white !important;
+    border-radius: 12px;
+    padding: 10px 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.btn-nav i {
+.btn-nav-modern:hover {
+    background: white;
+    color: var(--primary-color) !important;
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+.btn-nav-modern i {
     font-size: 1.1rem;
-    opacity: 0.8;
+}
+
+.portal-link {
+    background: rgba(76, 81, 191, 0.3);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.hover-scale:hover {
+    transform: scale(1.05);
 }
 
 /* Modern Cards */
@@ -97,39 +120,44 @@ body {
     }
 }
 
-/* Table Stylization */
+/* Table Stylization - Further refinement */
 .table-container {
     background: white;
-    border-radius: 12px;
-    padding: 5px;
+    border-radius: 20px;
+    padding: 15px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
 }
 
 .table {
     margin-bottom: 0;
     font-size: 0.82rem;
-    /* Reduce font size to fit more columns */
+    border-collapse: separate;
+    border-spacing: 0 8px;
 }
 
 .table thead th {
     background: #f8fafc;
-    border-bottom: 2px solid #edf2f7;
+    border: none;
     color: #4a5568;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.025em;
-    padding: 12px 8px;
-    white-space: nowrap;
+    letter-spacing: 0.05em;
+    padding: 15px 12px;
+}
+
+.table tbody tr {
+    transition: all 0.2s ease;
+}
+
+.table tbody tr:hover {
+    background-color: #f1f5f9;
+    transform: scale(1.002);
 }
 
 .table tbody td {
-    padding: 10px 8px;
+    padding: 15px 12px;
+    border: none;
     vertical-align: middle;
-    border-top: 1px solid #f1f5f9;
-    color: #444;
-}
-
-.table-hover tbody tr:hover {
-    background-color: #f8fafc;
 }
 
 /* Status Colors (Overrides) */

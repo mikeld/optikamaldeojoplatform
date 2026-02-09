@@ -4,6 +4,13 @@ session_start();
 
 // Verificar sesión
 Auth::verificarSesion();
+
+// Redirigir si es empleado (solo permitido el portal de pedidos)
+$usuarioActual = Auth::usuarioActual();
+if ($usuarioActual['rol'] === 'empleado') {
+    header('Location: pedidos/views/listado_pedidos.php?orden_columna=fecha_llegada&orden_direccion=ASC');
+    exit();
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">

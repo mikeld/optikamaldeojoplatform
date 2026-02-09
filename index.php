@@ -3,9 +3,14 @@ require 'includes/conexion.php';
 require 'includes/auth_class.php';
 session_start();
 
-// Si ya está autenticado, redirigir al home
+// Si ya está autenticado, redirigir según rol
 if (Auth::estaAutenticado()) {
-    header('Location: home.php');
+    $usuarioActual = Auth::usuarioActual();
+    if ($usuarioActual['rol'] === 'empleado') {
+        header('Location: pedidos/views/listado_pedidos.php?orden_columna=fecha_llegada&orden_direccion=ASC');
+    } else {
+        header('Location: home.php');
+    }
     exit();
 }
 
@@ -27,7 +32,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // Intentar autenticar
         if ($auth->autenticar($email, $password)) {
-            header('Location: home.php');
+            $usuarioActual = Auth::usuarioActual();
+            if ($usuarioActual['rol'] === 'empleado') {
+                header('Location: pedidos/views/listado_pedidos.php?orden_columna=fecha_llegada&orden_direccion=ASC');
+            } else {
+                header('Location: home.php');
+            }
             exit();
         } else {
             throw new Exception('Credenciales incorrectas. Por favor, verifica el email y la contraseña.');
