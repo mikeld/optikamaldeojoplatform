@@ -1,0 +1,204 @@
+/* General */
+body {
+    background-color: #f8f9fa; /* Default body background */
+    color: #212529; /* Default text color */
+}
+
+/* Login Page Specific Styles */
+body.login-page-body {
+    background: linear-gradient(to bottom right, #343a40, #495057); /* Dark gray gradient fallback */
+    background-attachment: fixed;
+    background-size: cover;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+.login-container {
+    background-color: rgba(0, 0, 0, 0.65); /* Semi-transparent dark background */
+    padding: 2rem 2.5rem;
+    border-radius: 0.5rem; /* Rounded corners */
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    color: #f8f9fa; /* Light text color for contrast */
+    max-width: 420px;
+    width: 100%;
+}
+
+.login-container .form-label {
+    color: #f8f9fa; /* Ensure labels are light */
+}
+
+.login-container .form-control {
+    background-color: rgba(255, 255, 255, 0.1); /* Slightly transparent input fields */
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+}
+
+.login-container .form-control:focus {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
+    color: #fff;
+    box-shadow: 0 0 0 0.25rem rgba(255, 255, 255, 0.25); /* Lighter focus ring */
+}
+
+.login-container .btn-primary {
+    background-color: #007bff;
+    border-color: #007bff;
+    /* Minor adjustments if needed, but Bootstrap primary usually works well */
+}
+
+.login-container .alert-danger {
+    background-color: rgba(220, 53, 69, 0.8); /* More thematic error message */
+    border-color: rgba(220, 53, 69, 0.9);
+    color: #fff;
+}
+
+
+.navbar {
+    background-color: #343a40 !important; /* New: Dark Gray/Black for Navbar */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Subtle box shadow */
+}
+
+/* Styling for user email in navbar to prevent overflow */
+.navbar .navbar-brand {
+    max-width: 200px; /* Adjust as needed */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Using more specific selectors to try and avoid !important */
+tr.fondo-hoy, .fondo-hoy {
+    background-color: #E0F2F7; /* New: Light Cyan/Blue */
+}
+
+tr.fondo-pasado, .fondo-pasado {
+    background-color: #F5C6CB; /* New: Light Pink/Muted Red */
+}
+
+tr.fondo-sin-fecha, .fondo-sin-fecha {
+    background-color: #FFF3CD; /* New: Light Amber/Yellow */
+}
+
+.table thead th {
+    text-align: center !important; /* Keep for now, review later if possible */
+}
+
+.table th a {
+    color: #007bff; /* Standard Bootstrap blue for links */
+    text-decoration: none;
+}
+
+.table th a:hover {
+    text-decoration: underline;
+}
+
+.table .btn {
+    margin: 0 2px;
+}
+
+/* Attempting to remove !important by ensuring specificity or rule order */
+.btn-recibido {
+    background-color: #28a745; /* New: Green for success state */
+    border-color: #28a745;
+    color: #fff; /* Adding white text for better contrast on green */
+}
+
+.btn-recibido:hover {
+    background-color: #218838; /* Darker green on hover */
+    border-color: #1e7e34;
+}
+
+
+.text-center {
+    text-align: center !important; /* Keep for now */
+}
+
+.text-muted {
+    color: #6c757d !important; /* Keep for now */
+}
+
+
+/*********** Página de redirección (whatsapp_redirect.php) ***********/
+
+/* Contenedor principal */
+.redirect-container {
+    text-align: center;
+    background-color: #ffffff;
+    padding: 2rem 3rem;
+    border-radius: 10px;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+    max-width: 400px;
+    width: 100%;
+    margin: 50px auto;
+}
+
+/* Título */
+.redirect-container h1 {
+    font-size: 24px;
+    margin-bottom: 1rem;
+    color: #25D366; /* Verde WhatsApp - Keep as is, specific to this page */
+}
+
+/* Texto de información */
+.redirect-container p {
+    font-size: 16px;
+    margin-bottom: 1rem;
+    color: #555;
+}
+
+/* Spinner de carga */
+.redirect-spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #25D366; /* Verde WhatsApp - Keep as is */
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 1s linear infinite;
+    margin: 20px auto;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Botón personalizado */
+.redirect-btn {
+    display: inline-block;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: bold;
+    color: #fff;
+    background-color: #25D366; /* Verde WhatsApp - Keep as is */
+    border: none;
+    border-radius: 5px;
+    text-decoration: none;
+    transition: background-color 0.3s ease-in-out;
+    margin-top: 10px;
+}
+
+.redirect-btn:hover {
+    background-color: #1da851;
+}
+
+.redirect-btn:active {
+    transform: scale(0.98);
+}
+
+.slide {
+  max-height: 1000px; /* Default height for expanded state */
+  overflow: hidden;
+  transition: max-height 0.35s ease-in-out; /* Smoother transition for max-height */
+}
+
+.slide.is-collapsed {
+  max-height: 0;
+}
+
+.hidden {
+  display: none !important; /* This !important is likely necessary for JS toggling */
+}
