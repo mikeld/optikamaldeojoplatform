@@ -1,9 +1,9 @@
 <?php
 class Conexion {
     private $host = "localhost";
-    private $db = "db2lgnr4esjpur";
-    private $user = "root"; // Cambiar según el usuario de tu MySQL
-    private $password = ""; // Cambiar según tu configuración
+    private $db = "u373487989_maldeojo";
+    private $user = "u373487989_mikel"; // Cambiar según el usuario de tu MySQL
+    private $password = "R4;vk+3pT>Nq"; // Cambiar según tu configuración
     private $charset = "utf8mb4";
     public $pdo;
 
