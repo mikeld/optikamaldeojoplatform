@@ -2,7 +2,7 @@
 -- Creación de tablas para el módulo de facturas en MySQL
 
 CREATE TABLE IF NOT EXISTS `facturas_products` (
-    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `id` VARCHAR(100) PRIMARY KEY,
     `sku` VARCHAR(100) UNIQUE,
     `name` VARCHAR(255) NOT NULL,
     `expected_price` DECIMAL(10, 2) DEFAULT 0.00,
@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS `facturas_products` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `facturas_audits` (
-    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `id` VARCHAR(100) PRIMARY KEY,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `invoice_date` DATE,
     `provider` VARCHAR(255),

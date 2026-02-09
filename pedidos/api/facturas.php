@@ -17,15 +17,16 @@ try {
         case 'upsertProduct':
             if ($method === 'POST') {
                 $data = json_decode(file_get_contents('php://input'), true);
-                if (isset($data['id']) && is_numeric($data['id'])) {
-                    // Update
-                    $stmt = $pdo->prepare("UPDATE `facturas_products` SET `sku`=?, `name`=?, `expected_price`=?, `vat`=? WHERE `id`=?");
-                    $stmt->execute([$data['sku'], $data['name'], $data['expectedPrice'], $data['vat'], $data['id']]);
-                } else {
-                    // Insert
-                    $stmt = $pdo->prepare("INSERT INTO `facturas_products` (`sku`, `name`, `expected_price`, `vat`) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE `name`=VALUES(`name`), `expected_price`=VALUES(`expected_price`), `vat`=VALUES(`vat`) ");
-                    $stmt->execute([$data['sku'], $data['name'], $data['expectedPrice'], $data['vat']]);
-                }
+                // Intentar actualizar por SKU primero, ya que es único
+                $stmt = $pdo->prepare("INSERT INTO `facturas_products` (`id`, `sku`, `name`, `expected_price`, `vat`) VALUES (?, ?, ?, ?, ?) 
+                                      ON DUPLICATE KEY UPDATE `name`=VALUES(`name`), `expected_price`=VALUES(`expected_price`), `vat`=VALUES(`vat`) ");
+                $stmt->execute([
+                    $data['id'] ?: uniqid(), // Usar el ID actual o generar uno
+                    $data['sku'],
+                    $data['name'],
+                    $data['expectedPrice'],
+                    $data['vat']
+                ]);
                 echo json_encode(['status' => 'success']);
             }
             break;
@@ -34,8 +35,11 @@ try {
             $stmt = $pdo->query("SELECT * FROM `facturas_audits` ORDER BY `created_at` DESC");
             $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
             foreach ($results as &$row) {
-                if (isset($row['lines'])) {
-                    $row['lines'] = json_decode($row['lines'], true);
+                if (isset($row['lines']) && $row['lines'] !== null) {
+                    $decoded = json_decode($row['lines'], true);
+                    $row['lines'] = $decoded !== null ? $decoded : [];
+                } else {
+                    $row['lines'] = [];
                 }
             }
             echo json_encode($results);
@@ -44,8 +48,10 @@ try {
         case 'saveAudit':
             if ($method === 'POST') {
                 $data = json_decode(file_get_contents('php://input'), true);
-                $stmt = $pdo->prepare("INSERT INTO `facturas_audits` (`invoice_date`, `provider`, `invoice_number`, `total_invoice`, `global_status`, `lines`) VALUES (?, ?, ?, ?, ?, ?)");
+                $stmt = $pdo->prepare("INSERT INTO `facturas_audits` (`id`, `invoice_date`, `provider`, `invoice_number`, `total_invoice`, `global_status`, `lines`) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                $auditId = $data['id'] ?: uniqid();
                 $stmt->execute([
+                    $auditId,
                     $data['invoiceDate'],
                     $data['provider'],
                     $data['invoiceNumber'],
@@ -53,7 +59,7 @@ try {
                     $data['globalStatus'],
                     json_encode($data['lines'])
                 ]);
-                echo json_encode(['status' => 'success', 'id' => $pdo->lastInsertId()]);
+                echo json_encode(['status' => 'success', 'id' => $auditId]);
             }
             break;
 
