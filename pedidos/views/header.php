@@ -27,7 +27,7 @@ $acciones_navbar = $acciones_navbar ?? [];
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 
   <!-- Estilos propios -->
-  <link href="../assets/css/style.css" rel="stylesheet">
+  <link href="../assets/css/style.css?v=<?= time() ?>" rel="stylesheet">
 </head>
 <body>
 
@@ -40,9 +40,9 @@ $acciones_navbar = $acciones_navbar ?? [];
             <i class="fas fa-user-circle"></i>
         </div>
         <div class="d-none d-md-block">
-            <div class="navbar-user-welcome">Hola,</div>
-            <div class="navbar-user-email" title="<?= htmlspecialchars($_SESSION['usuario_email'] ?? '') ?>">
-                <?= htmlspecialchars($_SESSION['usuario_email'] ?? '') ?>
+            <div class="navbar-user-welcome">Bienvenido/a</div>
+            <div class="navbar-user-info">
+                <?= htmlspecialchars($_SESSION['usuario_nombre'] ?? 'Usuario') ?>
             </div>
         </div>
       </a>

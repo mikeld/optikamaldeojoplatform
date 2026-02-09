@@ -23,14 +23,15 @@ body {
     color: var(--text-main);
 }
 
-/* Navbar Modernization - Vibrant Edition */
-.navbar.main-header {
-    background: rgba(255, 255, 255, 0.12) !important;
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-    padding: 10px 0;
-    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+/* Navbar Modernization - Extra Vibrant Edition */
+nav.navbar.main-header {
+    background: rgba(15, 23, 42, 0.4) !important;
+    /* Slightly darker glass for better contrast */
+    backdrop-filter: blur(25px) saturate(200%) !important;
+    -webkit-backdrop-filter: blur(25px) saturate(200%) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
+    padding: 12px 0;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2) !important;
 }
 
 .user-avatar-shell {
@@ -47,20 +48,23 @@ body {
 }
 
 .navbar-user-welcome {
-    font-size: 0.7rem;
-    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.65rem;
+    color: rgba(255, 255, 255, 0.6);
     text-transform: uppercase;
-    letter-spacing: 1px;
-    font-weight: 700;
+    letter-spacing: 1.5px;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 2px;
 }
 
-.navbar-user-email {
-    font-size: 0.95rem;
+.navbar-user-info {
+    font-size: 0.9rem;
     color: white;
-    font-weight: 600;
-    max-width: 200px;
+    font-weight: 700;
+    max-width: 180px;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .btn-nav-modern {
