@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS `facturas_audits` (
     `total_invoice` DECIMAL(10, 2),
     `global_status` ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
     `lines` JSON,
+    UNIQUE KEY `unique_invoice` (`provider`, `invoice_number`, `invoice_date`),
     INDEX (`invoice_date`),
     INDEX (`provider`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

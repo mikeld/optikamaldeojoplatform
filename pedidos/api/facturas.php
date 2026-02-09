@@ -48,7 +48,12 @@ try {
         case 'saveAudit':
             if ($method === 'POST') {
                 $data = json_decode(file_get_contents('php://input'), true);
-                $stmt = $pdo->prepare("INSERT INTO `facturas_audits` (`id`, `invoice_date`, `provider`, `invoice_number`, `total_invoice`, `global_status`, `lines`) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                $stmt = $pdo->prepare("INSERT INTO `facturas_audits` (`id`, `invoice_date`, `provider`, `invoice_number`, `total_invoice`, `global_status`, `lines`) 
+                                      VALUES (?, ?, ?, ?, ?, ?, ?)
+                                      ON DUPLICATE KEY UPDATE 
+                                      `total_invoice`=VALUES(`total_invoice`), 
+                                      `global_status`=VALUES(`global_status`), 
+                                      `lines`=VALUES(`lines`) ");
                 $auditId = $data['id'] ?: uniqid();
                 $stmt->execute([
                     $auditId,
