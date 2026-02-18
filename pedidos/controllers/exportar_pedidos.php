@@ -1,4 +1,5 @@
 <?php
+require '../includes/auth.php';
 require 'conexion.php';
 
 try {

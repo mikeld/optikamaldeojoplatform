@@ -1,16 +1,24 @@
 <?php
 require '../includes/auth.php';
 require '../includes/conexion.php';
+$breadcrumbs = [
+    ['nombre' => 'Nuevo Pedido', 'url' => '#']
+];
 $acciones_navbar = [
     [
         'nombre' => 'Listado Pedidos',
         'url' => 'listado_pedidos.php',
-        'icono' => 'bi-file-earmark-plus'
+        'icono' => 'bi-card-list'
     ],
     [
         'nombre' => 'Nuevo Cliente',
         'url' => 'formulario_usuarios.php',
         'icono' => 'bi-person-plus'
+    ],
+    [
+        'nombre' => 'Proveedores',
+        'url' => 'listado_proveedores.php',
+        'icono' => 'bi-building'
     ]
 ];
 include('header.php');
@@ -27,8 +35,14 @@ try {
     $sql_clientes = "SELECT id, referencia FROM clientes ORDER BY referencia ASC";
     $stmt_clientes = $conexion->pdo->query($sql_clientes);
     $clientes = $stmt_clientes->fetchAll(PDO::FETCH_ASSOC);
+
+    // Obtener lista de proveedores activos
+    $sql_proveedores = "SELECT id, nombre FROM proveedores WHERE activo = 1 ORDER BY nombre ASC";
+    $stmt_prov = $conexion->pdo->query($sql_proveedores);
+    $proveedores = $stmt_prov->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {
-    die("Error al obtener la lista de clientes: " . $e->getMessage());
+    // Si la tabla proveedores no existe (porque no se ha ejecutado el SQL), evitamos el die
+    $proveedores = [];
 }
 ?>
 
@@ -98,11 +112,20 @@ try {
                     </div>
 
                     <div class="row">
-                        <div class="col-md-6 mb-4">
+                        <div class="col-md-4 mb-4">
                             <label for="fecha_pedido" class="form-label">Fecha Pedido</label>
                             <input type="date" id="fecha_pedido" name="fecha_pedido" class="form-control">
                         </div>
-                        <div class="col-md-6 mb-4">
+                        <div class="col-md-4 mb-4">
+                            <label for="proveedor_id" class="form-label">Proveedor</label>
+                            <select id="proveedor_id" name="proveedor_id" class="form-select">
+                                <option value="">Seleccionar proveedor...</option>
+                                <?php foreach($proveedores as $prov): ?>
+                                    <option value="<?= $prov['id'] ?>"><?= htmlspecialchars($prov['nombre']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-4">
                             <label for="via" class="form-label">Vía de Pedido</label>
                             <input type="text" id="via" name="via" class="form-control" placeholder="Ej: Portal, Teléfono...">
                         </div>

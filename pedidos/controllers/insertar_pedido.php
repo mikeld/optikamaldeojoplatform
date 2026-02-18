@@ -17,6 +17,7 @@ try {
         $rx                 = trim($_POST['rx']                ?? '');
         $via                = trim($_POST['via']               ?? '');
         $observaciones      = trim($_POST['observaciones']     ?? '');
+        $proveedor_id       = $_POST['proveedor_id'] !== '' ? (int)$_POST['proveedor_id'] : null;
 
         // Convertir fechas vacías a NULL
         $fecha_pedido  = trim($_POST['fecha_pedido'] )  !== '' ? $_POST['fecha_pedido']  : null;
@@ -34,10 +35,10 @@ try {
         // 3) Preparar e insertar
         $sql = "INSERT INTO pedidos 
                   (fecha_cliente, referencia_cliente, lc_gafa_recambio, rx, 
-                   fecha_pedido, via, observaciones, fecha_llegada) 
+                   fecha_pedido, via, observaciones, fecha_llegada, proveedor_id) 
                 VALUES 
                   (:fecha_cliente, :referencia_cliente, :lc, :rx, 
-                   :fecha_pedido, :via, :obs, :fecha_llegada)";
+                   :fecha_pedido, :via, :obs, :fecha_llegada, :proveedor_id)";
         $stmt = $conexion->pdo->prepare($sql);
 
         // Campos siempre string
@@ -61,6 +62,8 @@ try {
         } else {
             $stmt->bindValue(':fecha_llegada', $fecha_llegada, PDO::PARAM_STR);
         }
+
+        $stmt->bindValue(':proveedor_id', $proveedor_id, $proveedor_id === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
 
         // Ejecutar
         $stmt->execute();

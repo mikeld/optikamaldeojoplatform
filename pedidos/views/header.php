@@ -7,8 +7,9 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 // Garantizar que $acciones_navbar está definido
-$is_admin = $_SESSION['usuario_rol'] ?? '' === 'admin';
+$is_admin = ($_SESSION['usuario_rol'] ?? '') === 'admin';
 $acciones_navbar = $acciones_navbar ?? [];
+$breadcrumbs = $breadcrumbs ?? [];
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -99,5 +100,25 @@ $acciones_navbar = $acciones_navbar ?? [];
     </div>
   </nav>
 
+  <!-- BREADCRUMBS -->
+  <?php if (!empty($breadcrumbs)): ?>
+  <div class="breadcrumb-bar">
+    <div class="container-fluid px-lg-5">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="listado_pedidos.php"><i class="fas fa-home"></i></a></li>
+          <?php foreach ($breadcrumbs as $i => $bc): ?>
+            <?php if ($i === count($breadcrumbs) - 1): ?>
+              <li class="breadcrumb-item active" aria-current="page"><?= htmlspecialchars($bc['nombre']) ?></li>
+            <?php else: ?>
+              <li class="breadcrumb-item"><a href="<?= htmlspecialchars($bc['url']) ?>"><?= htmlspecialchars($bc['nombre']) ?></a></li>
+            <?php endif; ?>
+          <?php endforeach; ?>
+        </ol>
+      </nav>
+    </div>
+  </div>
+  <?php endif; ?>
+
   <!-- Aquí comienza el contenido específico de cada página -->
-  <div class="container-fluid mt-5">
+  <div class="container-fluid mt-3">

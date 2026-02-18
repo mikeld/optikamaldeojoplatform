@@ -3,17 +3,8 @@ require '../includes/auth.php';
 require '../includes/conexion.php';
 require_once '../includes/funciones.php';
 
-$acciones_navbar = [
-    [
-        'nombre' => 'Nuevo Cliente',
-        'url' => 'formulario_usuarios.php',
-        'icono' => 'bi-person-plus'
-    ],
-    [
-        'nombre' => 'Listado Pedidos',
-        'url' => 'listado_pedidos.php',
-        'icono' => 'bi-card-list'
-    ]
+$breadcrumbs = [
+    ['nombre' => 'Listado Clientes', 'url' => '#']
 ];
 
 include('header.php');
@@ -100,12 +91,16 @@ try {
                         <?php foreach ($clientes as $cliente): ?>
                             <tr>
                                 <td><?= htmlspecialchars($cliente['id']) ?></td>
-                                <td><span class="fw-bold"><?= htmlspecialchars($cliente['referencia']) ?></span></td>
+                                <td><a href="ficha_cliente.php?id=<?= $cliente['id'] ?>" class="fw-bold text-decoration-none text-primary"><?= htmlspecialchars($cliente['referencia']) ?></a></td>
                                 <td><?= htmlspecialchars($cliente['telefono']) ?></td>
                                 <td><?= htmlspecialchars($cliente['email']) ?></td>
                                 <td><small class="text-muted"><?= htmlspecialchars($cliente['direccion']) ?></small></td>
                                 <td class="text-center">
                                     <div class="d-flex justify-content-center gap-2">
+                                        <!-- Botón Ver Ficha -->
+                                        <a href="ficha_cliente.php?id=<?= $cliente['id'] ?>" class="btn btn-light btn-sm" title="Ver ficha">
+                                            <i class="fas fa-id-card text-info"></i>
+                                        </a>
                                         <!-- Botón Editar -->
                                         <a href="formulario_usuarios.php?id=<?= $cliente['id'] ?>" class="btn btn-light btn-sm" title="Editar">
                                             <i class="fas fa-edit text-primary"></i>

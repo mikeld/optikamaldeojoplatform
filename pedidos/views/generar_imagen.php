@@ -39,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 function generarImagenHuggingFace($prompt) {
     $url = 'https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2';
     $headers = [
-        'Authorization: Bearer ' . (getenv('HUGGING_FACE_TOKEN') ?: 'TU_API_KEY_AQUI'),
+        'Authorization: Bearer ' . (getenv('HUGGING_FACE_TOKEN') ?: ''),
         'Content-Type: application/json',
     ];
 

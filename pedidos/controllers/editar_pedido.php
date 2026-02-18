@@ -29,75 +29,116 @@ $pedido = $stmt->fetch(PDO::FETCH_ASSOC);
 
 // Si no existe el pedido, redirigir
 if (!$pedido) {
-    header('Location: listado_pedidos.php');
+    header('Location: ../views/listado_pedidos.php');
     exit();
 }
+
+// Obtener lista de proveedores activos
+try {
+    $stmt_prov = $conexion->pdo->query("SELECT id, nombre FROM proveedores WHERE activo = 1 ORDER BY nombre ASC");
+    $proveedores = $stmt_prov->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    $proveedores = [];
+}
+
+$breadcrumbs = [
+    ['nombre' => 'Listado Pedidos', 'url' => '../views/listado_pedidos.php'],
+    ['nombre' => 'Editar Pedido', 'url' => '#']
+];
+$acciones_navbar = [
+    ['nombre'=>'Listado Pedidos',  'url'=>'../views/listado_pedidos.php', 'icono'=>'bi-card-list'],
+    ['nombre'=>'Listado Clientes', 'url'=>'../views/listado_usuarios.php','icono'=>'bi-people']
+];
+include '../views/header.php';
 ?>
 
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Editar Pedido</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body>
-    <div class="container mt-5">
-        <h1>Editar Pedido</h1>
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-md-7">
+            <h1 class="mb-4 section-title align-items-center">
+                <i class="fas fa-edit me-2"></i> Editar Pedido #<?= $pedido['id'] ?>
+            </h1>
 
-        <form action="procesar_editar_pedido.php" method="POST">
-            <input type="hidden" name="id" value="<?= htmlspecialchars($pedido['id']) ?>">
+            <div class="modern-card">
+                <form action="procesar_editar_pedido.php" method="POST" class="modern-form">
+                    <input type="hidden" name="id" value="<?= htmlspecialchars($pedido['id']) ?>">
 
-            <div class="mb-3">
-                <label for="referencia_cliente" class="form-label">Referencia Cliente</label>
-                <input type="text"
-                       class="form-control"
-                       id="referencia_cliente"
-                       name="referencia_cliente"
-                       readonly
-                       value="<?= htmlspecialchars($pedido['referencia_cliente']) ?>"
-                       required>
+                    <div class="mb-3">
+                        <label for="referencia_cliente" class="form-label">Cliente (Referencia)</label>
+                        <input type="text"
+                               class="form-control"
+                               id="referencia_cliente"
+                               name="referencia_cliente"
+                               readonly
+                               value="<?= htmlspecialchars($pedido['referencia_cliente']) ?>">
+                        <div class="form-text">La referencia del cliente no se puede cambiar.</div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-12">
+                            <label for="lc_gafa_recambio" class="form-label">Producto (LC / Gafa / Recambio)</label>
+                            <input type="text"
+                                   class="form-control"
+                                   id="lc_gafa_recambio"
+                                   name="lc_gafa_recambio"
+                                   value="<?= htmlspecialchars($pedido['lc_gafa_recambio'] ?? '') ?>">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label for="fecha_pedido" class="form-label">Fecha Pedido</label>
+                            <input type="date"
+                                   class="form-control"
+                                   id="fecha_pedido"
+                                   name="fecha_pedido"
+                                   value="<?= valorFechaParaInput($pedido['fecha_pedido']) ?>">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="fecha_llegada" class="form-label">Fecha Prevista Llegada</label>
+                            <input type="date"
+                                   class="form-control"
+                                   id="fecha_llegada"
+                                   name="fecha_llegada"
+                                   value="<?= valorFechaParaInput($pedido['fecha_llegada']) ?>">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-12">
+                            <label for="proveedor_id" class="form-label">Proveedor</label>
+                            <select id="proveedor_id" name="proveedor_id" class="form-select">
+                                <option value="">Seleccionar proveedor...</option>
+                                <?php foreach($proveedores as $prov): ?>
+                                    <option value="<?= $prov['id'] ?>" <?= ($pedido['proveedor_id'] ?? '') == $prov['id'] ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($prov['nombre']) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="observaciones" class="form-label">Observaciones</label>
+                        <textarea class="form-control"
+                                  id="observaciones"
+                                  name="observaciones"
+                                  rows="4"
+                                  placeholder="Notas adicionales..."><?= htmlspecialchars($pedido['observaciones'] ?? '') ?></textarea>
+                    </div>
+
+                    <div class="d-flex gap-2 pt-3 border-top">
+                        <button type="submit" class="btn btn-primary px-4">
+                            <i class="fas fa-save me-1"></i> Guardar Cambios
+                        </button>
+                        <a href="../views/listado_pedidos.php" class="btn btn-outline-secondary">
+                            Cancelar
+                        </a>
+                    </div>
+                </form>
             </div>
-
-            <div class="mb-3">
-                <label for="lc_gafa_recambio" class="form-label">LC / Gafa / Recambio</label>
-                <input type="text"
-                       class="form-control"
-                       id="lc_gafa_recambio"
-                       name="lc_gafa_recambio"
-                       value="<?= htmlspecialchars($pedido['lc_gafa_recambio']) ?>">
-            </div>
-
-            <div class="mb-3">
-                <label for="fecha_llegada" class="form-label">Fecha Llegada</label>
-                <input type="date"
-                       class="form-control"
-                       id="fecha_llegada"
-                       name="fecha_llegada"
-                       value="<?= valorFechaParaInput($pedido['fecha_llegada']) ?>">
-            </div>
-
-            <div class="mb-3">
-                <label for="fecha_pedido" class="form-label">Fecha Pedido</label>
-                <input type="date"
-                       class="form-control"
-                       id="fecha_pedido"
-                       name="fecha_pedido"
-                       value="<?= valorFechaParaInput($pedido['fecha_pedido']) ?>">
-            </div>
-
-            <div class="mb-3">
-                <label for="observaciones" class="form-label">Observaciones</label>
-                <textarea class="form-control"
-                          id="observaciones"
-                          name="observaciones"
-                          rows="4"><?= htmlspecialchars($pedido['observaciones']) ?></textarea>
-            </div>
-
-            <button type="submit" class="btn btn-success">Guardar Cambios</button>
-            <a href="../views/listado_pedidos.php" class="btn btn-secondary">Cancelar</a>
-        </form>
+        </div>
     </div>
-</body>
-</html>
+</div>
+
+<?php include '../views/footer.php'; ?>

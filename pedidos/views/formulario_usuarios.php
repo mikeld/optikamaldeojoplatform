@@ -2,13 +2,13 @@
 require '../includes/auth.php';
 require '../includes/conexion.php';
 
-// Definir las acciones del navbar
+$breadcrumbs = [
+    ['nombre' => 'Listado Clientes', 'url' => 'listado_usuarios.php'],
+    ['nombre' => (isset($_GET['id']) ? 'Editar Cliente' : 'Nuevo Cliente'), 'url' => '#']
+];
 $acciones_navbar = [
-    [
-        'nombre' => 'Listado Clientes',
-        'url' => 'listado_usuarios.php',
-        'icono' => 'bi-people'
-    ]
+    ['nombre' => 'Listado Clientes', 'url' => 'listado_usuarios.php', 'icono' => 'bi-people'],
+    ['nombre' => 'Listado Pedidos',  'url' => 'listado_pedidos.php',  'icono' => 'bi-card-list']
 ];
 
 include('header.php');
