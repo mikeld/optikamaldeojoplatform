@@ -48,7 +48,12 @@ try {
 
                         <!-- Campo SELECT para seleccionar cliente -->
                         <div class="col-md-6 mb-4">
-                            <label for="referencia_cliente" class="form-label">Cliente</label>
+                            <label for="referencia_cliente" class="form-label d-flex justify-content-between align-items-center">
+                                <span>Cliente</span>
+                                <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalNuevoCliente">
+                                    <i class="fas fa-plus"></i> Crear Cliente
+                                </button>
+                            </label>
                             <select id="referencia_cliente" name="referencia_cliente" class="form-select modern-form-control" required>
                                 <option value="">Seleccione un cliente</option>
                                 <?php foreach ($clientes as $cliente): ?>
@@ -120,6 +125,44 @@ try {
                         <i class="fas fa-save me-2"></i> Guardar Pedido
                     </button>
                 </form>               
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Nuevo Cliente -->
+<div class="modal fade" id="modalNuevoCliente" tabindex="-1" aria-labelledby="modalNuevoClienteLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalNuevoClienteLabel"><i class="fas fa-user-plus me-2"></i>Nuevo Cliente</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="formNuevoCliente">
+                    <div class="mb-3">
+                        <label for="modal_referencia" class="form-label">Referencia</label>
+                        <input type="text" id="modal_referencia" name="referencia" class="form-control" required placeholder="Ej: REF123">
+                    </div>
+                    <div class="mb-3">
+                        <label for="modal_telefono" class="form-label">Teléfono</label>
+                        <input type="text" id="modal_telefono" name="telefono" class="form-control" required placeholder="Ej: 600000000">
+                    </div>
+                    <div class="mb-3">
+                        <label for="modal_email" class="form-label">Email (Opcional)</label>
+                        <input type="email" id="modal_email" name="email" class="form-control" placeholder="ejemplo@email.com">
+                    </div>
+                    <div class="mb-3">
+                        <label for="modal_direccion" class="form-label">Dirección (Opcional)</label>
+                        <textarea id="modal_direccion" name="direccion" class="form-control" rows="2" placeholder="Dirección completa..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" id="btnGuardarCliente" class="btn btn-primary px-4">
+                    <i class="fas fa-save me-2"></i>Guardar Cliente
+                </button>
             </div>
         </div>
     </div>
@@ -202,6 +245,63 @@ try {
             });
           })
           .catch(console.error);
+    });
+
+    // Lógica para guardar nuevo cliente vía AJAX
+    document.getElementById('btnGuardarCliente').addEventListener('click', function() {
+        const form = document.getElementById('formNuevoCliente');
+        const formData = new FormData(form);
+
+        // Validación básica en JS
+        if (!formData.get('referencia').trim() || !formData.get('telefono').trim()) {
+            alert('Referencia y Teléfono son obligatorios.');
+            return;
+        }
+
+        // Mostrar estado de carga
+        const btn = this;
+        const originalContent = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Guardando...';
+
+        fetch('../controllers/crear_cliente_ajax.php', {
+            method: 'POST',
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                // 1. Añadir al select y seleccionar
+                const select = document.getElementById('referencia_cliente');
+                const option = new Option(data.cliente.referencia, data.cliente.referencia, true, true);
+                select.add(option);
+                
+                // Ordenar alfabéticamente el select (opcional pero recomendado)
+                const options = Array.from(select.options);
+                options.sort((a, b) => a.text.localeCompare(b.text));
+                select.innerHTML = '';
+                options.forEach(opt => select.add(opt));
+                select.value = data.cliente.referencia;
+
+                // 2. Disparar evento change para cargar datos históricos (aunque no tendrá al ser nuevo)
+                select.dispatchEvent(new Event('change'));
+
+                // 3. Cerrar modal y limpiar
+                const modal = bootstrap.Modal.getInstance(document.getElementById('modalNuevoCliente'));
+                modal.hide();
+                form.reset();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Ocurrió un error al procesar la solicitud.');
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = originalContent;
+        });
     });
     </script>
 
