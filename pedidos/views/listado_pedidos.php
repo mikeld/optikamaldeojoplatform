@@ -35,7 +35,7 @@ $inicio_recibidos       = ($pagina_recibidos    - 1) * $registros_por_pagina;
 
 $orden_columna          = $_GET['orden_columna']   ?? 'id';
 $orden_direccion        = strtoupper($_GET['orden_direccion'] ?? 'ASC') === 'DESC' ? 'DESC' : 'ASC';
-$columnas_validas       = ['id','fecha_pedido','fecha_llegada'];
+$columnas_validas       = ['id', 'referencia_cliente', 'lc_gafa_recambio', 'rx', 'fecha_pedido', 'via', 'fecha_llegada'];
 if (!in_array($orden_columna, $columnas_validas)) {
     $orden_columna = 'id';
 }

@@ -19,25 +19,57 @@ function obtenerMensajeWhatsApp($tipo, $idioma = 'es') {
 }
 
 /**
+ * Genera un enlace para ordenar la tabla manteniendo los filtros actuales
+ */
+function generarLinkOrden($columna, $orden_actual, $direccion_actual, $filtro = '', $prefix = '') {
+    $nueva_direccion = ($orden_actual === $columna && $direccion_actual === 'ASC') ? 'DESC' : 'ASC';
+    $params = $_GET;
+    $params[$prefix . 'orden_columna'] = $columna;
+    $params[$prefix . 'orden_direccion'] = $nueva_direccion;
+    if ($filtro) {
+        $params[$prefix . 'filtro'] = $filtro;
+    }
+    return '?' . http_build_query($params);
+}
+
+/**
  * Muestra una tabla con los pedidos y columnas según el tipo
  */
-function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_columna = 'id', $orden_direccion = 'ASC') {
+function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_columna = 'id', $orden_direccion = 'ASC', $prefix = '') {
     if (empty($pedidos)) {
         echo '<p class="text-center text-muted">'.$mensaje_vacio.'</p>';
         return;
     }
 
+    $filtro = $_GET[$prefix . 'filtro'] ?? '';
+
     echo '<div class="table-responsive">';
     echo '<table class="table table-hover">';
     echo '<thead><tr>';
-    echo '<th style="width: 50px;">ID</th>';
-    echo '<th>Cliente</th>';
-    echo '<th>Producto</th>';
-    echo '<th style="width: 80px;">RX</th>';
-    echo '<th style="width: 100px;">Pedido</th>';
-    echo '<th style="width: 70px;">Vía</th>';
-    echo '<th>Obs.</th>';
-    echo '<th style="width: 100px;">Llegada</th>';
+    
+    // Función anidada helper para los headers
+    $th = function($label, $col, $style = '') use ($orden_columna, $orden_direccion, $filtro, $prefix) {
+        $link = generarLinkOrden($col, $orden_columna, $orden_direccion, $filtro, $prefix);
+        $icon = '';
+        if ($orden_columna === $col) {
+            $icon = $orden_direccion === 'ASC' ? ' <i class="fas fa-sort-up"></i>' : ' <i class="fas fa-sort-down"></i>';
+        } else {
+            $icon = ' <i class="fas fa-sort text-muted opacity-50"></i>';
+        }
+        $styleAttr = $style ? ' style="'.$style.'"' : '';
+        return '<th'.$styleAttr.'><a href="'.$link.'" class="text-decoration-none text-dark d-block">'.$label.$icon.'</a></th>';
+    };
+
+    echo $th('ID', 'id', 'width: 50px;');
+    echo $th('Cliente', 'referencia_cliente');
+    echo $th('Producto', 'lc_gafa_recambio');
+    echo $th('RX', 'rx', 'width: 80px;');
+    echo $th('Pedido', 'fecha_pedido', 'width: 100px;');
+    echo $th('Vía', 'via', 'width: 70px;');
+    echo $th('Obs.', 'observaciones');
+    echo $th('Llegada', 'fecha_llegada', 'width: 100px;');
+
+    
     if ($tipo === 1) {
         echo '<th>Atraso</th>';
     }
@@ -47,6 +79,8 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
     echo '</tr></thead><tbody>';
 
     $hoy = new DateTime();
+    $msgES = obtenerMensajeWhatsApp('recibido', 'es');
+    $msgEU = obtenerMensajeWhatsApp('recibido', 'eu');
 
     foreach ($pedidos as $p) {
         echo '<tr>';
@@ -55,9 +89,9 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
         echo '<td class="text-center">'.htmlspecialchars($p['referencia_cliente']).'</td>';
         echo '<td class="text-center">'.htmlspecialchars($p['lc_gafa_recambio']).'</td>';
         echo '<td class="text-center">'.htmlspecialchars($p['rx']).'</td>';
-        echo '<td class="text-center">'.htmlspecialchars($p['fecha_pedido']).'</td>';
-        echo '<td class="text-center">'.htmlspecialchars($p['via']).'</td>';
-        echo '<td class="text-center">'.htmlspecialchars($p['observaciones']).'</td>';
+        echo '<td class="text-center">'.htmlspecialchars($p['fecha_pedido'] ?? '').'</td>';
+        echo '<td class="text-center">'.htmlspecialchars($p['via'] ?? '').'</td>';
+        echo '<td class="text-center">'.htmlspecialchars($p['observaciones'] ?? '').'</td>';
         $fechaLlegadaRaw = $p['fecha_llegada'] ?: '';
         echo '<td class="text-center">'.htmlspecialchars($fechaLlegadaRaw).'</td>';
 
@@ -91,11 +125,12 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
         echo '</td>';
 
         // WhatsApp
-        $tel = urlencode($p['telefono']);
+        $tel = urlencode($p['telefono'] ?? '');
         echo '<td class="text-center d-flex flex-column gap-1 align-items-center">';
         echo '<a href="../includes/whatsapp_redirect.php?telefono='.$tel.'&mensaje='.urlencode($msgES).'" class="btn btn-outline-success btn-sm w-100" title="Notificar en Castellano"><i class="fab fa-whatsapp"></i> ES</a>';
         echo '<a href="../includes/whatsapp_redirect.php?telefono='.$tel.'&mensaje='.urlencode($msgEU).'" class="btn btn-outline-secondary btn-sm w-100" title="Notificar en Euskera"><i class="fab fa-whatsapp"></i> EU</a>';
         echo '</td>';
+
 
         // Acciones
         echo '<td class="text-center">';
@@ -107,3 +142,4 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
 
     echo '</tbody></table></div>';
 }
+
