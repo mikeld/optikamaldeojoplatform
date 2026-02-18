@@ -34,7 +34,7 @@ const AuditPage: React.FC = () => {
     if (!file) return;
     setIsProcessing(true);
     setError(null);
-    
+
     try {
       const reader = new FileReader();
       reader.readAsDataURL(file);
@@ -44,7 +44,7 @@ const AuditPage: React.FC = () => {
         const masterProducts = await db.getProducts();
 
         const auditLines: AuditLine[] = extracted.items.map((item, idx) => {
-          const match = masterProducts.find(p => 
+          const match = masterProducts.find(p =>
             p.name.toLowerCase().trim() === item.description.toLowerCase().trim() ||
             p.sku.toLowerCase().trim() === item.description.toLowerCase().trim()
           );
@@ -90,7 +90,7 @@ const AuditPage: React.FC = () => {
 
     if (action === 'ACCEPT') {
       line.status = LineStatus.ACCEPTED;
-    } 
+    }
     else if (action === 'RESOLVE_PRICE') {
       setActiveLineIdx(lineIdx);
       setModalMode('PRICE_UPDATE');
@@ -98,7 +98,7 @@ const AuditPage: React.FC = () => {
     }
     else if (action === 'REJECT') {
       line.status = LineStatus.REJECTED;
-    } 
+    }
     else if (action === 'ADD_TO_CATALOG') {
       setActiveLineIdx(lineIdx);
       setTempSku(`SKU-${Math.floor(Math.random() * 10000)}`);
@@ -127,7 +127,7 @@ const AuditPage: React.FC = () => {
         await db.upsertProduct({ ...p, expectedPrice: line.invoiceUnitPrice });
       }
     }
-    
+
     line.status = LineStatus.ACCEPTED;
     setAuditResult({ ...auditResult, lines });
     setModalMode('NONE');
@@ -146,12 +146,12 @@ const AuditPage: React.FC = () => {
       expectedPrice: line.invoiceUnitPrice,
       vat: 21
     };
-    
+
     await db.upsertProduct(newProd);
     line.status = LineStatus.ACCEPTED;
     line.masterProductId = newProd.id;
     line.masterProductPrice = newProd.expectedPrice;
-    
+
     setAuditResult({ ...auditResult, lines });
     setModalMode('NONE');
     setActiveLineIdx(null);
@@ -161,10 +161,10 @@ const AuditPage: React.FC = () => {
   const saveEditedLine = () => {
     if (activeLineIdx === null || !auditResult || !editLineData) return;
     const lines = [...auditResult.lines];
-    
+
     const diff = editLineData.masterProductPrice ? editLineData.invoiceUnitPrice - editLineData.masterProductPrice : 0;
     let newStatus = editLineData.status;
-    
+
     if (editLineData.masterProductPrice) {
       newStatus = Math.abs(diff) < 0.01 ? LineStatus.MATCHED : LineStatus.DISCREPANCY;
     }
@@ -180,12 +180,33 @@ const AuditPage: React.FC = () => {
     setIsBulkProcessing(true);
     const updatedLines = [...auditResult.lines];
     const products = await db.getProducts();
+    const createdInSession = new Map<string, Product>();
 
     for (let i = 0; i < updatedLines.length; i++) {
       const line = updatedLines[i];
       if (line.status === LineStatus.REJECTED || line.status === LineStatus.ACCEPTED) continue;
-      
+
+      const cleanName = line.invoiceDescription.toLowerCase().trim();
+
       if (line.status === LineStatus.NEW_PRODUCT) {
+        // Check if we already created this product in this session
+        if (createdInSession.has(cleanName)) {
+          const existing = createdInSession.get(cleanName)!;
+          line.status = LineStatus.ACCEPTED;
+          line.masterProductId = existing.id;
+          line.masterProductPrice = existing.expectedPrice;
+          continue;
+        }
+
+        // Check if it exists in DB (to be ultra-safe)
+        const dbMatch = products.find(p => p.name.toLowerCase().trim() === cleanName);
+        if (dbMatch) {
+          line.status = LineStatus.ACCEPTED;
+          line.masterProductId = dbMatch.id;
+          line.masterProductPrice = dbMatch.expectedPrice;
+          continue;
+        }
+
         const newSku = `AUTO-${Math.floor(Math.random() * 99999)}`;
         const newProd: Product = {
           id: `prod-${Date.now()}-${i}`,
@@ -195,10 +216,12 @@ const AuditPage: React.FC = () => {
           vat: 21
         };
         await db.upsertProduct(newProd);
+        createdInSession.set(cleanName, newProd);
+
         line.status = LineStatus.ACCEPTED;
         line.masterProductId = newProd.id;
         line.masterProductPrice = newProd.expectedPrice;
-      } 
+      }
       else if (line.status === LineStatus.DISCREPANCY && line.masterProductId) {
         const p = products.find(prod => prod.id === line.masterProductId);
         if (p) {
@@ -240,7 +263,7 @@ const AuditPage: React.FC = () => {
               <p className="text-slate-500 text-center text-sm mb-8 leading-relaxed">
                 El ítem <strong>{auditResult.lines[activeLineIdx].invoiceDescription}</strong> ha variado. ¿Cómo quieres proceder?
               </p>
-              
+
               <div className="grid grid-cols-2 gap-4 mb-8">
                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-center">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Precio Catálogo</p>
@@ -253,20 +276,20 @@ const AuditPage: React.FC = () => {
               </div>
 
               <div className="space-y-3">
-                <button 
-                  onClick={() => confirmPriceResolution(true)} 
+                <button
+                  onClick={() => confirmPriceResolution(true)}
                   className="w-full py-4 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all flex items-center justify-center gap-2"
                 >
                   <RefreshCw className="w-5 h-5" /> ACTUALIZAR MAESTRO Y VALIDAR
                 </button>
-                <button 
-                  onClick={() => confirmPriceResolution(false)} 
+                <button
+                  onClick={() => confirmPriceResolution(false)}
                   className="w-full py-4 bg-white text-slate-600 font-black rounded-2xl border-2 border-slate-100 hover:bg-slate-50 transition-all"
                 >
                   Solo validar para esta factura
                 </button>
-                <button 
-                  onClick={() => setModalMode('NONE')} 
+                <button
+                  onClick={() => setModalMode('NONE')}
                   className="w-full py-3 text-slate-400 font-bold hover:text-slate-600 transition-colors"
                 >
                   Cancelar
@@ -284,29 +307,29 @@ const AuditPage: React.FC = () => {
               <div className="space-y-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Descripción</label>
-                  <input 
+                  <input
                     value={editLineData.invoiceDescription}
-                    onChange={(e) => setEditLineData({...editLineData, invoiceDescription: e.target.value})}
+                    onChange={(e) => setEditLineData({ ...editLineData, invoiceDescription: e.target.value })}
                     className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 font-bold outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Cantidad</label>
-                    <input 
+                    <input
                       type="number"
                       value={editLineData.quantity}
-                      onChange={(e) => setEditLineData({...editLineData, quantity: parseFloat(e.target.value)})}
+                      onChange={(e) => setEditLineData({ ...editLineData, quantity: parseFloat(e.target.value) })}
                       className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 font-bold font-mono outline-none focus:border-indigo-500"
                     />
                   </div>
                   <div>
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Precio (€)</label>
-                    <input 
+                    <input
                       type="number"
                       step="0.01"
                       value={editLineData.invoiceUnitPrice}
-                      onChange={(e) => setEditLineData({...editLineData, invoiceUnitPrice: parseFloat(e.target.value)})}
+                      onChange={(e) => setEditLineData({ ...editLineData, invoiceUnitPrice: parseFloat(e.target.value) })}
                       className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 font-bold font-mono outline-none focus:border-indigo-500"
                     />
                   </div>
@@ -387,7 +410,7 @@ const AuditPage: React.FC = () => {
                         <button onClick={() => handleLineAction(idx, 'EDIT')} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg transition-all" title="Corregir OCR">
                           <Edit3 className="w-4 h-4" />
                         </button>
-                        
+
                         {line.status === LineStatus.NEW_PRODUCT && (
                           <button onClick={() => handleLineAction(idx, 'ADD_TO_CATALOG')} className="flex items-center gap-1.5 text-[9px] font-black bg-slate-900 text-white px-3 py-2 rounded-lg hover:bg-indigo-600 transition-all uppercase">
                             <PlusCircle className="w-3.5 h-3.5" /> Vincular
@@ -395,8 +418,8 @@ const AuditPage: React.FC = () => {
                         )}
 
                         {isDiscrepancy && (
-                          <button 
-                            onClick={() => handleLineAction(idx, 'RESOLVE_PRICE')} 
+                          <button
+                            onClick={() => handleLineAction(idx, 'RESOLVE_PRICE')}
                             className="flex items-center gap-2 px-3 py-2 bg-rose-600 text-white rounded-lg text-[10px] font-black hover:bg-rose-700 transition-all shadow-lg shadow-rose-100 uppercase"
                           >
                             <RefreshCw className="w-3.5 h-3.5" /> Resolver
@@ -404,7 +427,7 @@ const AuditPage: React.FC = () => {
                         )}
 
                         {line.status === LineStatus.PENDING && (
-                           <button onClick={() => handleLineAction(idx, 'ACCEPT')} className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all">
+                          <button onClick={() => handleLineAction(idx, 'ACCEPT')} className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all">
                             <CheckCircle2 className="w-6 h-6" />
                           </button>
                         )}

@@ -22,7 +22,13 @@ export const extractInvoiceData = async (base64Image: string, mimeType: string):
           },
         },
         {
-          text: "Extract invoice data. IMPORTANT: The date MUST be in YYYY-MM-DD format. Identify all line items. Return JSON.",
+          text: `Extract invoice data. 
+          IMPORTANT Rules for Item Extraction:
+          1. Clean Descriptions: Remove technical noise from product names such as internal references (e.g. 100040256), graduation/powers (e.g. -02.75, +1.25), and other numeric codes (e.g. 850 141). 
+             Example: "(1) 100040256 DAILIES TOTAL 1 90P 850 141 -02.75" should be extracted as "DAILIES TOTAL 1 90P".
+          2. Grouping: If multiple lines refer to the same product (same cleaned description) AND have the same unit price, group them into a single item summing their quantities.
+          3. Date Format: MUST be in YYYY-MM-DD.
+          4. Return JSON following the provided schema.`,
         },
       ],
     },
