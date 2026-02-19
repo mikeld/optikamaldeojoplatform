@@ -295,6 +295,116 @@ $n_recibidos  = count($pedidos_recibidos);
     </div>
 </div>
 
+<!-- Modal de Detalles del Pedido -->
+<div class="modal fade" id="modalDetallePedido" tabindex="-1" aria-labelledby="modalDetallePedidoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 20px; overflow: hidden;">
+            <div class="modal-header bg-primary text-white border-0 py-3">
+                <h5 class="modal-title d-flex align-items-center" id="modalDetallePedidoLabel">
+                    <i class="fas fa-info-circle me-2"></i> Detalles del Pedido #<span id="p-id"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <div class="p-3 bg-light rounded-4 h-100">
+                            <label class="small text-muted text-uppercase fw-bold mb-1">Cliente</label>
+                            <div id="p-cliente" class="fs-5 fw-bold text-dark"></div>
+                            
+                            <hr class="my-3 opacity-10">
+                            
+                            <label class="small text-muted text-uppercase fw-bold mb-1">Producto / Servicio</label>
+                            <div id="p-producto" class="text-primary fw-bold"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-3 bg-light rounded-4 h-100">
+                            <label class="small text-muted text-uppercase fw-bold mb-1">Graduación (RX)</label>
+                            <div id="p-rx" class="mt-1"></div>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <div class="p-3 bg-light rounded-4 border-start border-primary border-4">
+                            <label class="small text-muted text-uppercase fw-bold mb-1">Observaciones</label>
+                            <div id="p-observaciones" class="mt-2 text-dark lh-base" style="white-space: pre-wrap; font-size: 1.05rem;"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-3 bg-light rounded-4 text-center">
+                            <label class="small text-muted text-uppercase fw-bold d-block mb-1">Fecha Pedido</label>
+                            <span id="p-fecha-pedido" class="badge bg-white text-dark border px-3 py-2"></span>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-3 bg-light rounded-4 text-center">
+                            <label class="small text-muted text-uppercase fw-bold d-block mb-1">Vía</label>
+                            <span id="p-via" class="badge bg-info text-white px-3 py-2"></span>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-3 bg-light rounded-4 text-center">
+                            <label class="small text-muted text-uppercase fw-bold d-block mb-1">Fecha Llegada</label>
+                            <span id="p-fecha-llegada" class="badge bg-primary px-3 py-2"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 p-4 pt-0">
+                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Cerrar</button>
+                <a id="p-btn-editar" href="#" class="btn btn-primary rounded-pill px-4">
+                    <i class="fas fa-edit me-1"></i> Editar Pedido
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const modal = new bootstrap.Modal(document.getElementById('modalDetallePedido'));
+    
+    document.querySelectorAll('.clickable-row').forEach(row => {
+        row.addEventListener('click', function(e) {
+            // No abrir modal si se hace clic en botones, enlaces o formularios
+            if (e.target.closest('button') || e.target.closest('a') || e.target.closest('form')) {
+                return;
+            }
+            
+            const p = JSON.parse(this.dataset.pedido);
+            
+            // Rellenar modal
+            document.getElementById('p-id').textContent = p.id;
+            document.getElementById('p-cliente').textContent = p.referencia_cliente;
+            document.getElementById('p-producto').textContent = p.lc_gafa_recambio;
+            document.getElementById('p-rx').innerHTML = this.querySelector('td:nth-child(4)').innerHTML;
+            document.getElementById('p-observaciones').textContent = p.observaciones || 'Sin observaciones.';
+            document.getElementById('p-fecha-pedido').textContent = p.fecha_pedido || '-';
+            document.getElementById('p-via').textContent = p.via || '-';
+            document.getElementById('p-fecha-llegada').textContent = p.fecha_llegada || '-';
+            document.getElementById('p-btn-editar').href = '../controllers/editar_pedido.php?id=' + p.id;
+            
+            modal.show();
+        });
+    });
+});
+
+function toggleTable(id, btnId, title) {
+    const element = document.getElementById(id);
+    const btn = document.getElementById(btnId);
+    if (element.classList.contains('is-collapsed')) {
+        element.classList.remove('is-collapsed');
+        btn.innerHTML = '<i class="fas fa-eye-slash me-1"></i> Ocultar';
+        btn.classList.add('btn-outline-primary');
+        btn.classList.remove('btn-primary');
+    } else {
+        element.classList.add('is-collapsed');
+        btn.innerHTML = '<i class="fas fa-eye me-1"></i> Mostrar';
+        btn.classList.remove('btn-outline-primary');
+        btn.classList.add('btn-primary');
+    }
+}
+</script>
+
 <?php
-// Pie de página (cierra contenedor, carga scripts, cierra body/html)
 include 'footer.php';

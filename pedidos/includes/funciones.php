@@ -112,7 +112,9 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
     $msgEU = obtenerMensajeWhatsApp('recibido', 'eu');
 
     foreach ($pedidos as $p) {
-        echo '<tr>';
+        // Preparar datos para el modal (escapado para JSON y HTML)
+        $p_json = htmlspecialchars(json_encode($p), ENT_QUOTES, 'UTF-8');
+        echo '<tr class="clickable-row" data-pedido=\''.$p_json.'\'>';
 
         echo '<td class="text-center">'.htmlspecialchars($p['id']).'</td>';
         echo '<td class="text-center">'.htmlspecialchars($p['referencia_cliente']).'</td>';
