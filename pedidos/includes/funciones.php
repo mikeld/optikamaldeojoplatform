@@ -33,6 +33,35 @@ function generarLinkOrden($columna, $orden_actual, $direccion_actual, $filtro = 
 }
 
 /**
+ * Formatea la graduación (RX) para mostrarla de forma estructurada
+ */
+function formatearRX($rx) {
+    if (!$rx) return '';
+    
+    // Intentar detectar OD/OI
+    $rx = str_replace(['O.D:', 'OD:', 'O.I:', 'OI:'], ['OD ', 'OD ', 'OI ', 'OI '], $rx);
+    
+    $parts = preg_split('/\s+(?=OD|OI)/i', trim($rx));
+    
+    if (count($parts) > 1) {
+        $html = '<div class="rx-grid">';
+        foreach ($parts as $part) {
+            $cleaned = trim($part);
+            if (empty($cleaned)) continue;
+            
+            $side = (stripos($cleaned, 'OD') === 0) ? 'OD' : ((stripos($cleaned, 'OI') === 0) ? 'OI' : '');
+            $val = trim(str_ireplace(['OD', 'OI'], '', $cleaned));
+            
+            $html .= '<div class="rx-item"><span class="rx-side">'.$side.'</span><span class="rx-val">'.$val.'</span></div>';
+        }
+        $html .= '</div>';
+        return $html;
+    }
+    
+    return '<div class="rx-badge">'.htmlspecialchars($rx).'</div>';
+}
+
+/**
  * Muestra una tabla con los pedidos y columnas según el tipo
  */
 function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_columna = 'id', $orden_direccion = 'ASC', $prefix = '') {
@@ -88,12 +117,12 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
         echo '<td class="text-center">'.htmlspecialchars($p['id']).'</td>';
         echo '<td class="text-center">'.htmlspecialchars($p['referencia_cliente']).'</td>';
         echo '<td class="text-center">'.htmlspecialchars($p['lc_gafa_recambio']).'</td>';
-        echo '<td class="text-center">'.htmlspecialchars($p['rx']).'</td>';
-        echo '<td class="text-center">'.htmlspecialchars($p['fecha_pedido'] ?? '').'</td>';
-        echo '<td class="text-center">'.htmlspecialchars($p['via'] ?? '').'</td>';
-        echo '<td class="text-center">'.htmlspecialchars($p['observaciones'] ?? '').'</td>';
+        echo '<td>'.formatearRX($p['rx']).'</td>';
+        echo '<td class="text-center font-monospace">'.htmlspecialchars($p['fecha_pedido'] ?? '').'</td>';
+        echo '<td class="text-center"><span class="badge bg-light text-dark border">'.htmlspecialchars($p['via'] ?? '').'</span></td>';
+        echo '<td><div class="text-truncate" style="max-width: 150px;" title="'.htmlspecialchars($p['observaciones'] ?? '').'">'.htmlspecialchars($p['observaciones'] ?? '').'</div></td>';
         $fechaLlegadaRaw = $p['fecha_llegada'] ?: '';
-        echo '<td class="text-center">'.htmlspecialchars($fechaLlegadaRaw).'</td>';
+        echo '<td class="text-center font-monospace font-bold text-primary">'.htmlspecialchars($fechaLlegadaRaw).'</td>';
 
         if ($tipo === 1) {
             if ($fechaLlegadaRaw) {
@@ -103,7 +132,7 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
             } else {
                 $dias = '';
             }
-            echo '<td class="text-center">'.$dias.' días</td>';
+            echo '<td class="text-center"><span class="badge bg-danger">'.$dias.' días</span></td>';
         }
 
         // Estado
@@ -112,13 +141,13 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
             if ($tipo < 3) {
                 echo '<form action="../controllers/marcar_recibido.php" method="POST" class="d-inline">';
                 echo '<input type="hidden" name="pedido_id" value="'.htmlspecialchars($p['id']).'">';
-                echo '<button type="submit" class="btn btn-success btn-sm btn-action"><i class="fas fa-check me-1"></i> RECIBIDO</button>';
+                echo '<button type="submit" class="btn btn-success btn-sm btn-action w-100"><i class="fas fa-check"></i></button>';
                 echo '</form>';
             } else {
                 echo '<form action="../controllers/cambiar_estado_pedido.php" method="POST" class="d-inline">';
                 echo '<input type="hidden" name="pedido_id" value="'.htmlspecialchars($p['id']).'">';
                 echo '<input type="hidden" name="recibido" value="0">';
-                echo '<button type="submit" class="btn btn-danger btn-sm btn-action"><i class="fas fa-undo me-1"></i> DESHACER</button>';
+                echo '<button type="submit" class="btn btn-danger btn-sm btn-action w-100"><i class="fas fa-undo"></i></button>';
                 echo '</form>';
             }
         }
@@ -126,15 +155,24 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
 
         // WhatsApp
         $tel = urlencode($p['telefono'] ?? '');
-        echo '<td class="text-center d-flex flex-column gap-1 align-items-center">';
-        echo '<a href="../includes/whatsapp_redirect.php?telefono='.$tel.'&mensaje='.urlencode($msgES).'" class="btn btn-outline-success btn-sm w-100" title="Notificar en Castellano"><i class="fab fa-whatsapp"></i> ES</a>';
-        echo '<a href="../includes/whatsapp_redirect.php?telefono='.$tel.'&mensaje='.urlencode($msgEU).'" class="btn btn-outline-secondary btn-sm w-100" title="Notificar en Euskera"><i class="fab fa-whatsapp"></i> EU</a>';
+        $nombreCliente = $p['referencia_cliente'] ?? 'Cliente';
+        $nombreProducto = $p['lc_gafa_recambio'] ?? 'pedido';
+
+        // Reemplazar placeholders en los mensajes
+        $msgES_custom = str_replace(['{cliente}', '{producto}'], [$nombreCliente, $nombreProducto], $msgES);
+        $msgEU_custom = str_replace(['{cliente}', '{producto}'], [$nombreCliente, $nombreProducto], $msgEU);
+
+        echo '<td class="text-center">';
+        echo '<div class="d-flex justify-content-center gap-1">';
+        echo '<a href="../includes/whatsapp_redirect.php?telefono='.$tel.'&mensaje='.urlencode($msgES_custom).'" class="btn btn-ws-pill btn-ws-es" title="Castellano" target="_blank" rel="noopener noreferrer"><i class="fab fa-whatsapp"></i> ES</a>';
+        echo '<a href="../includes/whatsapp_redirect.php?telefono='.$tel.'&mensaje='.urlencode($msgEU_custom).'" class="btn btn-ws-pill btn-ws-eu" title="Euskera" target="_blank" rel="noopener noreferrer"><i class="fab fa-whatsapp"></i> EU</a>';
+        echo '</div>';
         echo '</td>';
 
 
         // Acciones
         echo '<td class="text-center">';
-        echo '<a href="../controllers/editar_pedido.php?id='.htmlspecialchars($p['id']).'" class="btn btn-light btn-sm" title="Editar Pedido"><i class="fas fa-edit text-primary"></i></a>';
+        echo '<a href="../controllers/editar_pedido.php?id='.htmlspecialchars($p['id']).'" class="btn btn-edit-icon" title="Editar"><i class="fas fa-pen-to-square"></i></a>';
         echo '</td>';
 
         echo '</tr>';

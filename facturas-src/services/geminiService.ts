@@ -5,14 +5,14 @@ import { InvoiceData } from "../types";
 export const extractInvoiceData = async (base64Image: string, mimeType: string): Promise<InvoiceData> => {
   // Usamos (process.env as any) para evitar errores de tipos en entornos que no tienen definidos los tipos de Node/Vite
   // pero manteniendo la variable API_KEY que es donde el sistema inyecta la clave.
-  const apiKey = import.meta.env.VITE_API_KEY || (process.env as any).API_KEY;
+  const apiKey = (import.meta as any).env?.VITE_API_KEY || (process.env as any).API_KEY;
   if (!apiKey) {
     throw new Error("No se ha configurado la clave de API de Gemini (VITE_API_KEY)");
   }
   const ai = new GoogleGenAI({ apiKey });
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3-flash-preview', //model: "gemini-1.5-flash",
     contents: {
       parts: [
         {

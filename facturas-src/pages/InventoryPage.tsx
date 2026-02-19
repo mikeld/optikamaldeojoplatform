@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { db } from '../db';
-import { Product, AuditRecord } from '../types';
+import { Product, AuditRecord, ProductFamily } from '../types';
 import { Plus, Search, Edit2, Trash2, Calendar, TrendingUp, X, LineChart as ChartIcon, AlertTriangle } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 

@@ -426,3 +426,120 @@ h2 {
     content: "›";
     font-size: 1rem;
 }
+
+/* ── RX Display Styles ── */
+.rx-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 100px;
+}
+
+.rx-item {
+    display: flex;
+    align-items: center;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    overflow: hidden;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.rx-side {
+    background: #6366f1;
+    color: white;
+    padding: 2px 6px;
+    font-size: 0.65rem;
+    min-width: 28px;
+    text-align: center;
+}
+
+.rx-val {
+    padding: 2px 8px;
+    color: #1e293b;
+}
+
+.rx-badge {
+    background: #f1f5f9;
+    color: #475569;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    display: inline-block;
+}
+
+/* ── WhatsApp Buttons ── */
+.btn-ws-pill {
+    border-radius: 50px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    padding: 4px 10px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    text-decoration: none;
+    border: 1px solid transparent;
+}
+
+.btn-ws-es {
+    background: #ecfdf5;
+    color: #059669;
+    border-color: #10b98133;
+}
+
+.btn-ws-eu {
+    background: #f8fafc;
+    color: #64748b;
+    border-color: #e2e8f0;
+}
+
+.btn-ws-pill:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.btn-ws-es:hover {
+    background: #10b981;
+    color: white;
+}
+
+.btn-ws-eu:hover {
+    background: #64748b;
+    color: white;
+}
+
+/* ── Action Icons ── */
+.btn-edit-icon {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: #f1f5f9;
+    color: #6366f1;
+    transition: all 0.2s;
+    border: none;
+}
+
+.btn-edit-icon:hover {
+    background: #6366f1;
+    color: white;
+    transform: rotate(15deg);
+}
+
+/* ── Table Refinements ── */
+.table td {
+    font-weight: 500;
+}
+
+.font-bold {
+    font-weight: 700 !important;
+}
+
+.text-primary {
+    color: #4f46e5 !important;
+}

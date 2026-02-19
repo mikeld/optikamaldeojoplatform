@@ -18,8 +18,6 @@ $breadcrumbs = [
 $acciones_navbar = [
     ['nombre'=>'Nuevo Pedido',     'url'=>'formulario_pedidos.php',   'icono'=>'bi-file-earmark-plus'],
     ['nombre'=>'Nuevo Cliente',    'url'=>'formulario_usuarios.php',  'icono'=>'bi-person-plus'],
-    ['nombre'=>'Estadísticas',     'url'=>'estadisticas.php',         'icono'=>'bi-graph-up'],
-    ['nombre'=>'Calendario',       'url'=>'calendario.php',           'icono'=>'bi-calendar3'],
     ['nombre'=>'Proveedores',      'url'=>'listado_proveedores.php',  'icono'=>'bi-building'],
     ['nombre'=>'Listado Clientes', 'url'=>'listado_usuarios.php',     'icono'=>'bi-people']
 ];

@@ -3,7 +3,7 @@
 $telefono = isset($_GET['telefono']) ? preg_replace('/\D+/', '', $_GET['telefono']) : '';
 $mensaje  = isset($_GET['mensaje'])  ? $_GET['mensaje']                      : '';
 $mensaje_encoded = urlencode($mensaje);
-$url_whatsapp   = "https://api.whatsapp.com/send?phone={$telefono}&text={$mensaje_encoded}&type=phone_number&app_absent=0";
+$url_whatsapp   = "https://wa.me/{$telefono}?text={$mensaje_encoded}";
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -48,19 +48,21 @@ $url_whatsapp   = "https://api.whatsapp.com/send?phone={$telefono}&text={$mensaj
     const btn = document.getElementById('btn-whatsapp');
     const spinner = document.getElementById('spinner');
 
-    btn.addEventListener('click', () => {
+    function openWhatsApp() {
       // ocultar el botón y mostrar el spinner grande
       btn.disabled = true;
       spinner.style.borderTopColor = '#28a745';
 
-      // abre WhatsApp en nueva pestaña (éxito garantizado por gesto de usuario)
-      window.open(urlWhatsApp, '_blank');
+      // abre WhatsApp en la misma pestaña (ya estamos en una nueva abierta por target="_blank")
+      window.location.href = urlWhatsApp;
+    }
 
-      // tras 1 s, redirige al listado de pedidos en la misma pestaña
-      setTimeout(() => {
-        window.location.href = window.location.origin + '/views/listado_pedidos.php';
-      }, 1000);
-    });
+    btn.addEventListener('click', openWhatsApp);
+
+    // Auto-redirección tras 500ms
+    setTimeout(() => {
+        openWhatsApp();
+    }, 500);
   </script>
 </body>
 </html>
