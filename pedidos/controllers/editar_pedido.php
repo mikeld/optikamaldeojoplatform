@@ -75,7 +75,27 @@ include '../views/header.php';
                     </div>
 
                     <div class="row g-3 mb-3">
-                        <div class="col-12">
+                        <div class="col-md-6">
+                            <label for="fecha_cliente" class="form-label">Fecha Cliente</label>
+                            <input type="date"
+                                   class="form-control"
+                                   id="fecha_cliente"
+                                   name="fecha_cliente"
+                                   value="<?= valorFechaParaInput($pedido['fecha_cliente']) ?>">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="via" class="form-label">Vía de Pedido</label>
+                            <input type="text"
+                                   class="form-control"
+                                   id="via"
+                                   name="via"
+                                   placeholder="Ej: Teléfono, Email, Tienda..."
+                                   value="<?= htmlspecialchars($pedido['via'] ?? '') ?>">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-8">
                             <label for="lc_gafa_recambio" class="form-label">Producto (LC / Gafa / Recambio)</label>
                             <input type="text"
                                    class="form-control"
@@ -83,6 +103,22 @@ include '../views/header.php';
                                    name="lc_gafa_recambio"
                                    value="<?= htmlspecialchars($pedido['lc_gafa_recambio'] ?? '') ?>">
                         </div>
+                        <div class="col-md-4">
+                            <label for="recibido" class="form-label">Estado</label>
+                            <select id="recibido" name="recibido" class="form-select">
+                                <option value="0" <?= ($pedido['recibido'] ?? 0) == 0 ? 'selected' : '' ?>>Pendiente</option>
+                                <option value="1" <?= ($pedido['recibido'] ?? 0) == 1 ? 'selected' : '' ?>>Recibido</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="rx" class="form-label">Graduación (RX)</label>
+                        <textarea class="form-control"
+                                  id="rx"
+                                  name="rx"
+                                  rows="2"
+                                  placeholder="Ej: OD -2.00 OI -1.50..."><?= htmlspecialchars($pedido['rx'] ?? '') ?></textarea>
                     </div>
 
                     <div class="row g-3 mb-4">

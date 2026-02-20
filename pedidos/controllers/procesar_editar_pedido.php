@@ -8,10 +8,14 @@ $conexion = new Conexion();
 $pedido_id           = $_POST['id'];
 $referencia_cliente  = trim($_POST['referencia_cliente']);
 $lc_gafa_recambio    = trim($_POST['lc_gafa_recambio']);
+$rx                  = trim($_POST['rx'] ?? '');
+$via                 = trim($_POST['via'] ?? '');
+$recibido            = isset($_POST['recibido']) ? (int)$_POST['recibido'] : 0;
 $observaciones       = trim($_POST['observaciones']);
 $proveedor_id        = $_POST['proveedor_id'] !== '' ? (int)$_POST['proveedor_id'] : null;
 
 // Convertir fechas vacías a NULL
+$fecha_cliente = $_POST['fecha_cliente'] !== '' ? $_POST['fecha_cliente'] : null;
 $fecha_pedido  = $_POST['fecha_pedido']  !== '' ? $_POST['fecha_pedido']  : null;
 $fecha_llegada = $_POST['fecha_llegada'] !== '' ? $_POST['fecha_llegada'] : null;
 
@@ -25,6 +29,10 @@ if (!$pedido_id || !$referencia_cliente) {
 $sql = "UPDATE pedidos SET
           referencia_cliente = :ref,
           lc_gafa_recambio    = :lc,
+          rx                  = :rx,
+          via                 = :via,
+          recibido            = :rec,
+          fecha_cliente       = :fc,
           fecha_pedido        = :fp,
           fecha_llegada       = :fl,
           observaciones       = :obs,
@@ -33,7 +41,16 @@ $sql = "UPDATE pedidos SET
 $stmt = $conexion->pdo->prepare($sql);
 $stmt->bindValue(':ref', $referencia_cliente, PDO::PARAM_STR);
 $stmt->bindValue(':lc',  $lc_gafa_recambio,    PDO::PARAM_STR);
+$stmt->bindValue(':rx',  $rx,                 PDO::PARAM_STR);
+$stmt->bindValue(':via', $via,                PDO::PARAM_STR);
+$stmt->bindValue(':rec', $recibido,           PDO::PARAM_INT);
+
 // si es NULL, bindParam NULL, si no, bindParam como STRING
+if (is_null($fecha_cliente)) {
+    $stmt->bindValue(':fc', null, PDO::PARAM_NULL);
+} else {
+    $stmt->bindValue(':fc', $fecha_cliente, PDO::PARAM_STR);
+}
 if (is_null($fecha_pedido)) {
     $stmt->bindValue(':fp', null, PDO::PARAM_NULL);
 } else {
