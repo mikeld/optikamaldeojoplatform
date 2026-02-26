@@ -174,10 +174,9 @@ $n_recibidos  = count($pedidos_recibidos);
                 <span class="badge bg-warning text-dark ms-2 fs-6"><?= $n_pedir ?></span>
             </h2>
             <div class="d-flex gap-2">
-                <form action="" method="GET" class="d-flex search-box-inline">
-                    <?php foreach($_GET as $k=>$v): if(strpos($k, 'pedir_') !== 0) echo '<input type="hidden" name="'.htmlspecialchars($k).'" value="'.htmlspecialchars($v).'">'; endforeach; ?>
-                    <input type="text" name="pedir_filtro" class="form-control form-control-sm" placeholder="Buscar..." value="<?= htmlspecialchars($p_pedir['filter']) ?>">
-                    <button type="submit" class="btn btn-sm btn-nav-modern border-0"><i class="fas fa-search"></i></button>
+                <form action="" method="GET" class="d-flex search-box-inline" onsubmit="return false;">
+                    <input type="text" name="pedir_filtro" class="form-control form-control-sm live-search" placeholder="Buscar..." data-target="tabla-pedir" value="<?= htmlspecialchars($p_pedir['filter']) ?>">
+                    <button type="button" class="btn btn-sm btn-nav-modern border-0"><i class="fas fa-search"></i></button>
                 </form>
                 <button id="btn-por-pedir" class="btn btn-action btn-outline-primary"
                         onclick="toggleTable('tabla-por-pedir','btn-por-pedir', 'Pendientes de Pedir')">
@@ -206,10 +205,9 @@ $n_recibidos  = count($pedidos_recibidos);
                 <span class="badge bg-danger ms-2 fs-6"><?= $n_atrasados ?></span>
             </h2>
             <div class="d-flex gap-2">
-                <form action="" method="GET" class="d-flex search-box-inline">
-                    <?php foreach($_GET as $k=>$v): if(strpos($k, 'atrasados_') !== 0) echo '<input type="hidden" name="'.htmlspecialchars($k).'" value="'.htmlspecialchars($v).'">'; endforeach; ?>
-                    <input type="text" name="atrasados_filtro" class="form-control form-control-sm" placeholder="Buscar..." value="<?= htmlspecialchars($p_atrasados['filter']) ?>">
-                    <button type="submit" class="btn btn-sm btn-nav-modern border-0"><i class="fas fa-search"></i></button>
+                <form action="" method="GET" class="d-flex search-box-inline" onsubmit="return false;">
+                    <input type="text" name="atrasados_filtro" class="form-control form-control-sm live-search" placeholder="Buscar..." data-target="tabla-atrasados" value="<?= htmlspecialchars($p_atrasados['filter']) ?>">
+                    <button type="button" class="btn btn-sm btn-nav-modern border-0"><i class="fas fa-search"></i></button>
                 </form>
                 <button id="btn-atrasados" class="btn btn-action btn-outline-primary"
                         onclick="toggleTable('tabla-atrasados','btn-atrasados', 'Pedidos Atrasados')">
@@ -238,10 +236,9 @@ $n_recibidos  = count($pedidos_recibidos);
                 <span class="badge bg-primary ms-2 fs-6"><?= $n_pendientes ?></span>
             </h2>
             <div class="d-flex gap-2">
-                <form action="" method="GET" class="d-flex search-box-inline">
-                    <?php foreach($_GET as $k=>$v): if(strpos($k, 'pendientes_') !== 0) echo '<input type="hidden" name="'.htmlspecialchars($k).'" value="'.htmlspecialchars($v).'">'; endforeach; ?>
-                    <input type="text" name="pendientes_filtro" class="form-control form-control-sm" placeholder="Buscar..." value="<?= htmlspecialchars($p_pendientes['filter']) ?>">
-                    <button type="submit" class="btn btn-sm btn-nav-modern border-0"><i class="fas fa-search"></i></button>
+                <form action="" method="GET" class="d-flex search-box-inline" onsubmit="return false;">
+                    <input type="text" name="pendientes_filtro" class="form-control form-control-sm live-search" placeholder="Buscar..." data-target="tabla-pendientes" value="<?= htmlspecialchars($p_pendientes['filter']) ?>">
+                    <button type="button" class="btn btn-sm btn-nav-modern border-0"><i class="fas fa-search"></i></button>
                 </form>
                 <button id="btn-pendientes" class="btn btn-action btn-outline-primary"
                         onclick="toggleTable('tabla-pendientes','btn-pendientes', 'Pendientes de Recibir')">
@@ -270,10 +267,9 @@ $n_recibidos  = count($pedidos_recibidos);
                 <span class="badge bg-success ms-2 fs-6"><?= $n_recibidos ?></span>
             </h2>
             <div class="d-flex gap-2">
-                <form action="" method="GET" class="d-flex search-box-inline">
-                    <?php foreach($_GET as $k=>$v): if(strpos($k, 'recibidos_') !== 0) echo '<input type="hidden" name="'.htmlspecialchars($k).'" value="'.htmlspecialchars($v).'">'; endforeach; ?>
-                    <input type="text" name="recibidos_filtro" class="form-control form-control-sm" placeholder="Buscar..." value="<?= htmlspecialchars($p_recibidos['filter']) ?>">
-                    <button type="submit" class="btn btn-sm btn-nav-modern border-0"><i class="fas fa-search"></i></button>
+                <form action="" method="GET" class="d-flex search-box-inline" onsubmit="return false;">
+                    <input type="text" name="recibidos_filtro" class="form-control form-control-sm live-search" placeholder="Buscar..." data-target="tabla-recibidos" value="<?= htmlspecialchars($p_recibidos['filter']) ?>">
+                    <button type="button" class="btn btn-sm btn-nav-modern border-0"><i class="fas fa-search"></i></button>
                 </form>
                 <button id="btn-finalizados" class="btn btn-action btn-outline-primary"
                         onclick="toggleTable('tabla-finalizados','btn-finalizados', 'Pedidos Finalizados')">
@@ -386,6 +382,34 @@ document.addEventListener('DOMContentLoaded', function() {
             
             modal.show();
         });
+    });
+
+    // Lógica de filtrado en vivo
+    document.querySelectorAll('.live-search').forEach(input => {
+        input.addEventListener('input', function() {
+            const term = this.value.toLowerCase().trim();
+            const targetId = this.dataset.target;
+            const table = document.getElementById(targetId);
+            if (!table) return;
+
+            const rows = table.querySelectorAll('tbody tr');
+            rows.forEach(row => {
+                const text = row.innerText.toLowerCase();
+                row.style.display = text.includes(term) ? '' : 'none';
+            });
+            
+            // Actualizar contador si existe
+            const countBadge = this.closest('.modern-card').querySelector('.badge');
+            if (countBadge) {
+                const visibleRows = Array.from(rows).filter(r => r.style.display !== 'none').length;
+                countBadge.textContent = visibleRows;
+            }
+        });
+        
+        // Ejecutar al cargar si ya tiene valor
+        if (input.value.trim() !== '') {
+            input.dispatchEvent(new Event('input'));
+        }
     });
 });
 

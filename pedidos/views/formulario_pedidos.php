@@ -22,6 +22,16 @@ $acciones_navbar = [
     ]
 ];
 include('header.php');
+?>
+<!-- Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+    .select2-container--bootstrap-5 .select2-selection { border-radius: 12px; height: calc(3.5rem + 2px); padding: 1rem 0.75rem; }
+    .select2-container .select2-selection--single { height: 50px !important; border-radius: 10px !important; border: 1px solid #dee2e6 !important; }
+    .select2-container--default .select2-selection--single .select2-selection__rendered { line-height: 48px !important; padding-left: 15px !important; }
+    .select2-container--default .select2-selection--single .select2-selection__arrow { height: 48px !important; }
+</style>
+<?php
 
 date_default_timezone_set('Europe/Madrid'); // Asegurar la zona horaria
 header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
@@ -203,9 +213,19 @@ try {
     </script>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Select2 JS -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
    <script>
-    document.getElementById('referencia_cliente')
-      .addEventListener('change', function() {
+    $(document).ready(function() {
+        $('#referencia_cliente').select2({
+            placeholder: "Seleccione un cliente",
+            allowClear: true,
+            width: '100%'
+        });
+
+        $('#referencia_cliente').on('change', function() {
         const ref = this.value;
         if (!ref) return;
 
@@ -307,7 +327,7 @@ try {
                 select.value = data.cliente.referencia;
 
                 // 2. Disparar evento change para cargar datos históricos (aunque no tendrá al ser nuevo)
-                select.dispatchEvent(new Event('change'));
+                $(select).trigger('change');
 
                 // 3. Cerrar modal y limpiar
                 const modal = bootstrap.Modal.getInstance(document.getElementById('modalNuevoCliente'));
@@ -324,6 +344,7 @@ try {
         .finally(() => {
             btn.disabled = false;
             btn.innerHTML = originalContent;
+        });
         });
     });
     </script>

@@ -73,7 +73,8 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
     $filtro = $_GET[$prefix . 'filtro'] ?? '';
 
     echo '<div class="table-responsive">';
-    echo '<table class="table table-hover">';
+    $tableId = $prefix ? 'tabla-' . trim($prefix, '_') : 'tabla-pedidos-general';
+    echo '<table id="'.$tableId.'" class="table table-hover table-filterable">';
     echo '<thead><tr>';
     
     // Función anidada helper para los headers
