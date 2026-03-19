@@ -6,7 +6,7 @@ $conexion = new Conexion();
 
 // Recoger y sanear
 $pedido_id           = $_POST['id'];
-$referencia_cliente  = trim($_POST['referencia_cliente']);
+$referencia_cliente  = $_POST['referencia_cliente'];
 $lc_gafa_recambio    = trim($_POST['lc_gafa_recambio']);
 $rx                  = trim($_POST['rx'] ?? '');
 $via                 = trim($_POST['via'] ?? '');

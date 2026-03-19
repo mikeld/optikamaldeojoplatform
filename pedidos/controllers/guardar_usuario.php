@@ -6,10 +6,10 @@ try {
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id = $_POST['id'] ?? null;
-        $referencia = $_POST['referencia'] ?? '';
-        $telefono = $_POST['telefono'] ?? '';
-        $email = $_POST['email'] ?? '';
-        $direccion = $_POST['direccion'] ?? '';
+        $referencia = trim($_POST['referencia'] ?? '');
+        $telefono = trim($_POST['telefono'] ?? '');
+        $email = trim($_POST['email'] ?? '');
+        $direccion = trim($_POST['direccion'] ?? '');
 
         if (empty($referencia) || empty($telefono)) {
             throw new Exception("Los campos 'Referencia', 'Teléfono' son obligatorios.");

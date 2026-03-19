@@ -12,7 +12,7 @@ try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // 1) Recoger y sanear los datos
         $fecha_cliente      = trim($_POST['fecha_cliente']     ?? '');
-        $referencia_cliente = trim($_POST['referencia_cliente'] ?? '');
+        $referencia_cliente = $_POST['referencia_cliente'] ?? '';
         $lc_gafa_recambio   = trim($_POST['lc_gafa_recambio']  ?? '');
         $rx                 = trim($_POST['rx']                ?? '');
         $via                = trim($_POST['via']               ?? '');

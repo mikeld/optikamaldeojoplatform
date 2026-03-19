@@ -11,10 +11,10 @@ try {
     // Procesar formulario
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Obtener y validar los datos del formulario
-        $referencia = $_POST['referencia'] ?? null;
-        $telefono = $_POST['telefono'] ?? null;
-        $email = $_POST['email'] ?? null;
-        $direccion = $_POST['direccion'] ?? null;
+        $referencia = trim($_POST['referencia'] ?? '');
+        $telefono = trim($_POST['telefono'] ?? '');
+        $email = trim($_POST['email'] ?? '');
+        $direccion = trim($_POST['direccion'] ?? '');
 
         // Validar campos obligatorios
         if (empty($referencia) || empty($telefono) || empty($email)) {

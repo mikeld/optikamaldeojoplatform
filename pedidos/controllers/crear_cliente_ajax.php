@@ -7,10 +7,10 @@ try {
     $conexion = new Conexion();
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        $referencia = $_POST['referencia'] ?? '';
-        $telefono = $_POST['telefono'] ?? '';
-        $email = $_POST['email'] ?? '';
-        $direccion = $_POST['direccion'] ?? '';
+        $referencia = trim($_POST['referencia'] ?? '');
+        $telefono = trim($_POST['telefono'] ?? '');
+        $email = trim($_POST['email'] ?? '');
+        $direccion = trim($_POST['direccion'] ?? '');
 
         if (empty($referencia) || empty($telefono)) {
             echo json_encode(['success' => false, 'error' => "Los campos 'Referencia' y 'Teléfono' son obligatorios."]);
