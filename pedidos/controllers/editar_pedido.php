@@ -163,14 +163,46 @@ include '../views/header.php';
                                   placeholder="Notas adicionales..."><?= htmlspecialchars($pedido['observaciones'] ?? '') ?></textarea>
                     </div>
 
-                    <div class="d-flex gap-2 pt-3 border-top">
-                        <button type="submit" class="btn btn-primary px-4">
-                            <i class="fas fa-save me-1"></i> Guardar Cambios
+                    <div class="d-flex justify-content-between pt-3 border-top">
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary px-4">
+                                <i class="fas fa-save me-1"></i> Guardar Cambios
+                            </button>
+                            <a href="../views/listado_pedidos.php" class="btn btn-outline-secondary">
+                                Cancelar
+                            </a>
+                        </div>
+                        <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#modalConfirmarEliminar">
+                            <i class="fas fa-trash me-1"></i> Borrar
                         </button>
-                        <a href="../views/listado_pedidos.php" class="btn btn-outline-secondary">
-                            Cancelar
-                        </a>
                     </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Confirmación Eliminar -->
+<div class="modal fade" id="modalConfirmarEliminar" tabindex="-1" aria-labelledby="modalLabelEliminar" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
+            <div class="modal-header bg-danger text-white border-0">
+                <h5 class="modal-title" id="modalLabelEliminar">
+                    <i class="fas fa-exclamation-triangle me-2"></i> Confirmar Eliminación
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4 text-center">
+                <p class="fs-5">¿Estás seguro de que deseas eliminar este pedido permanentemente?</p>
+                <p class="text-muted">Esta acción no se puede deshacer.</p>
+            </div>
+            <div class="modal-footer border-0 justify-content-center pb-4">
+                <button type="button" class="btn btn-outline-secondary px-4 rounded-pill" data-bs-dismiss="modal">Cancelar</button>
+                <form action="../controllers/eliminar_pedido.php" method="POST">
+                    <input type="hidden" name="id" value="<?= htmlspecialchars($pedido['id']) ?>">
+                    <button type="submit" class="btn btn-danger px-4 rounded-pill shadow-sm">
+                        <i class="fas fa-trash me-1"></i> Eliminar Definitivamente
+                    </button>
                 </form>
             </div>
         </div>
