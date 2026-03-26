@@ -320,6 +320,10 @@ $n_recibidos  = count($pedidos_recibidos);
                             <div id="p-rx" class="mt-1"></div>
                         </div>
                     </div>
+                    <!-- Estado de Pack (Cajas/Blisters) -->
+                    <div class="col-12" id="p-pack-status">
+                         <!-- Inyectado por JS -->
+                    </div>
                     <div class="col-12">
                         <div class="p-3 bg-light rounded-4 border-start border-primary border-4">
                             <label class="small text-muted text-uppercase fw-bold mb-1">Observaciones</label>
@@ -373,8 +377,57 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('p-id').textContent = p.id;
             document.getElementById('p-cliente').textContent = p.referencia_cliente;
             document.getElementById('p-producto').textContent = p.lc_gafa_recambio;
-            document.getElementById('p-rx').innerHTML = this.querySelector('td:nth-child(4)').innerHTML;
-            document.getElementById('p-observaciones').textContent = p.observaciones || 'Sin observaciones.';
+            
+            // --- Formatear RX (JSON o Texto) ---
+            let rxHtml = '';
+            if (p.rx_lineas) {
+                try {
+                    const lineas = JSON.parse(p.rx_lineas);
+                    lineas.forEach((l, idx) => {
+                        rxHtml += `<div class="mb-2 ${idx > 0 ? 'border-top pt-2' : ''}">`;
+                        if(l.nota) rxHtml += `<div class="small text-muted fw-bold">${l.nota}</div>`;
+                        rxHtml += `<div class="d-flex gap-2 mt-1">`;
+                        if(l.od?.esf) rxHtml += `<span class="badge bg-light text-primary border">OD: ${l.od.esf} ${l.od.cil || ''}</span>`;
+                        if(l.oi?.esf) rxHtml += `<span class="badge bg-light text-danger border">OI: ${l.oi.esf} ${l.oi.cil || ''}</span>`;
+                        rxHtml += `</div></div>`;
+                    });
+                } catch(e) { rxHtml = p.rx || '-'; }
+            } else {
+                rxHtml = p.rx || '-';
+            }
+            document.getElementById('p-rx').innerHTML = rxHtml;
+
+            // --- Pack y Recepción Parcial ---
+            const packContainer = document.getElementById('p-pack-status');
+            if (packContainer) {
+                let packHtml = '';
+                if (p.pack_tipo) {
+                    const estado = JSON.parse(p.pack_estado || '{}');
+                    const tipo = p.pack_tipo;
+                    packHtml = `<div class="p-3 bg-light rounded-4 h-100"><label class="small text-muted text-uppercase fw-bold mb-2 d-block">Estado Pack (${tipo})</label><div class="d-flex gap-3">`;
+                    
+                    if (tipo === 'cajas' || tipo === 'ambos') {
+                        const rec = estado.cajas;
+                        packHtml += `<div class="text-center ${rec ? 'text-success' : 'text-primary'}">
+                            <i class="fas fa-box fs-4 d-block mb-1"></i>
+                            <span class="small fw-bold" style="${rec ? 'text-decoration:line-through' : ''}">Cajas</span>
+                            ${rec ? '<i class="fas fa-check-circle ms-1"></i>' : ''}
+                        </div>`;
+                    }
+                    if (tipo === 'blisters' || tipo === 'ambos') {
+                        const rec = estado.blisters;
+                        packHtml += `<div class="text-center ${rec ? 'text-success' : 'text-primary'}">
+                            <i class="fas fa-tablets fs-4 d-block mb-1"></i>
+                            <span class="small fw-bold" style="${rec ? 'text-decoration:line-through' : ''}">Blisteres</span>
+                            ${rec ? '<i class="fas fa-check-circle ms-1"></i>' : ''}
+                        </div>`;
+                    }
+                    packHtml += `</div></div>`;
+                }
+                packContainer.innerHTML = packHtml;
+            }
+
+            document.getElementById('p-observaciones').textContent = p.observaciones || '-';
             document.getElementById('p-fecha-pedido').textContent = p.fecha_pedido || '-';
             document.getElementById('p-via').textContent = p.via || '-';
             document.getElementById('p-fecha-llegada').textContent = p.fecha_llegada || '-';

@@ -51,6 +51,59 @@ $acciones_navbar = [
 ];
 include '../views/header.php';
 ?>
+<style>
+    /* --- RX Multi-línea --- */
+    .rx-linea-card {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 12px;
+        padding: 14px 16px 10px;
+        position: relative;
+    }
+    .rx-linea-numero {
+        position: absolute;
+        top: -10px; left: 14px;
+        background: var(--bs-primary, #0d6efd);
+        color: #fff;
+        font-size: .7rem;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 20px;
+    }
+    .rx-ojo-label {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px; height: 36px;
+        border-radius: 50%;
+        font-weight: 800; font-size: .85rem;
+    }
+    .rx-od { background: #e3f0ff; color: #0d6efd; }
+    .rx-oi { background: #fdecea; color: #dc3545; }
+    .btn-remove-rx {
+        position: absolute; top: 8px; right: 12px;
+        background: none; border: none; color: #adb5bd; cursor: pointer;
+    }
+
+    /* --- Pack Reception (Tachar) --- */
+    .pack-reception-container {
+        display: flex; gap: 15px; flex-wrap: wrap; margin-top: 10px;
+    }
+    .pack-item {
+        padding: 10px 20px; border-radius: 12px; border: 2px solid #dee2e6;
+        cursor: pointer; transition: all 0.2s; user-select: none;
+        display: flex; align-items: center; gap: 10px; font-weight: 600;
+    }
+    .pack-item.received {
+        background-color: #f8f9fa; border-color: #198754; color: #198754;
+        text-decoration: line-through; opacity: 0.7;
+    }
+    .pack-item:not(.received) {
+        background-color: #fff; border-color: #6c757d; color: #333;
+    }
+    .pack-item i.check-icon { display: none; }
+    .pack-item.received i.check-icon { display: inline-block; }
+</style>
 
 <div class="container-fluid py-4">
     <div class="row justify-content-center">
@@ -104,21 +157,57 @@ include '../views/header.php';
                                    value="<?= htmlspecialchars($pedido['lc_gafa_recambio'] ?? '') ?>">
                         </div>
                         <div class="col-md-4">
-                            <label for="recibido" class="form-label">Estado</label>
+                            <label for="recibido" class="form-label">Estado General</label>
                             <select id="recibido" name="recibido" class="form-select">
                                 <option value="0" <?= ($pedido['recibido'] ?? 0) == 0 ? 'selected' : '' ?>>Pendiente</option>
-                                <option value="1" <?= ($pedido['recibido'] ?? 0) == 1 ? 'selected' : '' ?>>Recibido</option>
+                                <option value="1" <?= ($pedido['recibido'] ?? 0) == 1 ? 'selected' : '' ?>>Recibido completo</option>
                             </select>
                         </div>
                     </div>
 
-                    <div class="mb-3">
-                        <label for="rx" class="form-label">Graduación (RX)</label>
-                        <textarea class="form-control"
-                                  id="rx"
-                                  name="rx"
-                                  rows="2"
-                                  placeholder="Ej: OD -2.00 OI -1.50..."><?= htmlspecialchars($pedido['rx'] ?? '') ?></textarea>
+                    <!-- Gestión de Recepción de PACK -->
+                    <?php if ($pedido['pack_tipo']): 
+                        $pack_estado = json_decode($pedido['pack_estado'] ?? '{}', true);
+                        $tipo = $pedido['pack_tipo'];
+                    ?>
+                    <div class="mb-4">
+                        <label class="form-label d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-box-open me-1 text-muted"></i>Recepción parcial (Tachar lo recibido)</span>
+                            <span class="text-muted small">Tipo pedido: <?= ucfirst($tipo) ?></span>
+                        </label>
+                        <div class="pack-reception-container">
+                            <?php if ($tipo === 'cajas' || $tipo === 'ambos'): ?>
+                            <div class="pack-item <?= ($pack_estado['cajas'] ?? false) ? 'received' : '' ?>" id="item-cajas" onclick="togglePackItem('cajas')">
+                                <i class="fas fa-box"></i> Cajas
+                                <i class="fas fa-check check-icon"></i>
+                            </div>
+                            <?php endif; ?>
+
+                            <?php if ($tipo === 'blisters' || $tipo === 'ambos'): ?>
+                            <div class="pack-item <?= ($pack_estado['blisters'] ?? false) ? 'received' : '' ?>" id="item-blisters" onclick="togglePackItem('blisters')">
+                                <i class="fas fa-tablets"></i> Blisteres
+                                <i class="fas fa-check check-icon"></i>
+                            </div>
+                            <?php endif; ?>
+                        </div>
+                        <input type="hidden" name="pack_estado" id="pack_estado_json" value='<?= htmlspecialchars($pedido['pack_estado'] ?? '{}') ?>'>
+                        <input type="hidden" name="pack_tipo" value="<?= htmlspecialchars($tipo) ?>">
+                    </div>
+                    <?php endif; ?>
+
+                    <!-- RX Multi-línea OD/OI -->
+                    <div class="mb-4">
+                        <label class="form-label d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-glasses me-1 text-muted"></i>Graduación (RX)</span>
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="crearLineaRX()">
+                                <i class="fas fa-plus me-1"></i>Añadir línea
+                            </button>
+                        </label>
+                        <div id="rx-lineas-container">
+                            <!-- Se inserta por JS -->
+                        </div>
+                        <input type="hidden" name="rx_lineas" id="rx_lineas_json" value='<?= htmlspecialchars($pedido['rx_lineas'] ?? '[]') ?>'>
+                        <input type="hidden" name="rx" id="rx" value="<?= htmlspecialchars($pedido['rx'] ?? '') ?>">
                     </div>
 
                     <div class="row g-3 mb-4">
@@ -208,5 +297,121 @@ include '../views/header.php';
         </div>
     </div>
 </div>
+
+    <script>
+        // --- Lógica RX Multi-línea ---
+        function crearLineaRX(data = null) {
+            const container = document.getElementById('rx-lineas-container');
+            const index = container.children.length + 1;
+            const div = document.createElement('div');
+            div.className = 'rx-linea-card mb-3';
+            div.innerHTML = `
+                <div class="rx-linea-numero">PEDIDO #${index}</div>
+                <button type="button" class="btn-remove-rx" onclick="removerLineaRX(this)"><i class="fas fa-times"></i></button>
+                <div class="row g-2 align-items-center mb-2">
+                    <div class="col-8">
+                        <input type="text" class="form-control form-control-sm rx-input-nota" placeholder="Notas (ej: Probar Biofinity)" value="${data ? (data.nota || '') : ''}">
+                    </div>
+                </div>
+                <div class="row g-2">
+                    <div class="col-6">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="rx-ojo-label rx-od">OD</span>
+                            <div class="row g-1 flex-grow-1">
+                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-od-esf" placeholder="Esf" value="${data ? (data.od?.esf || '') : ''}"></div>
+                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-od-cil" placeholder="Cil" value="${data ? (data.od?.cil || '') : ''}"></div>
+                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-od-eje" placeholder="Eje" value="${data ? (data.od?.eje || '') : ''}"></div>
+                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-od-add" placeholder="Add" value="${data ? (data.od?.add || '') : ''}"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="rx-ojo-label rx-oi">OI</span>
+                            <div class="row g-1 flex-grow-1">
+                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-oi-esf" placeholder="Esf" value="${data ? (data.oi?.esf || '') : ''}"></div>
+                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-oi-cil" placeholder="Cil" value="${data ? (data.oi?.cil || '') : ''}"></div>
+                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-oi-eje" placeholder="Eje" value="${data ? (data.oi?.eje || '') : ''}"></div>
+                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-oi-add" placeholder="Add" value="${data ? (data.oi?.add || '') : ''}"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.appendChild(div);
+        }
+
+        function removerLineaRX(btn) {
+            btn.closest('.rx-linea-card').remove();
+            re-ordenarLineas();
+        }
+
+        function re-ordenarLineas() {
+            document.querySelectorAll('.rx-linea-numero').forEach((el, idx) => {
+                el.innerText = `PEDIDO #${idx + 1}`;
+            });
+        }
+
+        function serializarRX() {
+            const lineas = [];
+            let textRX = "";
+            document.querySelectorAll('.rx-linea-card').forEach((card, idx) => {
+                const row = {
+                    nota: card.querySelector('.rx-input-nota').value,
+                    od: {
+                        esf: card.querySelector('.rx-od-esf').value,
+                        cil: card.querySelector('.rx-od-cil').value,
+                        eje: card.querySelector('.rx-od-eje').value,
+                        add: card.querySelector('.rx-od-add').value
+                    },
+                    oi: {
+                        esf: card.querySelector('.rx-oi-esf').value,
+                        cil: card.querySelector('.rx-oi-cil').value,
+                        eje: card.querySelector('.rx-oi-eje').value,
+                        add: card.querySelector('.rx-oi-add').value
+                    }
+                };
+                lineas.push(row);
+                textRX += `P#${idx+1}: OD(${row.od.esf || '0'} ${row.od.cil || ''} ${row.od.eje || ''}) OI(${row.oi.esf || '0'} ${row.oi.cil || ''} ${row.oi.eje || ''}) | `;
+            });
+            document.getElementById('rx_lineas_json').value = JSON.stringify(lineas);
+            document.getElementById('rx').value = textRX;
+        }
+
+        // --- Pack Receptor ---
+        function togglePackItem(item) {
+            const el = document.getElementById('item-' + item);
+            el.classList.toggle('received');
+            
+            const currentJson = JSON.parse(document.getElementById('pack_estado_json').value || '{}');
+            currentJson[item] = el.classList.contains('received');
+            document.getElementById('pack_estado_json').value = JSON.stringify(currentJson);
+            
+            // Auto-update check general si ambos están true
+            const items = document.querySelectorAll('.pack-item');
+            const allOk = Array.from(items).every(i => i.classList.contains('received'));
+            if (allOk) {
+                document.getElementById('recibido').value = "1";
+            } else {
+                document.getElementById('recibido').value = "0";
+            }
+        }
+
+        $(document).ready(function() {
+            const initialRx = $('#rx_lineas_json').val();
+            try {
+                const data = JSON.parse(initialRx);
+                if(data && data.length > 0) {
+                    data.forEach(d => crearLineaRX(d));
+                } else {
+                    crearLineaRX();
+                }
+            } catch(e) { crearLineaRX(); }
+
+            $('form').on('submit', function() {
+                serializarRX();
+            });
+        });
+    </script>
 
 <?php include '../views/footer.php'; ?>

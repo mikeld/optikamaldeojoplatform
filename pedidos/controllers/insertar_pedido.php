@@ -15,6 +15,8 @@ try {
         $referencia_cliente = $_POST['referencia_cliente'] ?? '';
         $lc_gafa_recambio   = trim($_POST['lc_gafa_recambio']  ?? '');
         $rx                 = trim($_POST['rx']                ?? '');
+        $rx_lineas          = $_POST['rx_lineas'] ?? null;
+        $pack_tipo          = $_POST['pack_tipo'] ?? null;
         $via                = trim($_POST['via']               ?? '');
         $observaciones      = trim($_POST['observaciones']     ?? '');
         $proveedor_id       = $_POST['proveedor_id'] !== '' ? (int)$_POST['proveedor_id'] : null;
@@ -34,10 +36,10 @@ try {
 
         // 3) Preparar e insertar
         $sql = "INSERT INTO pedidos 
-                  (fecha_cliente, referencia_cliente, lc_gafa_recambio, rx, 
+                  (fecha_cliente, referencia_cliente, lc_gafa_recambio, rx, rx_lineas, pack_tipo,
                    fecha_pedido, via, observaciones, fecha_llegada, proveedor_id) 
                 VALUES 
-                  (:fecha_cliente, :referencia_cliente, :lc, :rx, 
+                  (:fecha_cliente, :referencia_cliente, :lc, :rx, :rx_lineas, :pack_tipo,
                    :fecha_pedido, :via, :obs, :fecha_llegada, :proveedor_id)";
         $stmt = $conexion->pdo->prepare($sql);
 
@@ -46,6 +48,8 @@ try {
         $stmt->bindValue(':referencia_cliente', $referencia_cliente, PDO::PARAM_STR);
         $stmt->bindValue(':lc',                 $lc_gafa_recambio,   PDO::PARAM_STR);
         $stmt->bindValue(':rx',                 $rx,                 PDO::PARAM_STR);
+        $stmt->bindValue(':rx_lineas',          $rx_lineas,          $rx_lineas ? PDO::PARAM_STR : PDO::PARAM_NULL);
+        $stmt->bindValue(':pack_tipo',          $pack_tipo,          $pack_tipo ? PDO::PARAM_STR : PDO::PARAM_NULL);
         $stmt->bindValue(':via',                $via,                PDO::PARAM_STR);
         $stmt->bindValue(':obs',                $observaciones,      PDO::PARAM_STR);
 

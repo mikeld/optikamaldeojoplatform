@@ -13,7 +13,7 @@ if (!$referencia) {
 
 $pdo = (new Conexion())->pdo;
 // Trae últimos 5 pedidos de ese cliente, ordenados por fecha de pedido descendente
-$sql = "SELECT lc_gafa_recambio, rx 
+$sql = "SELECT lc_gafa_recambio, rx, rx_lineas, pack_tipo 
         FROM pedidos 
         WHERE referencia_cliente = :ref 
         ORDER BY fecha_pedido DESC 

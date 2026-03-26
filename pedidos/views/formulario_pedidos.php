@@ -30,6 +30,71 @@ include('header.php');
     .select2-container .select2-selection--single { height: 50px !important; border-radius: 10px !important; border: 1px solid #dee2e6 !important; }
     .select2-container--default .select2-selection--single .select2-selection__rendered { line-height: 48px !important; padding-left: 15px !important; }
     .select2-container--default .select2-selection--single .select2-selection__arrow { height: 48px !important; }
+
+    /* --- RX Multi-línea --- */
+    .rx-linea-card {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 12px;
+        padding: 14px 16px 10px;
+        position: relative;
+        transition: box-shadow .2s;
+    }
+    .rx-linea-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,.08); }
+    .rx-linea-numero {
+        position: absolute;
+        top: -10px; left: 14px;
+        background: var(--bs-primary, #0d6efd);
+        color: #fff;
+        font-size: .7rem;
+        font-weight: 700;
+        letter-spacing: .05em;
+        padding: 2px 8px;
+        border-radius: 20px;
+    }
+    .rx-ojo-label {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px; height: 36px;
+        border-radius: 50%;
+        font-weight: 800;
+        font-size: .85rem;
+        flex-shrink: 0;
+    }
+    .rx-od { background: #e3f0ff; color: #0d6efd; }
+    .rx-oi { background: #fdecea; color: #dc3545; }
+    .btn-remove-rx {
+        position: absolute; top: 8px; right: 12px;
+        background: none; border: none; color: #adb5bd; font-size: 1.1rem;
+        cursor: pointer; line-height: 1; padding: 2px;
+        transition: color .2s;
+    }
+    .btn-remove-rx:hover { color: #dc3545; }
+
+    /* --- Pack Tags --- */
+    .pack-options .form-check-input:checked + .form-check-label .pack-tag {
+        border-color: transparent;
+        color: #fff;
+    }
+    .pack-tag {
+        display: inline-block;
+        padding: 6px 18px;
+        border-radius: 30px;
+        border: 2px solid #dee2e6;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: .85rem;
+        transition: all .2s;
+        user-select: none;
+    }
+    #pack-cajas:checked ~ * .pack-tag-cajas,
+    .pack-tag-cajas-active   { background: #0d6efd; border-color: #0d6efd; color:#fff; }
+    #pack-blisters:checked ~ * .pack-tag-blisters,
+    .pack-tag-blisters-active { background: #6610f2; border-color: #6610f2; color:#fff; }
+    #pack-ambos:checked ~ * .pack-tag-ambos,
+    .pack-tag-ambos-active   { background: #198754; border-color: #198754; color:#fff; }
+    .pack-tag:hover { opacity: .85; transform: translateY(-1px); }
 </style>
 <?php
 
@@ -106,19 +171,66 @@ try {
                         <datalist id="lc-list"></datalist>
                     </div>
 
-                    <!-- RX -->
+                    <!-- PACK (Cajas / Blisteres / Ambos) -->
                     <div class="mb-4">
-                        <label class="form-label d-flex justify-content-between">
-                            <span>Graduación (RX)</span>
-                            <span id="sug-rx"></span>
+                        <label class="form-label d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-box me-1 text-muted"></i>Pack</span>
+                            <span class="text-muted small">Opcional</span>
                         </label>
-                        <input type="text"
-                               id="rx"
-                               name="rx"
-                               class="form-control"
-                               placeholder="Ej: OD -1.00 OI -1.25"
-                               list="rx-list">
-                        <datalist id="rx-list"></datalist>
+                        <div class="d-flex flex-wrap gap-2 pack-options" id="pack-options">
+                            <div>
+                                <input type="radio" class="d-none" name="pack_tipo" id="pack-cajas" value="cajas">
+                                <label for="pack-cajas">
+                                    <span class="pack-tag pack-tag-cajas" id="label-pack-cajas">
+                                        <i class="fas fa-box me-1"></i>Cajas
+                                    </span>
+                                </label>
+                            </div>
+                            <div>
+                                <input type="radio" class="d-none" name="pack_tipo" id="pack-blisters" value="blisters">
+                                <label for="pack-blisters">
+                                    <span class="pack-tag pack-tag-blisters" id="label-pack-blisters">
+                                        <i class="fas fa-tablets me-1"></i>Blisteres
+                                    </span>
+                                </label>
+                            </div>
+                            <div>
+                                <input type="radio" class="d-none" name="pack_tipo" id="pack-ambos" value="ambos">
+                                <label for="pack-ambos">
+                                    <span class="pack-tag pack-tag-ambos" id="label-pack-ambos">
+                                        <i class="fas fa-layer-group me-1"></i>Cajas + Blisteres
+                                    </span>
+                                </label>
+                            </div>
+                            <div>
+                                <button type="button" class="pack-tag" id="btn-pack-ninguno" style="border-style:dashed; color:#6c757d">
+                                    <i class="fas fa-times me-1"></i>Ninguno
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- RX Multi-línea OD/OI -->
+                    <div class="mb-4">
+                        <label class="form-label d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-glasses me-1 text-muted"></i>Graduación (RX)</span>
+                            <div class="d-flex gap-2 align-items-center">
+                                <span id="sug-rx"></span>
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="btn-add-rx-linea">
+                                    <i class="fas fa-plus me-1"></i>Añadir línea
+                                </button>
+                            </div>
+                        </label>
+
+                        <!-- Contenedor dinámico de líneas RX -->
+                        <div id="rx-lineas-container">
+                            <!-- Se inserta por JS -->
+                        </div>
+
+                        <!-- Campo oculto que envía el JSON final al servidor -->
+                        <input type="hidden" name="rx_lineas" id="rx_lineas_json">
+                        <!-- Campo legado rx para compatibilidad -->
+                        <input type="hidden" name="rx" id="rx">
                     </div>
 
                     <div class="row">
@@ -201,152 +313,293 @@ try {
     </div>
 </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Select2 JS -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
     <script>
+        // Función para validar el formulario antes de enviar
         function validarFormulario() {
             const referenciaCliente = document.getElementById('referencia_cliente').value;
             if (referenciaCliente.trim() === '') {
                 alert('Debe seleccionar un cliente.');
                 return false;
             }
+
+            // Actualizar el campo oculto rx_lineas_json antes de enviar
+            serializeRxLines();
             return true;
         }
-    </script>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- Select2 JS -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+        // --- Lógica para RX Multi-línea OD/OI ---
+        let rxLineCounter = 0;
 
-   <script>
-    $(document).ready(function() {
-        $('#referencia_cliente').select2({
-            placeholder: "Seleccione un cliente",
-            allowClear: true,
-            width: '100%'
-        });
+        function addRxLine(initialData = {}) {
+            rxLineCounter++;
+            const container = document.getElementById('rx-lineas-container');
+            const newLine = document.createElement('div');
+            newLine.className = 'row g-2 mb-2 rx-line';
+            newLine.dataset.lineId = rxLineCounter;
+            newLine.innerHTML = `
+                <div class="col-md-2">
+                    <input type="text" class="form-control form-control-sm rx-ojo" placeholder="Ojo (OD/OI)" value="${initialData.ojo || ''}">
+                </div>
+                <div class="col-md-2">
+                    <input type="text" class="form-control form-control-sm rx-esfera" placeholder="Esfera" value="${initialData.esfera || ''}">
+                </div>
+                <div class="col-md-2">
+                    <input type="text" class="form-control form-control-sm rx-cilindro" placeholder="Cilindro" value="${initialData.cilindro || ''}">
+                </div>
+                <div class="col-md-2">
+                    <input type="text" class="form-control form-control-sm rx-eje" placeholder="Eje" value="${initialData.eje || ''}">
+                </div>
+                <div class="col-md-2">
+                    <input type="text" class="form-control form-control-sm rx-adicion" placeholder="Adición" value="${initialData.adicion || ''}">
+                </div>
+                <div class="col-md-2 d-flex align-items-center">
+                    <button type="button" class="btn btn-sm btn-outline-danger w-100 btn-remove-rx-line">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            `;
+            container.appendChild(newLine);
 
-        $('#referencia_cliente').on('change', function() {
-        const ref = this.value;
-        if (!ref) return;
-
-        fetch(`../controllers/get_ultimos_pedidos.php?referencia=${encodeURIComponent(ref)}`)
-          .then(res => res.json())
-          .then(data => {
-            const lcList = document.getElementById('lc-list');
-            const rxList = document.getElementById('rx-list');
-            lcList.innerHTML = '';
-            rxList.innerHTML = '';
-
-            // contenedores para sugerencia
-            const contLc = document.getElementById('sug-lc');
-            const contRx = document.getElementById('sug-rx');
-            contLc.innerHTML = '';
-            contRx.innerHTML = '';
-
-            // Si vienen datos, el primero es el más reciente
-            if (data.length) {
-              const ultimo = data[0];
-
-              if (ultimo.lc_gafa_recambio) {
-                const btnLc = document.createElement('button');
-                btnLc.type = 'button';
-                btnLc.className = 'btn btn-action btn-sm btn-outline-primary';
-                btnLc.innerHTML = '<i class="fas fa-copy"></i> ' + ultimo.lc_gafa_recambio;
-                btnLc.onclick = () => {
-                  document.getElementById('lc_gafa_recambio').value = ultimo.lc_gafa_recambio;
-                };
-                contLc.appendChild(btnLc);
-              }
-
-              if (ultimo.rx) {
-                const btnRx = document.createElement('button');
-                btnRx.type = 'button';
-                btnRx.className = 'btn btn-action btn-sm btn-outline-primary';
-                btnRx.innerHTML = '<i class="fas fa-copy"></i> ' + ultimo.rx;
-                btnRx.onclick = () => {
-                  document.getElementById('rx').value = ultimo.rx;
-                };
-                contRx.appendChild(btnRx);
-              }
-            }
-
-            // Poblamos datalists con los 5 últimos
-            const seenLC = new Set(), seenRX = new Set();
-            data.forEach(item => {
-              if (item.lc_gafa_recambio && !seenLC.has(item.lc_gafa_recambio)) {
-                seenLC.add(item.lc_gafa_recambio);
-                const opt = document.createElement('option');
-                opt.value = item.lc_gafa_recambio;
-                lcList.appendChild(opt);
-              }
-              if (item.rx && !seenRX.has(item.rx)) {
-                seenRX.add(item.rx);
-                const opt2 = document.createElement('option');
-                opt2.value = item.rx;
-                rxList.appendChild(opt2);
-              }
+            newLine.querySelector('.btn-remove-rx-line').addEventListener('click', function() {
+                newLine.remove();
+                serializeRxLines(); // Actualizar JSON al eliminar
             });
-          })
-          .catch(console.error);
-    });
 
-    // Lógica para guardar nuevo cliente vía AJAX
-    document.getElementById('btnGuardarCliente').addEventListener('click', function() {
-        const form = document.getElementById('formNuevoCliente');
-        const formData = new FormData(form);
+            // Añadir event listeners para actualizar el JSON al cambiar cualquier campo
+            newLine.querySelectorAll('input').forEach(input => {
+                input.addEventListener('input', serializeRxLines);
+            });
 
-        // Validación básica en JS
-        if (!formData.get('referencia').trim() || !formData.get('telefono').trim()) {
-            alert('Referencia y Teléfono son obligatorios.');
-            return;
+            serializeRxLines(); // Actualizar JSON al añadir
         }
 
-        // Mostrar estado de carga
-        const btn = this;
-        const originalContent = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Guardando...';
+        function serializeRxLines() {
+            const rxLines = [];
+            document.querySelectorAll('.rx-line').forEach(lineDiv => {
+                const ojo = lineDiv.querySelector('.rx-ojo').value;
+                const esfera = lineDiv.querySelector('.rx-esfera').value;
+                const cilindro = lineDiv.querySelector('.rx-cilindro').value;
+                const eje = lineDiv.querySelector('.rx-eje').value;
+                const adicion = lineDiv.querySelector('.rx-adicion').value;
 
-        fetch('../controllers/crear_cliente_ajax.php', {
-            method: 'POST',
-            body: formData
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                // 1. Añadir al select y seleccionar
-                const select = document.getElementById('referencia_cliente');
-                const option = new Option(data.cliente.referencia, data.cliente.referencia, true, true);
-                select.add(option);
-                
-                // Ordenar alfabéticamente el select (opcional pero recomendado)
-                const options = Array.from(select.options);
-                options.sort((a, b) => a.text.localeCompare(b.text));
-                select.innerHTML = '';
-                options.forEach(opt => select.add(opt));
-                select.value = data.cliente.referencia;
+                if (ojo || esfera || cilindro || eje || adicion) { // Solo añadir líneas con algún dato
+                    rxLines.push({ ojo, esfera, cilindro, eje, adicion });
+                }
+            });
+            document.getElementById('rx_lineas_json').value = JSON.stringify(rxLines);
 
-                // 2. Disparar evento change para cargar datos históricos (aunque no tendrá al ser nuevo)
-                $(select).trigger('change');
+            // Para compatibilidad con el campo 'rx' legado, crear una representación simple
+            const rxLegacyValue = rxLines.map(line => {
+                let parts = [];
+                if (line.ojo) parts.push(line.ojo);
+                if (line.esfera) parts.push(`Esf:${line.esfera}`);
+                if (line.cilindro) parts.push(`Cil:${line.cilindro}`);
+                if (line.eje) parts.push(`Eje:${line.eje}`);
+                if (line.adicion) parts.push(`Add:${line.adicion}`);
+                return parts.join(' ');
+            }).join(' | ');
+            document.getElementById('rx').value = rxLegacyValue;
+        }
 
-                // 3. Cerrar modal y limpiar
-                const modal = bootstrap.Modal.getInstance(document.getElementById('modalNuevoCliente'));
-                modal.hide();
-                form.reset();
+        document.getElementById('btn-add-rx-linea').addEventListener('click', () => addRxLine());
+
+        // --- Lógica para Pack interactivo ---
+        document.getElementById('pack-options').addEventListener('click', function(event) {
+            const target = event.target.closest('.pack-tag, #btn-pack-ninguno');
+            if (!target) return;
+
+            // Desmarcar todos los radios
+            document.querySelectorAll('input[name="pack_tipo"]').forEach(radio => {
+                radio.checked = false;
+                document.getElementById(`label-${radio.id}`).classList.remove('active');
+            });
+
+            // Si se hizo clic en "Ninguno"
+            if (target.id === 'btn-pack-ninguno') {
+                // No hacer nada, ya están todos desmarcados
             } else {
-                alert('Error: ' + data.error);
+                // Si se hizo clic en una opción de pack
+                const inputId = target.closest('label').getAttribute('for');
+                const radio = document.getElementById(inputId);
+                if (radio) {
+                    radio.checked = true;
+                    target.classList.add('active');
+                }
             }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Ocurrió un error al procesar la solicitud.');
-        })
-        .finally(() => {
-            btn.disabled = false;
-            btn.innerHTML = originalContent;
         });
+
+        // --- Lógica principal al cargar el documento ---
+        $(document).ready(function() {
+            // Inicializar Select2
+            $('#referencia_cliente').select2({
+                placeholder: "Seleccione un cliente",
+                allowClear: true,
+                width: '100%'
+            });
+
+            // Cargar sugerencias y datos históricos al cambiar el cliente
+            $('#referencia_cliente').on('change', function() {
+                const ref = this.value;
+                if (!ref) {
+                    // Limpiar sugerencias y datalists si no hay cliente seleccionado
+                    document.getElementById('lc-list').innerHTML = '';
+                    document.getElementById('sug-lc').innerHTML = '';
+                    document.getElementById('rx-lineas-container').innerHTML = '';
+                    document.getElementById('sug-rx').innerHTML = '';
+                    serializeRxLines(); // Limpiar JSON de RX
+                    return;
+                }
+
+                fetch(`../controllers/get_ultimos_pedidos.php?referencia=${encodeURIComponent(ref)}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        const lcList = document.getElementById('lc-list');
+                        lcList.innerHTML = ''; // Limpiar datalist de LC
+
+                        const contLc = document.getElementById('sug-lc');
+                        contLc.innerHTML = ''; // Limpiar contenedor de sugerencia LC
+
+                        const rxContainer = document.getElementById('rx-lineas-container');
+                        rxContainer.innerHTML = ''; // Limpiar líneas RX existentes
+                        const contRx = document.getElementById('sug-rx');
+                        contRx.innerHTML = ''; // Limpiar contenedor de sugerencia RX
+
+                        // Si vienen datos, el primero es el más reciente
+                        if (data.length) {
+                            const ultimo = data[0];
+
+                            // Sugerencia para LC / Gafa / Recambio
+                            if (ultimo.lc_gafa_recambio) {
+                                const btnLc = document.createElement('button');
+                                btnLc.type = 'button';
+                                btnLc.className = 'btn btn-action btn-sm btn-outline-primary';
+                                btnLc.innerHTML = '<i class="fas fa-copy"></i> ' + ultimo.lc_gafa_recambio;
+                                btnLc.onclick = () => {
+                                    document.getElementById('lc_gafa_recambio').value = ultimo.lc_gafa_recambio;
+                                };
+                                contLc.appendChild(btnLc);
+                            }
+
+                            // Sugerencia para RX (si existe y es un JSON válido)
+                            if (ultimo.rx_lineas) {
+                                try {
+                                    const rxLinesData = JSON.parse(ultimo.rx_lineas);
+                                    if (Array.isArray(rxLinesData) && rxLinesData.length > 0) {
+                                        const btnRx = document.createElement('button');
+                                        btnRx.type = 'button';
+                                        btnRx.className = 'btn btn-action btn-sm btn-outline-primary';
+                                        btnRx.innerHTML = '<i class="fas fa-copy"></i> Última RX';
+                                        btnRx.onclick = () => {
+                                            rxContainer.innerHTML = ''; // Limpiar antes de cargar
+                                            rxLinesData.forEach(line => addRxLine(line));
+                                        };
+                                        contRx.appendChild(btnRx);
+                                    }
+                                } catch (e) {
+                                    console.error("Error parsing rx_lineas from last order:", e);
+                                }
+                            } else if (ultimo.rx) { // Compatibilidad con campo RX legado
+                                const btnRx = document.createElement('button');
+                                btnRx.type = 'button';
+                                btnRx.className = 'btn btn-action btn-sm btn-outline-primary';
+                                btnRx.innerHTML = '<i class="fas fa-copy"></i> ' + ultimo.rx;
+                                btnRx.onclick = () => {
+                                    // Para el campo legado, simplemente se copia el texto
+                                    // Si se quiere convertir a multi-línea, se necesitaría una lógica de parseo
+                                    document.getElementById('rx').value = ultimo.rx;
+                                    // Opcional: intentar parsear y añadir como línea si el formato es simple
+                                    // addRxLine({ ojo: 'N/A', esfera: ultimo.rx });
+                                };
+                                contRx.appendChild(btnRx);
+                            }
+                        }
+
+                        // Poblamos datalists con los 5 últimos valores únicos de LC
+                        const seenLC = new Set();
+                        data.forEach(item => {
+                            if (item.lc_gafa_recambio && !seenLC.has(item.lc_gafa_recambio)) {
+                                seenLC.add(item.lc_gafa_recambio);
+                                const opt = document.createElement('option');
+                                opt.value = item.lc_gafa_recambio;
+                                lcList.appendChild(opt);
+                            }
+                        });
+
+                        // Asegurarse de que siempre haya al menos una línea RX vacía si no hay sugerencia
+                        if (rxContainer.children.length === 0) {
+                            addRxLine();
+                        }
+                    })
+                    .catch(console.error);
+            });
+
+            // Asegurarse de que siempre haya al menos una línea RX vacía al cargar el formulario
+            if (document.getElementById('rx-lineas-container').children.length === 0) {
+                addRxLine();
+            }
+
+            // Lógica para guardar nuevo cliente vía AJAX
+            document.getElementById('btnGuardarCliente').addEventListener('click', function() {
+                const form = document.getElementById('formNuevoCliente');
+                const formData = new FormData(form);
+
+                // Validación básica en JS
+                if (!formData.get('referencia').trim() || !formData.get('telefono').trim()) {
+                    alert('Referencia y Teléfono son obligatorios.');
+                    return;
+                }
+
+                // Mostrar estado de carga
+                const btn = this;
+                const originalContent = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Guardando...';
+
+                fetch('../controllers/crear_cliente_ajax.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        // 1. Añadir al select y seleccionar
+                        const select = document.getElementById('referencia_cliente');
+                        const option = new Option(data.cliente.referencia, data.cliente.referencia, true, true);
+                        select.add(option);
+                        
+                        // Ordenar alfabéticamente el select (opcional pero recomendado)
+                        const options = Array.from(select.options);
+                        options.sort((a, b) => a.text.localeCompare(b.text));
+                        select.innerHTML = '';
+                        options.forEach(opt => select.add(opt));
+                        select.value = data.cliente.referencia;
+
+                        // 2. Disparar evento change para cargar datos históricos (aunque no tendrá al ser nuevo)
+                        $(select).trigger('change');
+
+                        // 3. Cerrar modal y limpiar
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('modalNuevoCliente'));
+                        modal.hide();
+                        form.reset();
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Ocurrió un error al procesar la solicitud.');
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.innerHTML = originalContent;
+                });
+            });
         });
-    });
     </script>
 
 

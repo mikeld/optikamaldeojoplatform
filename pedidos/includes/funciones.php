@@ -33,14 +33,34 @@ function generarLinkOrden($columna, $orden_actual, $direccion_actual, $filtro = 
 }
 
 /**
- * Formatea la graduación (RX) para mostrarla de forma estructurada
+ * Formatea la graduación (RX) para mostrarla de forma estructurada (Soporta JSON o Texto)
  */
-function formatearRX($rx) {
+function formatearRX($rx, $rx_lineas_json = null) {
+    if ($rx_lineas_json) {
+        $lineas = json_decode($rx_lineas_json, true);
+        if ($lineas && is_array($lineas)) {
+            $html = '<div class="rx-container-multi">';
+            foreach ($lineas as $idx => $l) {
+                $html .= '<div class="rx-line-block' . (count($lineas) > 1 ? ' mb-2 border-bottom pb-1' : '') . '">';
+                if ($l['nota']) $html .= '<div class="small text-muted mb-1"><strong>' . htmlspecialchars($l['nota']) . '</strong></div>';
+                $html .= '<div class="d-flex gap-2">';
+                if ($l['od']['esf'] || $l['od']['cil']) {
+                    $html .= '<span class="badge bg-light text-primary border me-1">OD ' . $l['od']['esf'] . ' ' . $l['od']['cil'] . '</span>';
+                }
+                if ($l['oi']['esf'] || $l['oi']['cil']) {
+                    $html .= '<span class="badge bg-light text-danger border">OI ' . $l['oi']['esf'] . ' ' . $l['oi']['cil'] . '</span>';
+                }
+                $html .= '</div></div>';
+            }
+            $html .= '</div>';
+            return $html;
+        }
+    }
+
     if (!$rx) return '';
     
-    // Intentar detectar OD/OI
+    // Intentar detectar OD/OI (Legacy)
     $rx = str_replace(['O.D:', 'OD:', 'O.I:', 'OI:'], ['OD ', 'OD ', 'OI ', 'OI '], $rx);
-    
     $parts = preg_split('/\s+(?=OD|OI)/i', trim($rx));
     
     if (count($parts) > 1) {
@@ -48,10 +68,8 @@ function formatearRX($rx) {
         foreach ($parts as $part) {
             $cleaned = trim($part);
             if (empty($cleaned)) continue;
-            
             $side = (stripos($cleaned, 'OD') === 0) ? 'OD' : ((stripos($cleaned, 'OI') === 0) ? 'OI' : '');
             $val = trim(str_ireplace(['OD', 'OI'], '', $cleaned));
-            
             $html .= '<div class="rx-item"><span class="rx-side">'.$side.'</span><span class="rx-val">'.$val.'</span></div>';
         }
         $html .= '</div>';
@@ -59,6 +77,32 @@ function formatearRX($rx) {
     }
     
     return '<div class="rx-badge">'.htmlspecialchars($rx).'</div>';
+}
+
+/**
+ * Formatea el estado del pack para mostrar iconos tachados si no se han recibido
+ */
+function formatearPackEstado($tipo, $estado_json) {
+    if (!$tipo) return '';
+    $estado = json_decode($estado_json ?? '{}', true);
+    $html = '<div class="d-flex gap-2 justify-content-center">';
+    
+    if ($tipo === 'cajas' || $tipo === 'ambos') {
+        $recibido = $estado['cajas'] ?? false;
+        $color = $recibido ? 'text-success' : 'text-primary';
+        $style = $recibido ? 'text-decoration: line-through; opacity: 0.6;' : 'font-weight: bold;';
+        $html .= '<span title="Cajas" class="'.$color.'" style="'.$style.'"><i class="fas fa-box"></i></span>';
+    }
+    
+    if ($tipo === 'blisters' || $tipo === 'ambos') {
+        $recibido = $estado['blisters'] ?? false;
+        $color = $recibido ? 'text-success' : 'text-primary';
+        $style = $recibido ? 'text-decoration: line-through; opacity: 0.6;' : 'font-weight: bold;';
+        $html .= '<span title="Blisteres" class="'.$color.'" style="'.$style.'"><i class="fas fa-tablets"></i></span>';
+    }
+    
+    $html .= '</div>';
+    return $html;
 }
 
 /**
@@ -93,7 +137,8 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
     echo $th('ID', 'id', 'width: 50px;');
     echo $th('Cliente', 'referencia_cliente');
     echo $th('Producto', 'lc_gafa_recambio');
-    echo $th('RX', 'rx', 'width: 80px;');
+    echo $th('Pack', 'pack_tipo', 'width: 60px;');
+    echo $th('RX', 'rx', 'width: 120px;');
     echo $th('Pedido', 'fecha_pedido', 'width: 100px;');
     echo $th('Vía', 'via', 'width: 70px;');
     echo $th('Obs.', 'observaciones');
@@ -120,7 +165,8 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
         echo '<td class="text-center">'.htmlspecialchars($p['id']).'</td>';
         echo '<td class="text-center">'.htmlspecialchars($p['referencia_cliente']).'</td>';
         echo '<td class="text-center">'.htmlspecialchars($p['lc_gafa_recambio']).'</td>';
-        echo '<td>'.formatearRX($p['rx']).'</td>';
+        echo '<td class="text-center">'.formatearPackEstado($p['pack_tipo'], $p['pack_estado']).'</td>';
+        echo '<td>'.formatearRX($p['rx'], $p['rx_lineas'] ?? null).'</td>';
         echo '<td class="text-center font-monospace">'.htmlspecialchars($p['fecha_pedido'] ?? '').'</td>';
         echo '<td class="text-center"><span class="badge bg-light text-dark border">'.htmlspecialchars($p['via'] ?? '').'</span></td>';
         echo '<td><div class="text-truncate" style="max-width: 150px;" title="'.htmlspecialchars($p['observaciones'] ?? '').'">'.htmlspecialchars($p['observaciones'] ?? '').'</div></td>';
