@@ -378,23 +378,33 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('p-cliente').textContent = p.referencia_cliente;
             document.getElementById('p-producto').textContent = p.lc_gafa_recambio;
             
-            // --- Formatear RX (JSON o Texto) ---
+            // --- Formatear RX (JSON o Texto) con soporte para ambos formatos ---
             let rxHtml = '';
             if (p.rx_lineas) {
                 try {
                     const lineas = JSON.parse(p.rx_lineas);
                     lineas.forEach((l, idx) => {
-                        rxHtml += `<div class="mb-2 ${idx > 0 ? 'border-top pt-2' : ''}">`;
-                        if(l.nota) rxHtml += `<div class="small text-muted fw-bold">${l.nota}</div>`;
-                        rxHtml += `<div class="d-flex gap-2 mt-1">`;
-                        if(l.od?.esf) rxHtml += `<span class="badge bg-light text-primary border">OD: ${l.od.esf} ${l.od.cil || ''}</span>`;
-                        if(l.oi?.esf) rxHtml += `<span class="badge bg-light text-danger border">OI: ${l.oi.esf} ${l.oi.cil || ''}</span>`;
-                        rxHtml += `</div></div>`;
+                        rxHtml += `<div class="${idx > 0 ? 'border-top pt-2 mt-2' : ''}">`;
+                        
+                        // Determinar si es formato anidado (OD/OI) o plano (ojo)
+                        if (l.od || l.oi) {
+                            if(l.nota) rxHtml += `<div class="small text-muted fw-bold">${l.nota}</div>`;
+                            rxHtml += `<div class="d-flex flex-wrap gap-2 mt-1">`;
+                            if(l.od?.esf || l.od?.cil) rxHtml += `<span class="badge bg-light text-primary border">OD: ${l.od.esf || ''} ${l.od.cil || ''}</span>`;
+                            if(l.oi?.esf || l.oi?.cil) rxHtml += `<span class="badge bg-light text-danger border">OI: ${l.oi.esf || ''} ${l.oi.cil || ''}</span>`;
+                            rxHtml += `</div>`;
+                        } else if (l.ojo) {
+                            const eyeClass = l.ojo.includes('OD') ? 'text-primary' : 'text-danger';
+                            rxHtml += `<span class="badge bg-light ${eyeClass} border me-1">${l.ojo} ${l.esfera || ''} ${l.cilindro || ''}</span>`;
+                        }
+                        
+                        rxHtml += `</div>`;
                     });
                 } catch(e) { rxHtml = p.rx || '-'; }
             } else {
                 rxHtml = p.rx || '-';
             }
+            if (!rxHtml || rxHtml === '-') rxHtml = '<span class="text-muted">Sin graduación</span>';
             document.getElementById('p-rx').innerHTML = rxHtml;
 
             // --- Pack y Recepción Parcial ---

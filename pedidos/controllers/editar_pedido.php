@@ -199,7 +199,7 @@ include '../views/header.php';
                     <div class="mb-4">
                         <label class="form-label d-flex justify-content-between align-items-center">
                             <span><i class="fas fa-glasses me-1 text-muted"></i>Graduación (RX)</span>
-                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="crearLineaRX()">
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="addRxLine()">
                                 <i class="fas fa-plus me-1"></i>Añadir línea
                             </button>
                         </label>
@@ -299,18 +299,18 @@ include '../views/header.php';
 </div>
 
     <script>
-        // --- Lógica RX Multi-línea ---
-        function crearLineaRX(data = null) {
+        // --- Lógica RX Multi-línea (Anidada OD/OI) ---
+        function addRxLine(data = null) {
             const container = document.getElementById('rx-lineas-container');
             const index = container.children.length + 1;
             const div = document.createElement('div');
-            div.className = 'rx-linea-card mb-3';
+            div.className = 'rx-linea-card mb-3 rx-line-row';
             div.innerHTML = `
-                <div class="rx-linea-numero">PEDIDO #${index}</div>
+                <div class="rx-linea-numero">LINEA #${index}</div>
                 <button type="button" class="btn-remove-rx" onclick="removerLineaRX(this)"><i class="fas fa-times"></i></button>
                 <div class="row g-2 align-items-center mb-2">
                     <div class="col-8">
-                        <input type="text" class="form-control form-control-sm rx-input-nota" placeholder="Notas (ej: Probar Biofinity)" value="${data ? (data.nota || '') : ''}">
+                        <input type="text" class="form-control form-control-sm rx-input-nota" placeholder="Notas / Tipo Lente (ej: Biofinity)" value="${data ? (data.nota || '') : ''}">
                     </div>
                 </div>
                 <div class="row g-2">
@@ -339,23 +339,29 @@ include '../views/header.php';
                 </div>
             `;
             container.appendChild(div);
+            
+            div.querySelectorAll('input').forEach(input => {
+                input.addEventListener('input', serializeRxLines);
+            });
+            serializeRxLines();
         }
 
         function removerLineaRX(btn) {
             btn.closest('.rx-linea-card').remove();
-            re-ordenarLineas();
+            reordenarLineas();
+            serializeRxLines();
         }
 
-        function re-ordenarLineas() {
+        function reordenarLineas() {
             document.querySelectorAll('.rx-linea-numero').forEach((el, idx) => {
-                el.innerText = `PEDIDO #${idx + 1}`;
+                el.innerText = `LINEA #${idx + 1}`;
             });
         }
 
-        function serializarRX() {
-            const lineas = [];
-            let textRX = "";
-            document.querySelectorAll('.rx-linea-card').forEach((card, idx) => {
+        function serializeRxLines() {
+            const rxLines = [];
+            let textLegacy = "";
+            document.querySelectorAll('.rx-line-row').forEach((card, idx) => {
                 const row = {
                     nota: card.querySelector('.rx-input-nota').value,
                     od: {
@@ -371,11 +377,15 @@ include '../views/header.php';
                         add: card.querySelector('.rx-oi-add').value
                     }
                 };
-                lineas.push(row);
-                textRX += `P#${idx+1}: OD(${row.od.esf || '0'} ${row.od.cil || ''} ${row.od.eje || ''}) OI(${row.oi.esf || '0'} ${row.oi.cil || ''} ${row.oi.eje || ''}) | `;
+                
+                if (row.nota || row.od.esf || row.od.cil || row.oi.esf || row.oi.cil) {
+                    rxLines.push(row);
+                    const label = row.nota ? `[${row.nota}] ` : `L#${idx+1}: `;
+                    textLegacy += `${label}OD(${row.od.esf || '0'} ${row.od.cil || ''}) OI(${row.oi.esf || '0'} ${row.oi.cil || ''}) | `;
+                }
             });
-            document.getElementById('rx_lineas_json').value = JSON.stringify(lineas);
-            document.getElementById('rx').value = textRX;
+            document.getElementById('rx_lineas_json').value = JSON.stringify(rxLines);
+            document.getElementById('rx').value = textLegacy.replace(/\|\s*$/, '');
         }
 
         // --- Pack Receptor ---
@@ -402,14 +412,14 @@ include '../views/header.php';
             try {
                 const data = JSON.parse(initialRx);
                 if(data && data.length > 0) {
-                    data.forEach(d => crearLineaRX(d));
+                    data.forEach(d => addRxLine(d));
                 } else {
-                    crearLineaRX();
+                    addRxLine();
                 }
-            } catch(e) { crearLineaRX(); }
+            } catch(e) { addRxLine(); }
 
             $('form').on('submit', function() {
-                serializarRX();
+                serializeRxLines();
             });
         });
     </script>

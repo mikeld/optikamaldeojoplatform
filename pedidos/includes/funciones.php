@@ -42,14 +42,32 @@ function formatearRX($rx, $rx_lineas_json = null) {
             $html = '<div class="rx-container-multi">';
             foreach ($lineas as $idx => $l) {
                 $html .= '<div class="rx-line-block' . (count($lineas) > 1 ? ' mb-2 border-bottom pb-1' : '') . '">';
-                if ($l['nota']) $html .= '<div class="small text-muted mb-1"><strong>' . htmlspecialchars($l['nota']) . '</strong></div>';
-                $html .= '<div class="d-flex gap-2">';
-                if ($l['od']['esf'] || $l['od']['cil']) {
-                    $html .= '<span class="badge bg-light text-primary border me-1">OD ' . $l['od']['esf'] . ' ' . $l['od']['cil'] . '</span>';
+                
+                // Si tiene nota, mostrarla
+                $nota = $l['nota'] ?? $l['notas'] ?? '';
+                if ($nota) $html .= '<div class="small text-muted mb-1"><strong>' . htmlspecialchars($nota) . '</strong></div>';
+                
+                $html .= '<div class="d-flex flex-wrap gap-2">';
+                
+                // CASO 1: Formato Anidado (OD y OI en la misma línea)
+                if (isset($l['od']) || isset($l['oi'])) {
+                    if (!empty($l['od']['esf']) || !empty($l['od']['cil'])) {
+                        $txt = 'OD ' . ($l['od']['esf'] ?? '') . ' ' . ($l['od']['cil'] ?? '');
+                        $html .= '<span class="badge bg-light text-primary border me-1">' . htmlspecialchars(trim($txt)) . '</span>';
+                    }
+                    if (!empty($l['oi']['esf']) || !empty($l['oi']['cil'])) {
+                        $txt = 'OI ' . ($l['oi']['esf'] ?? '') . ' ' . ($l['oi']['cil'] ?? '');
+                        $html .= '<span class="badge bg-light text-danger border">' . htmlspecialchars(trim($txt)) . '</span>';
+                    }
+                } 
+                // CASO 2: Formato Plano (Cada entrada es un ojo)
+                else if (isset($l['ojo'])) {
+                    $ojo = strtoupper($l['ojo']);
+                    $class = (strpos($ojo, 'OD') !== false) ? 'text-primary' : 'text-danger';
+                    $txt = $ojo . ' ' . ($l['esfera'] ?? $l['esf'] ?? '') . ' ' . ($l['cilindro'] ?? $l['cil'] ?? '');
+                    $html .= '<span class="badge bg-light ' . $class . ' border">' . htmlspecialchars(trim($txt)) . '</span>';
                 }
-                if ($l['oi']['esf'] || $l['oi']['cil']) {
-                    $html .= '<span class="badge bg-light text-danger border">OI ' . $l['oi']['esf'] . ' ' . $l['oi']['cil'] . '</span>';
-                }
+                
                 $html .= '</div></div>';
             }
             $html .= '</div>';

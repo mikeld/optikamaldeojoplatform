@@ -332,78 +332,95 @@ try {
             return true;
         }
 
-        // --- Lógica para RX Multi-línea OD/OI ---
-        let rxLineCounter = 0;
-
-        function addRxLine(initialData = {}) {
-            rxLineCounter++;
+        // --- Lógica RX Multi-línea (Anidada OD/OI) ---
+        function addRxLine(data = null) {
             const container = document.getElementById('rx-lineas-container');
-            const newLine = document.createElement('div');
-            newLine.className = 'row g-2 mb-2 rx-line';
-            newLine.dataset.lineId = rxLineCounter;
-            newLine.innerHTML = `
-                <div class="col-md-2">
-                    <input type="text" class="form-control form-control-sm rx-ojo" placeholder="Ojo (OD/OI)" value="${initialData.ojo || ''}">
+            const index = container.children.length + 1;
+            const div = document.createElement('div');
+            div.className = 'rx-linea-card mb-3 rx-line-row'; // Clase para identificar filas
+            div.innerHTML = `
+                <div class="rx-linea-numero">LINEA #${index}</div>
+                <button type="button" class="btn-remove-rx" onclick="removerLineaRX(this)"><i class="fas fa-times"></i></button>
+                <div class="row g-2 align-items-center mb-2">
+                    <div class="col-8">
+                        <input type="text" class="form-control form-control-sm rx-input-nota" placeholder="Notas / Tipo Lente (ej: Biofinity)" value="${data ? (data.nota || '') : ''}">
+                    </div>
                 </div>
-                <div class="col-md-2">
-                    <input type="text" class="form-control form-control-sm rx-esfera" placeholder="Esfera" value="${initialData.esfera || ''}">
-                </div>
-                <div class="col-md-2">
-                    <input type="text" class="form-control form-control-sm rx-cilindro" placeholder="Cilindro" value="${initialData.cilindro || ''}">
-                </div>
-                <div class="col-md-2">
-                    <input type="text" class="form-control form-control-sm rx-eje" placeholder="Eje" value="${initialData.eje || ''}">
-                </div>
-                <div class="col-md-2">
-                    <input type="text" class="form-control form-control-sm rx-adicion" placeholder="Adición" value="${initialData.adicion || ''}">
-                </div>
-                <div class="col-md-2 d-flex align-items-center">
-                    <button type="button" class="btn btn-sm btn-outline-danger w-100 btn-remove-rx-line">
-                        <i class="fas fa-trash"></i>
-                    </button>
+                <div class="row g-2">
+                    <div class="col-6">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="rx-ojo-label rx-od">OD</span>
+                            <div class="row g-1 flex-grow-1">
+                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-od-esf" placeholder="Esf" value="${data ? (data.od?.esf || '') : ''}"></div>
+                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-od-cil" placeholder="Cil" value="${data ? (data.od?.cil || '') : ''}"></div>
+                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-od-eje" placeholder="Eje" value="${data ? (data.od?.eje || '') : ''}"></div>
+                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-od-add" placeholder="Add" value="${data ? (data.od?.add || '') : ''}"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="rx-ojo-label rx-oi">OI</span>
+                            <div class="row g-1 flex-grow-1">
+                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-oi-esf" placeholder="Esf" value="${data ? (data.oi?.esf || '') : ''}"></div>
+                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-oi-cil" placeholder="Cil" value="${data ? (data.oi?.cil || '') : ''}"></div>
+                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-oi-eje" placeholder="Eje" value="${data ? (data.oi?.eje || '') : ''}"></div>
+                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-oi-add" placeholder="Add" value="${data ? (data.oi?.add || '') : ''}"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             `;
-            container.appendChild(newLine);
-
-            newLine.querySelector('.btn-remove-rx-line').addEventListener('click', function() {
-                newLine.remove();
-                serializeRxLines(); // Actualizar JSON al eliminar
-            });
-
-            // Añadir event listeners para actualizar el JSON al cambiar cualquier campo
-            newLine.querySelectorAll('input').forEach(input => {
+            container.appendChild(div);
+            
+            // Añadir listeners para serializar al cambiar
+            div.querySelectorAll('input').forEach(input => {
                 input.addEventListener('input', serializeRxLines);
             });
+            serializeRxLines();
+        }
 
-            serializeRxLines(); // Actualizar JSON al añadir
+        function removerLineaRX(btn) {
+            btn.closest('.rx-linea-card').remove();
+            reordenarLineas();
+            serializeRxLines();
+        }
+
+        function reordenarLineas() {
+            document.querySelectorAll('.rx-linea-numero').forEach((el, idx) => {
+                el.innerText = `LINEA #${idx + 1}`;
+            });
         }
 
         function serializeRxLines() {
             const rxLines = [];
-            document.querySelectorAll('.rx-line').forEach(lineDiv => {
-                const ojo = lineDiv.querySelector('.rx-ojo').value;
-                const esfera = lineDiv.querySelector('.rx-esfera').value;
-                const cilindro = lineDiv.querySelector('.rx-cilindro').value;
-                const eje = lineDiv.querySelector('.rx-eje').value;
-                const adicion = lineDiv.querySelector('.rx-adicion').value;
-
-                if (ojo || esfera || cilindro || eje || adicion) { // Solo añadir líneas con algún dato
-                    rxLines.push({ ojo, esfera, cilindro, eje, adicion });
+            let textLegacy = "";
+            document.querySelectorAll('.rx-line-row').forEach((card, idx) => {
+                const row = {
+                    nota: card.querySelector('.rx-input-nota').value,
+                    od: {
+                        esf: card.querySelector('.rx-od-esf').value,
+                        cil: card.querySelector('.rx-od-cil').value,
+                        eje: card.querySelector('.rx-od-eje').value,
+                        add: card.querySelector('.rx-od-add').value
+                    },
+                    oi: {
+                        esf: card.querySelector('.rx-oi-esf').value,
+                        cil: card.querySelector('.rx-oi-cil').value,
+                        eje: card.querySelector('.rx-oi-eje').value,
+                        add: card.querySelector('.rx-oi-add').value
+                    }
+                };
+                
+                // Solo añadir si hay algún dato real
+                if (row.nota || row.od.esf || row.od.cil || row.oi.esf || row.oi.cil) {
+                    rxLines.push(row);
+                    const label = row.nota ? `[${row.nota}] ` : `L#${idx+1}: `;
+                    textLegacy += `${label}OD(${row.od.esf || '0'} ${row.od.cil || ''}) OI(${row.oi.esf || '0'} ${row.oi.cil || ''}) | `;
                 }
             });
             document.getElementById('rx_lineas_json').value = JSON.stringify(rxLines);
-
-            // Para compatibilidad con el campo 'rx' legado, crear una representación simple
-            const rxLegacyValue = rxLines.map(line => {
-                let parts = [];
-                if (line.ojo) parts.push(line.ojo);
-                if (line.esfera) parts.push(`Esf:${line.esfera}`);
-                if (line.cilindro) parts.push(`Cil:${line.cilindro}`);
-                if (line.eje) parts.push(`Eje:${line.eje}`);
-                if (line.adicion) parts.push(`Add:${line.adicion}`);
-                return parts.join(' ');
-            }).join(' | ');
-            document.getElementById('rx').value = rxLegacyValue;
+            document.getElementById('rx').value = textLegacy.replace(/\|\s*$/, '');
         }
 
         document.getElementById('btn-add-rx-linea').addEventListener('click', () => addRxLine());
