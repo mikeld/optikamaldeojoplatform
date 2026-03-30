@@ -160,8 +160,22 @@ include '../views/header.php';
                             <label for="recibido" class="form-label">Estado General</label>
                             <select id="recibido" name="recibido" class="form-select">
                                 <option value="0" <?= ($pedido['recibido'] ?? 0) == 0 ? 'selected' : '' ?>>Pendiente</option>
+                                <option value="2" <?= ($pedido['recibido'] ?? 0) == 2 ? 'selected' : '' ?>>Parcialmente recibido</option>
                                 <option value="1" <?= ($pedido['recibido'] ?? 0) == 1 ? 'selected' : '' ?>>Recibido completo</option>
                             </select>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-12">
+                            <label for="notas_recepcion" class="form-label text-danger"><i class="fas fa-exclamation-circle me-1"></i> Notas de Recepción Parcial</label>
+                            <input type="text"
+                                   class="form-control border-danger-subtle text-danger"
+                                   id="notas_recepcion"
+                                   name="notas_recepcion"
+                                   placeholder="Faltantes o incidencias en la recepción..."
+                                   value="<?= htmlspecialchars($pedido['notas_recepcion'] ?? '') ?>">
+                            <div class="form-text text-muted">Estas notas se mostrarán en rojo en el listado cuando el pedido esté Parcialmente Recibido.</div>
                         </div>
                     </div>
 
@@ -397,11 +411,14 @@ include '../views/header.php';
             currentJson[item] = el.classList.contains('received');
             document.getElementById('pack_estado_json').value = JSON.stringify(currentJson);
             
-            // Auto-update check general si ambos están true
+            // Auto-update check general si ambos están true, parcial si hay alguno
             const items = document.querySelectorAll('.pack-item');
             const allOk = Array.from(items).every(i => i.classList.contains('received'));
+            const someOk = Array.from(items).some(i => i.classList.contains('received'));
             if (allOk) {
                 document.getElementById('recibido').value = "1";
+            } else if (someOk) {
+                document.getElementById('recibido').value = "2";
             } else {
                 document.getElementById('recibido').value = "0";
             }

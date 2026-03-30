@@ -14,7 +14,8 @@ $pack_tipo           = $_POST['pack_tipo'] ?? null;
 $pack_estado         = $_POST['pack_estado'] ?? null;
 $via                 = trim($_POST['via'] ?? '');
 $recibido            = isset($_POST['recibido']) ? (int)$_POST['recibido'] : 0;
-$observaciones       = trim($_POST['observaciones']);
+$observaciones       = trim($_POST['observaciones'] ?? '');
+$notas_recepcion     = trim($_POST['notas_recepcion'] ?? '');
 $proveedor_id        = $_POST['proveedor_id'] !== '' ? (int)$_POST['proveedor_id'] : null;
 
 // Convertir fechas vacías a NULL
@@ -42,6 +43,7 @@ $sql = "UPDATE pedidos SET
           fecha_pedido        = :fp,
           fecha_llegada       = :fl,
           observaciones       = :obs,
+          notas_recepcion     = :nrec,
           proveedor_id        = :prov
         WHERE id = :id";
 $stmt = $conexion->pdo->prepare($sql);
@@ -57,6 +59,7 @@ $stmt->bindValue(':fc',  $fecha_cliente,      $fecha_cliente ? PDO::PARAM_STR : 
 $stmt->bindValue(':fp',  $fecha_pedido,       $fecha_pedido ? PDO::PARAM_STR : PDO::PARAM_NULL);
 $stmt->bindValue(':fl',  $fecha_llegada,      $fecha_llegada ? PDO::PARAM_STR : PDO::PARAM_NULL);
 $stmt->bindValue(':obs', $observaciones,      PDO::PARAM_STR);
+$stmt->bindValue(':nrec', $notas_recepcion,   PDO::PARAM_STR);
 $stmt->bindValue(':prov', $proveedor_id,      $proveedor_id === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
 $stmt->bindValue(':id',  $pedido_id,    PDO::PARAM_INT);
 

@@ -64,7 +64,7 @@ $stmt = $pdo->prepare("
     SELECT p.*, c.telefono, c.email
     FROM pedidos p
     JOIN clientes c ON p.referencia_cliente = c.referencia
-    WHERE p.recibido = 0
+    WHERE p.recibido IN (0, 2)
       AND p.fecha_pedido IS NULL
       {$p_pedir['cond']}
     ORDER BY {$p_pedir['sort']} {$p_pedir['dir']}
@@ -83,7 +83,7 @@ $stmt = $pdo->prepare("
     SELECT p.*, c.telefono, c.email
     FROM pedidos p
     JOIN clientes c ON p.referencia_cliente = c.referencia
-    WHERE p.recibido = 0
+    WHERE p.recibido IN (0, 2)
       AND p.fecha_llegada <= :fecha_hoy
       {$p_atrasados['cond']}
     ORDER BY {$p_atrasados['sort']} {$p_atrasados['dir']}
@@ -103,7 +103,7 @@ $stmt = $pdo->prepare("
     SELECT p.*, c.telefono, c.email
     FROM pedidos p
     JOIN clientes c ON p.referencia_cliente = c.referencia
-    WHERE p.recibido = 0
+    WHERE p.recibido IN (0, 2)
       AND p.fecha_llegada > :fecha_hoy
       {$p_pendientes['cond']}
     ORDER BY {$p_pendientes['sort']} {$p_pendientes['dir']}
@@ -160,14 +160,14 @@ $n_recibidos  = count($pedidos_recibidos);
 
     <!-- Resumen rápido en línea -->
     <div class="d-flex flex-wrap gap-3 mb-4">
-        <span class="quick-stat quick-stat-warning"><i class="fas fa-clock me-1"></i> Sin pedir: <strong><?= $n_pedir ?></strong></span>
-        <span class="quick-stat quick-stat-danger"><i class="fas fa-exclamation-triangle me-1"></i> Atrasados: <strong><?= $n_atrasados ?></strong></span>
-        <span class="quick-stat quick-stat-primary"><i class="fas fa-truck me-1"></i> En camino: <strong><?= $n_pendientes ?></strong></span>
-        <span class="quick-stat quick-stat-success"><i class="fas fa-check-circle me-1"></i> Finalizados: <strong><?= $n_recibidos ?></strong></span>
+        <a href="#card-por-pedir" class="quick-stat quick-stat-warning text-decoration-none" style="color: inherit;"><i class="fas fa-clock me-1"></i> Sin pedir: <strong><?= $n_pedir ?></strong></a>
+        <a href="#card-atrasados" class="quick-stat quick-stat-danger text-decoration-none" style="color: inherit;"><i class="fas fa-exclamation-triangle me-1"></i> Atrasados: <strong><?= $n_atrasados ?></strong></a>
+        <a href="#card-pendientes" class="quick-stat quick-stat-primary text-decoration-none" style="color: inherit;"><i class="fas fa-truck me-1"></i> En camino: <strong><?= $n_pendientes ?></strong></a>
+        <a href="#card-finalizados" class="quick-stat quick-stat-success text-decoration-none" style="color: inherit;"><i class="fas fa-check-circle me-1"></i> Finalizados: <strong><?= $n_recibidos ?></strong></a>
     </div>
 
     <!-- 1) Pedidos Pendientes de Pedir -->
-    <div class="modern-card">
+    <div id="card-por-pedir" class="modern-card">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h2 class="text-dark mb-0 section-title">
                 <i class="fas fa-clock text-warning"></i> Pendientes de Pedir
@@ -198,7 +198,7 @@ $n_recibidos  = count($pedidos_recibidos);
     </div>
 
     <!-- 2) Pedidos Atrasados -->
-    <div class="modern-card">
+    <div id="card-atrasados" class="modern-card">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h2 class="text-dark mb-0 section-title">
                 <i class="fas fa-exclamation-triangle text-danger"></i> Pedidos Atrasados
@@ -229,7 +229,7 @@ $n_recibidos  = count($pedidos_recibidos);
     </div>
 
     <!-- 3) Pedidos Pendientes de Recibir -->
-    <div class="modern-card">
+    <div id="card-pendientes" class="modern-card">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h2 class="text-dark mb-0 section-title">
                 <i class="fas fa-truck-loading text-primary"></i> Pendientes de Recibir
@@ -260,7 +260,7 @@ $n_recibidos  = count($pedidos_recibidos);
     </div>
 
     <!-- 4) Pedidos Finalizados -->
-    <div class="modern-card">
+    <div id="card-finalizados" class="modern-card">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h2 class="text-success mb-0 section-title">
                 <i class="fas fa-check-circle"></i> Pedidos Finalizados
@@ -288,6 +288,55 @@ $n_recibidos  = count($pedidos_recibidos);
                 'recibidos_'
             ); ?>
         </div>
+    </div>
+</div>
+
+<!-- Modal de Recepción Parcial -->
+<div class="modal fade" id="modalRecepcion" tabindex="-1" aria-labelledby="modalRecepcionLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form action="../controllers/marcar_recibido.php" method="POST" class="modal-content shadow-lg border-0" style="border-radius: 20px; overflow: hidden;">
+            <div class="modal-header bg-warning text-dark border-0 py-3">
+                <h5 class="modal-title d-flex align-items-center fw-bold" id="modalRecepcionLabel">
+                    <i class="fas fa-box-open me-2"></i> Recepción Parcial - Pedido #<span id="rp-id-text" class="ms-1"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4 bg-light">
+                <input type="hidden" name="pedido_id" id="rp-pedido-id" value="">
+                
+                <div id="rp-pack-container" class="mb-4 d-none">
+                    <label class="form-label fw-bold text-secondary"> Componentes del Pack </label>
+                    <div class="card border-0 shadow-sm rounded-4">
+                        <div class="card-body py-2">
+                             <div class="form-check form-switch mb-2 pt-2" id="rp-container-cajas">
+                                <input class="form-check-input" type="checkbox" id="rp-cajas" name="pack_cajas" value="1" style="transform: scale(1.3); margin-top: 0.15rem; margin-right: 0.5rem;">
+                                <label class="form-check-label fw-bold" for="rp-cajas"><i class="fas fa-box text-primary mx-1"></i> Cajas recibidas</label>
+                            </div>
+                            <div class="form-check form-switch pb-2" id="rp-container-blisters">
+                                <input class="form-check-input" type="checkbox" id="rp-blisters" name="pack_blisters" value="1" style="transform: scale(1.3); margin-top: 0.15rem; margin-right: 0.5rem;">
+                                <label class="form-check-label fw-bold" for="rp-blisters"><i class="fas fa-tablets text-primary mx-1"></i> Blísteres recibidos</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-1">
+                    <label for="rp-notas" class="form-label fw-bold text-secondary"> Notas de Recepción Parcial</label>
+                    <textarea class="form-control rounded-3" id="rp-notas" name="notas_recepcion" rows="3" placeholder="Ej: Falta un líquido, han llegado solo 2 cajas..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer bg-white border-0 py-3 px-4 d-flex justify-content-between">
+                <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cancelar</button>
+                <div class="d-flex gap-2">
+                     <button type="submit" name="recibido_val" value="2" class="btn btn-warning text-dark fw-bold rounded-pill px-4">
+                         <i class="fas fa-save me-1"></i> Guardar Parcial
+                     </button>
+                     <button type="submit" name="recibido_val" value="1" class="btn btn-success fw-bold rounded-pill px-4">
+                         <i class="fas fa-check me-1"></i> ¡Todo Completado!
+                     </button>
+                </div>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -446,6 +495,60 @@ document.addEventListener('DOMContentLoaded', function() {
             modal.show();
         });
     });
+
+    // Modal Recepción Parcial
+    const modalParcialElement = document.getElementById('modalRecepcion');
+    const modalParcial = new bootstrap.Modal(modalParcialElement);
+
+    document.querySelectorAll('.open-parcial-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation(); // Evita que se abra el modalDetallePedido
+            const row = this.closest('tr');
+            if (!row) return;
+
+            const p = JSON.parse(row.getAttribute('data-pedido'));
+            
+            document.getElementById('rp-pedido-id').value = p.id;
+            document.getElementById('rp-id-text').textContent = p.id;
+            
+            // Textarea de notas
+            document.getElementById('rp-notas').value = p.notas_recepcion || '';
+
+            // Mostrar u ocultar el contenedor de pack
+            const packContainer = document.getElementById('rp-pack-container');
+            const contCajas = document.getElementById('rp-container-cajas');
+            const contBlisters = document.getElementById('rp-container-blisters');
+            const chkCajas = document.getElementById('rp-cajas');
+            const chkBlisters = document.getElementById('rp-blisters');
+            
+            chkCajas.checked = false;
+            chkBlisters.checked = false;
+
+            if (p.pack_tipo) {
+                packContainer.classList.remove('d-none');
+                const estado = JSON.parse(p.pack_estado || '{}');
+                
+                if (p.pack_tipo === 'cajas' || p.pack_tipo === 'ambos') {
+                    contCajas.classList.remove('d-none');
+                    chkCajas.checked = estado.cajas || false;
+                } else {
+                    contCajas.classList.add('d-none');
+                }
+
+                if (p.pack_tipo === 'blisters' || p.pack_tipo === 'ambos') {
+                    contBlisters.classList.remove('d-none');
+                    chkBlisters.checked = estado.blisters || false;
+                } else {
+                    contBlisters.classList.add('d-none');
+                }
+            } else {
+                packContainer.classList.add('d-none');
+            }
+
+            modalParcial.show();
+        });
+    });
+
 
     // Lógica de filtrado en vivo
     document.querySelectorAll('.live-search').forEach(input => {

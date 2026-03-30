@@ -123,6 +123,11 @@ function formatearPackEstado($tipo, $estado_json) {
     return $html;
 }
 
+function formatearNotaParcial($nota) {
+    if (empty($nota)) return '';
+    return '<div class="text-danger small mt-1 fw-bold" style="font-size: 0.75rem;"><i class="fas fa-exclamation-circle"></i> ' . htmlspecialchars($nota) . '</div>';
+}
+
 /**
  * Muestra una tabla con los pedidos y columnas según el tipo
  */
@@ -182,8 +187,13 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
 
         echo '<td class="text-center">'.htmlspecialchars($p['id']).'</td>';
         echo '<td class="text-center">'.htmlspecialchars($p['referencia_cliente']).'</td>';
-        echo '<td class="text-center">'.htmlspecialchars($p['lc_gafa_recambio']).'</td>';
-        echo '<td class="text-center">'.formatearPackEstado($p['pack_tipo'], $p['pack_estado']).'</td>';
+        echo '<td class="text-center">';
+        echo htmlspecialchars($p['lc_gafa_recambio']);
+        if (!empty($p['notas_recepcion'])) {
+            echo formatearNotaParcial($p['notas_recepcion']);
+        }
+        echo '</td>';
+        echo '<td class="text-center open-parcial-btn" style="cursor:pointer;" title="Haz clic para modificar recepción parcial">'.formatearPackEstado($p['pack_tipo'], $p['pack_estado']).'</td>';
         echo '<td>'.formatearRX($p['rx'], $p['rx_lineas'] ?? null).'</td>';
         echo '<td class="text-center font-monospace">'.htmlspecialchars($p['fecha_pedido'] ?? '').'</td>';
         echo '<td class="text-center"><span class="badge bg-light text-dark border">'.htmlspecialchars($p['via'] ?? '').'</span></td>';
@@ -206,10 +216,24 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
         echo '<td class="text-center">';
         if ($mostrar_botones) {
             if ($tipo < 3) {
-                echo '<form action="../controllers/marcar_recibido.php" method="POST" class="d-inline">';
-                echo '<input type="hidden" name="pedido_id" value="'.htmlspecialchars($p['id']).'">';
-                echo '<button type="submit" class="btn btn-success btn-sm btn-action w-100"><i class="fas fa-check"></i></button>';
-                echo '</form>';
+                if (($p['recibido'] ?? 0) == 2) {
+                    echo '<span class="badge bg-warning text-dark mb-1 d-block" style="font-size:0.75rem;"><i class="fas fa-box-open"></i> PARCIAL</span>';
+                    echo '<form action="../controllers/marcar_recibido.php" method="POST" class="d-block m-0">';
+                    echo '<input type="hidden" name="pedido_id" value="'.htmlspecialchars($p['id']).'">';
+                    echo '<input type="hidden" name="recibido_val" value="1">';
+                    echo '<button type="submit" title="Marcar Completo" class="btn btn-success btn-sm btn-action w-100"><i class="fas fa-check"></i></button>';
+                    echo '</form>';
+                } else {
+                    echo '<div class="d-flex gap-1">';
+                    echo '<form action="../controllers/marcar_recibido.php" method="POST" class="flex-fill m-0">';
+                    echo '<input type="hidden" name="pedido_id" value="'.htmlspecialchars($p['id']).'">';
+                    echo '<input type="hidden" name="recibido_val" value="1">';
+                    echo '<button type="submit" title="Marcar Completo" class="btn btn-success btn-sm btn-action w-100"><i class="fas fa-check"></i></button>';
+                    echo '</form>';
+
+                    echo '<button type="button" title="Recibido Parcial" class="btn btn-warning text-dark btn-sm btn-action w-100 flex-fill open-parcial-btn"><i class="fas fa-box-open"></i></button>';
+                    echo '</div>';
+                }
             } else {
                 echo '<form action="../controllers/cambiar_estado_pedido.php" method="POST" class="d-inline">';
                 echo '<input type="hidden" name="pedido_id" value="'.htmlspecialchars($p['id']).'">';
