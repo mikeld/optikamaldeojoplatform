@@ -16,12 +16,11 @@ $via                 = trim($_POST['via'] ?? '');
 $recibido            = isset($_POST['recibido']) ? (int)$_POST['recibido'] : 0;
 $observaciones       = trim($_POST['observaciones'] ?? '');
 $notas_recepcion     = trim($_POST['notas_recepcion'] ?? '');
-$proveedor_id        = $_POST['proveedor_id'] !== '' ? (int)$_POST['proveedor_id'] : null;
-
-// Convertir fechas vacías a NULL
-$fecha_cliente = $_POST['fecha_cliente'] !== '' ? $_POST['fecha_cliente'] : null;
-$fecha_pedido  = $_POST['fecha_pedido']  !== '' ? $_POST['fecha_pedido']  : null;
-$fecha_llegada = $_POST['fecha_llegada'] !== '' ? $_POST['fecha_llegada'] : null;
+// Convertir fechas o enteros desde POST con seguridad
+$proveedor_id        = !empty($_POST['proveedor_id']) ? (int)$_POST['proveedor_id'] : null;
+$fecha_cliente = !empty($_POST['fecha_cliente']) ? $_POST['fecha_cliente'] : null;
+$fecha_pedido  = !empty($_POST['fecha_pedido'])  ? $_POST['fecha_pedido']  : null;
+$fecha_llegada = !empty($_POST['fecha_llegada']) ? $_POST['fecha_llegada'] : null;
 
 // Validar imprescindible
 if (!$pedido_id || !$referencia_cliente) {
