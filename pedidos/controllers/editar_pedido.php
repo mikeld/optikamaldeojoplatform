@@ -204,7 +204,7 @@ include '../views/header.php';
                             </div>
                             <?php endif; ?>
                         </div>
-                        <input type="hidden" name="pack_estado" id="pack_estado_json" value='<?= htmlspecialchars($pedido['pack_estado'] ?? '{}') ?>'>
+                        <input type="hidden" name="pack_estado" id="pack_estado_json" value="<?= htmlspecialchars($pedido['pack_estado'] ?? '{}', ENT_QUOTES, 'UTF-8') ?>">
                         <input type="hidden" name="pack_tipo" value="<?= htmlspecialchars($tipo) ?>">
                     </div>
                     <?php endif; ?>
@@ -220,8 +220,8 @@ include '../views/header.php';
                         <div id="rx-lineas-container">
                             <!-- Se inserta por JS -->
                         </div>
-                        <input type="hidden" name="rx_lineas" id="rx_lineas_json" value='<?= htmlspecialchars($pedido['rx_lineas'] ?? '[]') ?>'>
-                        <input type="hidden" name="rx" id="rx" value="<?= htmlspecialchars($pedido['rx'] ?? '') ?>">
+                        <input type="hidden" name="rx_lineas" id="rx_lineas_json" value="<?= htmlspecialchars($pedido['rx_lineas'] ?? '[]', ENT_QUOTES, 'UTF-8') ?>">
+                        <input type="hidden" name="rx" id="rx" value="<?= htmlspecialchars($pedido['rx'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
                     </div>
 
                     <div class="row g-3 mb-4">
