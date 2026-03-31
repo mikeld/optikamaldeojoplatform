@@ -158,12 +158,21 @@ $n_recibidos  = count($pedidos_recibidos);
         </div>
     </div>
 
-    <!-- Resumen rápido en línea -->
-    <div class="d-flex flex-wrap gap-3 mb-4">
-        <a href="#card-por-pedir" class="quick-stat quick-stat-warning text-decoration-none" style="color: inherit;"><i class="fas fa-clock me-1"></i> Sin pedir: <strong><?= $n_pedir ?></strong></a>
-        <a href="#card-atrasados" class="quick-stat quick-stat-danger text-decoration-none" style="color: inherit;"><i class="fas fa-exclamation-triangle me-1"></i> Atrasados: <strong><?= $n_atrasados ?></strong></a>
-        <a href="#card-pendientes" class="quick-stat quick-stat-primary text-decoration-none" style="color: inherit;"><i class="fas fa-truck me-1"></i> En camino: <strong><?= $n_pendientes ?></strong></a>
-        <a href="#card-finalizados" class="quick-stat quick-stat-success text-decoration-none" style="color: inherit;"><i class="fas fa-check-circle me-1"></i> Finalizados: <strong><?= $n_recibidos ?></strong></a>
+    <!-- Resumen rápido en línea y Buscador Global -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div class="d-flex flex-wrap gap-3">
+            <a href="#card-por-pedir" class="quick-stat quick-stat-warning text-decoration-none" style="color: inherit;"><i class="fas fa-clock me-1"></i> Sin pedir: <strong><?= $n_pedir ?></strong></a>
+            <a href="#card-atrasados" class="quick-stat quick-stat-danger text-decoration-none" style="color: inherit;"><i class="fas fa-exclamation-triangle me-1"></i> Atrasados: <strong><?= $n_atrasados ?></strong></a>
+            <a href="#card-pendientes" class="quick-stat quick-stat-primary text-decoration-none" style="color: inherit;"><i class="fas fa-truck me-1"></i> En camino: <strong><?= $n_pendientes ?></strong></a>
+            <a href="#card-finalizados" class="quick-stat quick-stat-success text-decoration-none" style="color: inherit;"><i class="fas fa-check-circle me-1"></i> Finalizados: <strong><?= $n_recibidos ?></strong></a>
+        </div>
+        
+        <div class="ms-md-auto" style="min-width: 250px; flex: 1; max-width: 400px;">
+            <div class="input-group shadow-sm bg-white rounded-pill overflow-hidden border">
+                <span class="input-group-text bg-transparent border-0 pe-1" id="search-addon"><i class="fas fa-search text-muted"></i></span>
+                <input type="text" id="buscador-general" class="form-control border-0 shadow-none px-2" placeholder="Buscar en todas las tablas..." aria-label="Buscador global" aria-describedby="search-addon">
+            </div>
+        </div>
     </div>
 
     <!-- 1) Pedidos Pendientes de Pedir -->
@@ -550,7 +559,20 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
 
-    // Lógica de filtrado en vivo
+    // Lógica de filtrado en vivo global
+    const buscadorGeneral = document.getElementById('buscador-general');
+    if (buscadorGeneral) {
+        buscadorGeneral.addEventListener('input', function() {
+            const term = this.value;
+            document.querySelectorAll('.live-search').forEach(input => {
+                input.value = term;
+                // Disparamos el evento de 'input' en cada buscador para que filtre su respectiva tabla
+                input.dispatchEvent(new Event('input'));
+            });
+        });
+    }
+
+    // Lógica de filtrado en vivo individual
     document.querySelectorAll('.live-search').forEach(input => {
         input.addEventListener('input', function() {
             const term = this.value.toLowerCase().trim();
