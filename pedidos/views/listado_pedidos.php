@@ -168,9 +168,12 @@ $n_recibidos  = count($pedidos_recibidos);
         </div>
         
         <div class="ms-md-auto" style="min-width: 250px; flex: 1; max-width: 400px;">
-            <div class="input-group shadow-sm bg-white rounded-pill overflow-hidden border">
+            <div class="input-group shadow-sm bg-white rounded-pill overflow-hidden border position-relative">
                 <span class="input-group-text bg-transparent border-0 pe-1" id="search-addon"><i class="fas fa-search text-muted"></i></span>
-                <input type="text" id="buscador-general" class="form-control border-0 shadow-none px-2" placeholder="Buscar en todas las tablas..." aria-label="Buscador global" aria-describedby="search-addon">
+                <input type="text" id="buscador-general" class="form-control border-0 shadow-none px-2" placeholder="Buscar en todas las tablas..." aria-label="Buscador global" aria-describedby="search-addon" style="padding-right: 35px;">
+                <button type="button" id="btn-clear-search" class="btn btn-link text-muted position-absolute end-0 top-50 translate-middle-y text-decoration-none d-none" style="z-index: 5;" title="Borrar búsqueda">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
         </div>
     </div>
@@ -559,17 +562,62 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
 
-    // Lógica de filtrado en vivo global
+    // Lógica de filtrado en vivo global con persistencia
     const buscadorGeneral = document.getElementById('buscador-general');
+    const btnClearSearch = document.getElementById('btn-clear-search');
+    
     if (buscadorGeneral) {
+        // Restaurar valor previo
+        const savedTerm = sessionStorage.getItem('buscadorGlobalPedidos');
+        if (savedTerm) {
+            buscadorGeneral.value = savedTerm;
+            if (btnClearSearch) btnClearSearch.classList.remove('d-none');
+        }
+
         buscadorGeneral.addEventListener('input', function() {
             const term = this.value;
+            // Guardar en sesión
+            sessionStorage.setItem('buscadorGlobalPedidos', term);
+            
+            // Mostrar u ocultar botón de borrar
+            if (term.length > 0) {
+                if (btnClearSearch) btnClearSearch.classList.remove('d-none');
+            } else {
+                if (btnClearSearch) btnClearSearch.classList.add('d-none');
+            }
+            
             document.querySelectorAll('.live-search').forEach(input => {
                 input.value = term;
                 // Disparamos el evento de 'input' en cada buscador para que filtre su respectiva tabla
                 input.dispatchEvent(new Event('input'));
             });
         });
+
+        if (btnClearSearch) {
+            btnClearSearch.addEventListener('click', function() {
+                buscadorGeneral.value = '';
+                sessionStorage.removeItem('buscadorGlobalPedidos');
+                btnClearSearch.classList.add('d-none');
+                
+                // Limpiar los inputs individuales y disparar su input
+                document.querySelectorAll('.live-search').forEach(input => {
+                    input.value = '';
+                    input.dispatchEvent(new Event('input'));
+                });
+                
+                buscadorGeneral.focus();
+            });
+        }
+        
+        // Si había valor guardado, disparamos la búsqueda inicial para que filtre las tablas al cargar
+        if (savedTerm) {
+            setTimeout(() => {
+                document.querySelectorAll('.live-search').forEach(input => {
+                    input.value = savedTerm;
+                    input.dispatchEvent(new Event('input'));
+                });
+            }, 100);
+        }
     }
 
     // Lógica de filtrado en vivo individual

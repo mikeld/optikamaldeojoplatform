@@ -426,14 +426,36 @@ include '../views/header.php';
 
         $(document).ready(function() {
             const initialRx = $('#rx_lineas_json').val();
+            const legacyRx = $('#rx').val(); // Capturar si hay RX en formato texto antiguo
             try {
                 const data = JSON.parse(initialRx);
                 if(data && data.length > 0) {
-                    data.forEach(d => addRxLine(d));
+                    data.forEach(d => {
+                        // Soporte para formato JSON antiguo (plano con 'ojo')
+                        if (d.ojo && !d.od && !d.oi) {
+                            const isOD = d.ojo.includes('OD');
+                            addRxLine({
+                                nota: d.nota || '',
+                                od: isOD ? { esf: d.esfera, cil: d.cilindro, eje: d.eje, add: d.adicion } : {},
+                                oi: !isOD ? { esf: d.esfera, cil: d.cilindro, eje: d.eje, add: d.adicion } : {}
+                            });
+                        } else {
+                            addRxLine(d);
+                        }
+                    });
+                } else if (legacyRx && legacyRx.trim() !== '') {
+                    // Si no hay lineas JSON pero sí RX legado de texto
+                    addRxLine({ nota: legacyRx });
                 } else {
                     addRxLine();
                 }
-            } catch(e) { addRxLine(); }
+            } catch(e) { 
+                if (legacyRx && legacyRx.trim() !== '') {
+                    addRxLine({ nota: legacyRx });
+                } else {
+                    addRxLine(); 
+                }
+            }
 
             $('form').on('submit', function() {
                 serializeRxLines();
