@@ -451,12 +451,19 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (l.od || l.oi) {
                             if(l.nota) rxHtml += `<div class="small text-muted fw-bold">${l.nota}</div>`;
                             rxHtml += `<div class="d-flex flex-wrap gap-2 mt-1">`;
-                            if(l.od?.esf || l.od?.cil) rxHtml += `<span class="badge bg-light text-primary border">OD: ${l.od.esf || ''} ${l.od.cil || ''}</span>`;
-                            if(l.oi?.esf || l.oi?.cil) rxHtml += `<span class="badge bg-light text-danger border">OI: ${l.oi.esf || ''} ${l.oi.cil || ''}</span>`;
+                            if(l.od?.esf || l.od?.cil || l.od?.eje || l.od?.add) {
+                                const parts = [l.od.esf, l.od.cil, l.od.eje, l.od.add].filter(Boolean).join(' ');
+                                rxHtml += `<span class="badge bg-light text-primary border">OD: ${parts}</span>`;
+                            }
+                            if(l.oi?.esf || l.oi?.cil || l.oi?.eje || l.oi?.add) {
+                                const parts = [l.oi.esf, l.oi.cil, l.oi.eje, l.oi.add].filter(Boolean).join(' ');
+                                rxHtml += `<span class="badge bg-light text-danger border">OI: ${parts}</span>`;
+                            }
                             rxHtml += `</div>`;
                         } else if (l.ojo) {
                             const eyeClass = l.ojo.includes('OD') ? 'text-primary' : 'text-danger';
-                            rxHtml += `<span class="badge bg-light ${eyeClass} border me-1">${l.ojo} ${l.esfera || ''} ${l.cilindro || ''}</span>`;
+                            const parts = [l.esfera || l.esf, l.cilindro || l.cil, l.eje, l.adicion || l.add].filter(Boolean).join(' ');
+                            rxHtml += `<span class="badge bg-light ${eyeClass} border me-1">${l.ojo} ${parts}</span>`;
                         }
                         
                         rxHtml += `</div>`;

@@ -51,21 +51,24 @@ function formatearRX($rx, $rx_lineas_json = null) {
                 
                 // CASO 1: Formato Anidado (OD y OI en la misma línea)
                 if (isset($l['od']) || isset($l['oi'])) {
-                    if (!empty($l['od']['esf']) || !empty($l['od']['cil'])) {
-                        $txt = 'OD ' . ($l['od']['esf'] ?? '') . ' ' . ($l['od']['cil'] ?? '');
-                        $html .= '<span class="badge bg-light text-primary border me-1">' . htmlspecialchars(trim($txt)) . '</span>';
+                    if (!empty($l['od']['esf']) || !empty($l['od']['cil']) || !empty($l['od']['eje']) || !empty($l['od']['add'])) {
+                        $parts = array_filter([$l['od']['esf'] ?? '', $l['od']['cil'] ?? '', $l['od']['eje'] ?? '', $l['od']['add'] ?? '']);
+                        $txt = 'OD ' . implode(' ', $parts);
+                        $html .= '<span class="badge bg-light text-primary border me-1">' . htmlspecialchars($txt) . '</span>';
                     }
-                    if (!empty($l['oi']['esf']) || !empty($l['oi']['cil'])) {
-                        $txt = 'OI ' . ($l['oi']['esf'] ?? '') . ' ' . ($l['oi']['cil'] ?? '');
-                        $html .= '<span class="badge bg-light text-danger border">' . htmlspecialchars(trim($txt)) . '</span>';
+                    if (!empty($l['oi']['esf']) || !empty($l['oi']['cil']) || !empty($l['oi']['eje']) || !empty($l['oi']['add'])) {
+                        $parts = array_filter([$l['oi']['esf'] ?? '', $l['oi']['cil'] ?? '', $l['oi']['eje'] ?? '', $l['oi']['add'] ?? '']);
+                        $txt = 'OI ' . implode(' ', $parts);
+                        $html .= '<span class="badge bg-light text-danger border">' . htmlspecialchars($txt) . '</span>';
                     }
                 } 
                 // CASO 2: Formato Plano (Cada entrada es un ojo)
                 else if (isset($l['ojo'])) {
                     $ojo = strtoupper($l['ojo']);
                     $class = (strpos($ojo, 'OD') !== false) ? 'text-primary' : 'text-danger';
-                    $txt = $ojo . ' ' . ($l['esfera'] ?? $l['esf'] ?? '') . ' ' . ($l['cilindro'] ?? $l['cil'] ?? '');
-                    $html .= '<span class="badge bg-light ' . $class . ' border">' . htmlspecialchars(trim($txt)) . '</span>';
+                    $parts = array_filter([$l['esfera'] ?? $l['esf'] ?? '', $l['cilindro'] ?? $l['cil'] ?? '', $l['eje'] ?? '', $l['adicion'] ?? $l['add'] ?? '']);
+                    $txt = $ojo . ' ' . implode(' ', $parts);
+                    $html .= '<span class="badge bg-light ' . $class . ' border">' . htmlspecialchars($txt) . '</span>';
                 }
                 
                 $html .= '</div></div>';
