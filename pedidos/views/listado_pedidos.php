@@ -187,7 +187,7 @@ $n_recibidos  = count($pedidos_recibidos);
             </h2>
             <div class="d-flex gap-2">
                 <form action="" method="GET" class="d-flex search-box-inline" onsubmit="return false;">
-                    <input type="text" name="pedir_filtro" class="form-control form-control-sm live-search" placeholder="Buscar..." data-target="tabla-pedir" value="<?= htmlspecialchars($p_pedir['filter']) ?>">
+                    <input type="text" name="pedir_filtro" class="form-control form-control-sm live-search" placeholder="Buscar..." data-target="tabla-por-pedir" value="<?= htmlspecialchars($p_pedir['filter']) ?>">
                     <button type="button" class="btn btn-sm btn-nav-modern border-0"><i class="fas fa-search"></i></button>
                 </form>
                 <button id="btn-por-pedir" class="btn btn-action btn-outline-primary"
@@ -280,7 +280,7 @@ $n_recibidos  = count($pedidos_recibidos);
             </h2>
             <div class="d-flex gap-2">
                 <form action="" method="GET" class="d-flex search-box-inline" onsubmit="return false;">
-                    <input type="text" name="recibidos_filtro" class="form-control form-control-sm live-search" placeholder="Buscar..." data-target="tabla-recibidos" value="<?= htmlspecialchars($p_recibidos['filter']) ?>">
+                    <input type="text" name="recibidos_filtro" class="form-control form-control-sm live-search" placeholder="Buscar..." data-target="tabla-finalizados" value="<?= htmlspecialchars($p_recibidos['filter']) ?>">
                     <button type="button" class="btn btn-sm btn-nav-modern border-0"><i class="fas fa-search"></i></button>
                 </form>
                 <button id="btn-finalizados" class="btn btn-action btn-outline-primary"

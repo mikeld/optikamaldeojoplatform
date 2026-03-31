@@ -424,9 +424,9 @@ include '../views/header.php';
             }
         }
 
-        $(document).ready(function() {
-            const initialRx = $('#rx_lineas_json').val();
-            const legacyRx = $('#rx').val(); // Capturar si hay RX en formato texto antiguo
+        document.addEventListener('DOMContentLoaded', function() {
+            const initialRx = document.getElementById('rx_lineas_json').value;
+            const legacyRx = document.getElementById('rx').value; // Capturar si hay RX en formato texto antiguo
             try {
                 const data = JSON.parse(initialRx);
                 if(data && data.length > 0) {
@@ -457,7 +457,7 @@ include '../views/header.php';
                 }
             }
 
-            $('form').on('submit', function() {
+            document.querySelector('form').addEventListener('submit', function() {
                 serializeRxLines();
             });
         });
