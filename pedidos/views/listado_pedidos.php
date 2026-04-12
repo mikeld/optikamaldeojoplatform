@@ -204,7 +204,8 @@ $n_recibidos  = count($pedidos_recibidos);
                 true,
                 $p_pedir['sort'],
                 $p_pedir['dir'],
-                'pedir_'
+                'pedir_',
+                true
             ); ?>
         </div>
     </div>
@@ -494,26 +495,41 @@ document.addEventListener('DOMContentLoaded', function() {
             if (packContainer) {
                 let packHtml = '';
                 if (p.pack_tipo) {
-                    const estado = JSON.parse(p.pack_estado || '{}');
+                    let estado = {};
+                    try { estado = JSON.parse(p.pack_estado || '{}'); } catch(e) {}
                     const tipo = p.pack_tipo;
-                    packHtml = `<div class="p-3 bg-light rounded-4 h-100"><label class="small text-muted text-uppercase fw-bold mb-2 d-block">Estado Pack (${tipo})</label><div class="d-flex gap-3">`;
-                    
-                    if (tipo === 'cajas' || tipo === 'ambos') {
-                        const rec = estado.cajas;
-                        packHtml += `<div class="text-center ${rec ? 'text-success' : 'text-primary'}">
-                            <i class="fas fa-box fs-4 d-block mb-1"></i>
-                            <span class="small fw-bold" style="${rec ? 'text-decoration:line-through' : ''}">Cajas</span>
-                            ${rec ? '<i class="fas fa-check-circle ms-1"></i>' : ''}
+
+                    // Helper para leer cantidades (soporta formato nuevo {pedidas,recibidas} y legado bool)
+                    function packQty(val) {
+                        if (val && typeof val === 'object') {
+                            return { pedidas: val.pedidas ?? 0, recibidas: val.recibidas ?? 0 };
+                        }
+                        return { pedidas: 0, recibidas: val ? 1 : 0 };
+                    }
+
+                    function packItemHtml(icono, nombre, val) {
+                        const q = packQty(val);
+                        const completo = q.pedidas > 0 && q.recibidas >= q.pedidas;
+                        const parcial  = q.recibidas > 0 && !completo;
+                        const colorClass = completo ? 'text-success' : (parcial ? 'text-warning' : 'text-primary');
+                        const strike     = completo ? 'text-decoration:line-through;' : '';
+                        const badge      = completo
+                            ? `<span class="badge bg-success ms-1"><i class="fas fa-check"></i> Completo</span>`
+                            : (parcial
+                                ? `<span class="badge bg-warning text-dark ms-1">${q.recibidas}/${q.pedidas}</span>`
+                                : (q.pedidas > 0
+                                    ? `<span class="badge bg-light text-muted border ms-1">0/${q.pedidas}</span>`
+                                    : ''));
+                        return `<div class="d-flex align-items-center gap-2 p-2 rounded-3 border ${completo ? 'border-success bg-success bg-opacity-10' : (parcial ? 'border-warning bg-warning bg-opacity-10' : 'border-light bg-white')}">
+                            <i class="fas ${icono} fs-5 ${colorClass}"></i>
+                            <span class="fw-bold small ${colorClass}" style="${strike}">${nombre}</span>
+                            ${badge}
                         </div>`;
                     }
-                    if (tipo === 'blisters' || tipo === 'ambos') {
-                        const rec = estado.blisters;
-                        packHtml += `<div class="text-center ${rec ? 'text-success' : 'text-primary'}">
-                            <i class="fas fa-tablets fs-4 d-block mb-1"></i>
-                            <span class="small fw-bold" style="${rec ? 'text-decoration:line-through' : ''}">Blisteres</span>
-                            ${rec ? '<i class="fas fa-check-circle ms-1"></i>' : ''}
-                        </div>`;
-                    }
+
+                    packHtml = `<div class="p-3 bg-light rounded-4"><label class="small text-muted text-uppercase fw-bold mb-2 d-block">Estado Pack</label><div class="d-flex flex-wrap gap-2">`;
+                    if (tipo === 'cajas'    || tipo === 'ambos') packHtml += packItemHtml('fa-box',     'Cajas',    estado.cajas);
+                    if (tipo === 'blisters' || tipo === 'ambos') packHtml += packItemHtml('fa-tablets', 'Blisters', estado.blisters);
                     packHtml += `</div></div>`;
                 }
                 packContainer.innerHTML = packHtml;
@@ -602,6 +618,57 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+
+    // Toggle "En carrito"
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('.btn-toggle-carrito');
+        if (!btn) return;
+        e.stopPropagation();
+
+        const pedidoId  = btn.dataset.pedidoId;
+        const enCarrito = btn.dataset.enCarrito === '1';
+
+        fetch('../controllers/toggle_carrito.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'pedido_id=' + encodeURIComponent(pedidoId)
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) { alert('Error: ' + data.error); return; }
+
+            const ahora = data.en_carrito === 1;
+            btn.dataset.enCarrito = ahora ? '1' : '0';
+
+            if (ahora) {
+                btn.className = btn.className.replace('btn-outline-info', 'btn-info text-white');
+                btn.innerHTML = '<i class="fas fa-cart-arrow-down me-1"></i>En carrito';
+                btn.title = 'Quitar del carrito';
+            } else {
+                btn.className = btn.className.replace('btn-info text-white', 'btn-outline-info');
+                btn.innerHTML = '<i class="fas fa-cart-plus me-1"></i>Carrito';
+                btn.title = 'Añadir al carrito';
+            }
+
+            // Actualizar badge en columna Producto de la misma fila
+            const row = btn.closest('tr');
+            if (row) {
+                let badge = row.querySelector('.badge-en-carrito');
+                if (ahora && !badge) {
+                    const prodCell = row.querySelector('td:nth-child(3)');
+                    if (prodCell) {
+                        const b = document.createElement('div');
+                        b.className = 'mt-1 badge-en-carrito';
+                        b.innerHTML = '<span class="badge bg-info text-white" style="font-size:.7rem;"><i class="fas fa-shopping-cart me-1"></i>En carrito</span>';
+                        prodCell.appendChild(b);
+                    }
+                } else if (!ahora && badge) {
+                    badge.remove();
+                }
+            }
+        })
+        .catch(() => alert('Error de conexión al cambiar estado de carrito.'));
+    });
 
     // Lógica de filtrado en vivo global con persistencia
     const buscadorGeneral = document.getElementById('buscador-general');

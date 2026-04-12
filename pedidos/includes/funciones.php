@@ -152,6 +152,38 @@ function formatearPackEstado($tipo, $estado_json) {
     return $html;
 }
 
+/**
+ * Parsea un valor libre de 'via' y devuelve ['canal' => ..., 'detalle' => ...]
+ * Canales reconocidos: Web, WhatsApp, Teléfono, E-mail, Presencial, Otro
+ */
+function parsearVia($via) {
+    $via = trim($via ?? '');
+    if ($via === '') return ['canal' => '', 'detalle' => ''];
+
+    if (preg_match('/^(web|portal|portar)/i', $via)) {
+        $detalle = trim(preg_replace('/^(web|portal|portar)\s*/i', '', $via));
+        return ['canal' => 'Web', 'detalle' => $detalle];
+    }
+    if (preg_match('/^whatsapp/i', $via)) {
+        $detalle = trim(preg_replace('/^whatsapp\s*/i', '', $via));
+        return ['canal' => 'WhatsApp', 'detalle' => $detalle];
+    }
+    if (preg_match('/^(tel[eé]fono|tel[eé]f|tel\.?|tf\.?|tf$)/i', $via)) {
+        $detalle = trim(preg_replace('/^(tel[eé]fono|tel[eé]f|tel\.?|tf\.?)\s*/i', '', $via));
+        return ['canal' => 'Teléfono', 'detalle' => $detalle];
+    }
+    if (preg_match('/^(e-?mail|mail|correo)/i', $via)) {
+        $detalle = trim(preg_replace('/^(e-?mail|mail|correo)\s*/i', '', $via));
+        return ['canal' => 'E-mail', 'detalle' => $detalle];
+    }
+    if (preg_match('/^presencial/i', $via)) {
+        return ['canal' => 'Presencial', 'detalle' => ''];
+    }
+
+    // No reconocido → "Otro" con el texto completo como detalle
+    return ['canal' => 'Otro', 'detalle' => $via];
+}
+
 function formatearNotaParcial($nota) {
     if (empty($nota)) return '';
     return '<div class="text-danger small mt-1 fw-bold" style="font-size: 0.75rem;"><i class="fas fa-exclamation-circle"></i> ' . htmlspecialchars($nota) . '</div>';
@@ -160,7 +192,7 @@ function formatearNotaParcial($nota) {
 /**
  * Muestra una tabla con los pedidos y columnas según el tipo
  */
-function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_columna = 'id', $orden_direccion = 'ASC', $prefix = '') {
+function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_columna = 'id', $orden_direccion = 'ASC', $prefix = '', $mostrar_carrito = false) {
     if (empty($pedidos)) {
         echo '<p class="text-center text-muted">'.$mensaje_vacio.'</p>';
         return;
@@ -218,6 +250,9 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
         echo '<td class="text-center">'.htmlspecialchars($p['referencia_cliente']).'</td>';
         echo '<td class="text-center">';
         echo htmlspecialchars($p['lc_gafa_recambio']);
+        if ($mostrar_carrito && !empty($p['en_carrito'])) {
+            echo '<div class="mt-1"><span class="badge bg-info text-white" style="font-size:.7rem;"><i class="fas fa-shopping-cart me-1"></i>En carrito</span></div>';
+        }
         if (!empty($p['notas_recepcion'])) {
             echo formatearNotaParcial($p['notas_recepcion']);
         }
@@ -244,7 +279,20 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
         // Estado
         echo '<td class="text-center">';
         if ($mostrar_botones) {
-            if ($tipo < 3) {
+            if ($mostrar_carrito) {
+                // Sección "Por Pedir": solo botón de carrito, sin botones de recepción
+                $en_carrito = !empty($p['en_carrito']);
+                $carrito_class = $en_carrito ? 'btn-info text-white' : 'btn-outline-info';
+                $carrito_title = $en_carrito ? 'Quitar del carrito'  : 'Añadir al carrito';
+                $carrito_icon  = $en_carrito ? 'fa-cart-arrow-down'  : 'fa-cart-plus';
+                echo '<button type="button"'
+                    .' class="btn btn-sm btn-action btn-toggle-carrito '.$carrito_class.'"'
+                    .' data-pedido-id="'.htmlspecialchars($p['id']).'"'
+                    .' data-en-carrito="'.($en_carrito ? '1' : '0').'"'
+                    .' title="'.$carrito_title.'">'
+                    .'<i class="fas '.$carrito_icon.'"></i>'
+                    .'</button>';
+            } elseif ($tipo < 3) {
                 if (($p['recibido'] ?? 0) == 2) {
                     echo '<span class="badge bg-warning text-dark mb-1 d-block" style="font-size:0.75rem;"><i class="fas fa-box-open"></i> PARCIAL</span>';
                     echo '<form action="../controllers/marcar_recibido.php" method="POST" class="d-block m-0">';

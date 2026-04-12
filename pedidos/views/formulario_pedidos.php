@@ -95,6 +95,10 @@ include('header.php');
     #pack-ambos:checked ~ * .pack-tag-ambos,
     .pack-tag-ambos-active   { background: #198754; border-color: #198754; color:#fff; }
     .pack-tag:hover { opacity: .85; transform: translateY(-1px); }
+
+    /* --- Vía de Pedido --- */
+    .via-detalle-wrap { transition: opacity .2s; }
+    .via-detalle-wrap.d-none { display: none !important; }
 </style>
 <?php
 
@@ -266,8 +270,21 @@ try {
                             </select>
                         </div>
                         <div class="col-md-4 mb-4">
-                            <label for="via" class="form-label">Vía de Pedido</label>
-                            <input type="text" id="via" name="via" class="form-control" placeholder="Ej: Portal, Teléfono...">
+                            <label class="form-label">Vía de Pedido</label>
+                            <div class="d-flex gap-2">
+                                <select id="via_canal" class="form-select" onchange="actualizarVia()" style="min-width:0; flex:0 0 auto; width:auto;">
+                                    <option value="">— Canal —</option>
+                                    <option value="Web">🌐 Web</option>
+                                    <option value="WhatsApp">💬 WhatsApp</option>
+                                    <option value="Teléfono">📞 Teléfono</option>
+                                    <option value="E-mail">✉️ E-mail</option>
+                                    <option value="Presencial">🏪 Presencial</option>
+                                    <option value="Otro">Otro</option>
+                                </select>
+                                <input type="text" id="via_detalle" class="form-control via-detalle-wrap d-none"
+                                       placeholder="" oninput="actualizarVia()">
+                            </div>
+                            <input type="hidden" name="via" id="via">
                         </div>
                     </div>
 
@@ -345,7 +362,7 @@ try {
                 return false;
             }
 
-            // Actualizar el campo oculto rx_lineas_json antes de enviar
+            actualizarVia();
             serializeRxLines();
             return true;
         }
@@ -495,6 +512,28 @@ try {
                 }
             }
         });
+
+        // --- Vía de Pedido: selector + campo contextual ---
+        const VIA_PLACEHOLDERS = {
+            'Web':       '¿Qué portal? (ej: B+L, Marlow...)',
+            'WhatsApp':  '¿Con quién? (nombre del contacto)',
+            'E-mail':    '¿A quién? (nombre o email)',
+            'Otro':      'Describe la vía...',
+        };
+        const VIA_MOSTRAR_DETALLE = ['Web', 'WhatsApp', 'E-mail', 'Otro'];
+
+        function actualizarVia() {
+            const canal   = document.getElementById('via_canal').value;
+            const detalle = document.getElementById('via_detalle');
+            const mostrar = VIA_MOSTRAR_DETALLE.includes(canal);
+
+            detalle.classList.toggle('d-none', !mostrar);
+            if (!mostrar) detalle.value = '';
+            if (mostrar) detalle.placeholder = VIA_PLACEHOLDERS[canal] || '';
+
+            const val = detalle.value.trim();
+            document.getElementById('via').value = canal + (val ? ' ' + val : '');
+        }
 
         // --- Lógica principal al cargar el documento ---
         $(document).ready(function() {

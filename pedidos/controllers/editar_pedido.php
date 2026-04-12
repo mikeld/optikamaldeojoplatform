@@ -139,13 +139,28 @@ include '../views/header.php';
                                    value="<?= valorFechaParaInput($pedido['fecha_cliente']) ?>">
                         </div>
                         <div class="col-md-6">
-                            <label for="via" class="form-label">Vía de Pedido</label>
-                            <input type="text"
-                                   class="form-control"
-                                   id="via"
-                                   name="via"
-                                   placeholder="Ej: Teléfono, Email, Tienda..."
-                                   value="<?= htmlspecialchars($pedido['via'] ?? '') ?>">
+                            <label class="form-label">Vía de Pedido</label>
+                            <?php
+                                require_once '../includes/funciones.php';
+                                $viaParsed  = parsearVia($pedido['via'] ?? '');
+                                $viaCanal   = htmlspecialchars($viaParsed['canal'],   ENT_QUOTES);
+                                $viaDetalle = htmlspecialchars($viaParsed['detalle'], ENT_QUOTES);
+                                $viaMostrar = in_array($viaParsed['canal'], ['Web','WhatsApp','E-mail','Otro']);
+                            ?>
+                            <div class="d-flex gap-2">
+                                <select id="via_canal" class="form-select" onchange="actualizarVia()" style="min-width:0; flex:0 0 auto; width:auto;">
+                                    <option value="">— Canal —</option>
+                                    <option value="Web"       <?= $viaCanal==='Web'        ? 'selected':'' ?>>🌐 Web</option>
+                                    <option value="WhatsApp"  <?= $viaCanal==='WhatsApp'   ? 'selected':'' ?>>💬 WhatsApp</option>
+                                    <option value="Teléfono"  <?= $viaCanal==='Teléfono'   ? 'selected':'' ?>>📞 Teléfono</option>
+                                    <option value="E-mail"    <?= $viaCanal==='E-mail'     ? 'selected':'' ?>>✉️ E-mail</option>
+                                    <option value="Presencial"<?= $viaCanal==='Presencial' ? 'selected':'' ?>>🏪 Presencial</option>
+                                    <option value="Otro"      <?= $viaCanal==='Otro'       ? 'selected':'' ?>>Otro</option>
+                                </select>
+                                <input type="text" id="via_detalle" class="form-control via-detalle-wrap <?= $viaMostrar ? '' : 'd-none' ?>"
+                                       value="<?= $viaDetalle ?>" oninput="actualizarVia()">
+                            </div>
+                            <input type="hidden" name="via" id="via" value="<?= htmlspecialchars($pedido['via'] ?? '', ENT_QUOTES) ?>">
                         </div>
                     </div>
 
@@ -365,6 +380,28 @@ include '../views/header.php';
 </div>
 
     <script>
+        // --- Vía de Pedido ---
+        const VIA_PLACEHOLDERS = {
+            'Web':      '¿Qué portal? (ej: B+L, Marlow...)',
+            'WhatsApp': '¿Con quién? (nombre del contacto)',
+            'E-mail':   '¿A quién? (nombre o email)',
+            'Otro':     'Describe la vía...',
+        };
+        const VIA_MOSTRAR_DETALLE = ['Web', 'WhatsApp', 'E-mail', 'Otro'];
+
+        function actualizarVia() {
+            const canal   = document.getElementById('via_canal').value;
+            const detalle = document.getElementById('via_detalle');
+            const mostrar = VIA_MOSTRAR_DETALLE.includes(canal);
+
+            detalle.classList.toggle('d-none', !mostrar);
+            if (!mostrar) detalle.value = '';
+            if (mostrar && !detalle.value) detalle.placeholder = VIA_PLACEHOLDERS[canal] || '';
+
+            const val = detalle.value.trim();
+            document.getElementById('via').value = canal + (val ? ' ' + val : '');
+        }
+
         // --- Lógica RX Multi-línea (Anidada OD/OI) ---
         function addRxLine(data = null) {
             const container = document.getElementById('rx-lineas-container');
@@ -533,6 +570,7 @@ include '../views/header.php';
             }
 
             document.querySelector('form').addEventListener('submit', function() {
+                actualizarVia();
                 serializeRxLines();
             });
         });
