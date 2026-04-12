@@ -101,27 +101,53 @@ function formatearRX($rx, $rx_lineas_json = null) {
 }
 
 /**
- * Formatea el estado del pack para mostrar iconos tachados si no se han recibido
+ * Formatea el estado del pack mostrando cantidades recibidas/pedidas.
+ * Soporta formato nuevo {cajas:{pedidas:N,recibidas:M}} y legado {cajas:bool}.
  */
 function formatearPackEstado($tipo, $estado_json) {
     if (!$tipo) return '';
     $estado = json_decode($estado_json ?? '{}', true);
-    $html = '<div class="d-flex gap-2 justify-content-center">';
-    
-    if ($tipo === 'cajas' || $tipo === 'ambos') {
-        $recibido = $estado['cajas'] ?? false;
-        $color = $recibido ? 'text-success' : 'text-primary';
-        $style = $recibido ? 'text-decoration: line-through; opacity: 0.6;' : 'font-weight: bold;';
-        $html .= '<span title="Cajas" class="'.$color.'" style="'.$style.'"><i class="fas fa-box"></i></span>';
+    $html = '<div class="d-flex gap-2 justify-content-center flex-wrap">';
+
+    $tipos = [];
+    if ($tipo === 'cajas'   || $tipo === 'ambos') $tipos[] = 'cajas';
+    if ($tipo === 'blisters'|| $tipo === 'ambos') $tipos[] = 'blisters';
+
+    foreach ($tipos as $t) {
+        $icono = ($t === 'cajas') ? 'fa-box' : 'fa-tablets';
+        $val   = $estado[$t] ?? false;
+
+        if (is_array($val)) {
+            // Formato nuevo con cantidades
+            $pedidas   = (int)($val['pedidas']   ?? 0);
+            $recibidas = (int)($val['recibidas'] ?? 0);
+            $completo  = $pedidas > 0 && $recibidas >= $pedidas;
+            $parcial   = $recibidas > 0 && !$completo;
+
+            if ($completo) {
+                $color = 'text-success';
+                $style = 'text-decoration:line-through;opacity:.6;';
+            } elseif ($parcial) {
+                $color = 'text-warning';
+                $style = 'font-weight:bold;';
+            } else {
+                $color = 'text-primary';
+                $style = 'font-weight:bold;';
+            }
+            $label = $pedidas > 0 ? "{$recibidas}/{$pedidas}" : '?';
+            $title = ucfirst($t) . ": {$recibidas} de {$pedidas}";
+            $html .= '<span title="'.$title.'" class="'.$color.'" style="'.$style.' font-size:.82rem;white-space:nowrap;">'
+                   . '<i class="fas '.$icono.' me-1"></i>'.$label.'</span>';
+        } else {
+            // Formato legado: booleano
+            $recibido = (bool)$val;
+            $color = $recibido ? 'text-success' : 'text-primary';
+            $style = $recibido ? 'text-decoration:line-through;opacity:.6;' : 'font-weight:bold;';
+            $html .= '<span title="'.ucfirst($t).'" class="'.$color.'" style="'.$style.'">'
+                   . '<i class="fas '.$icono.'"></i></span>';
+        }
     }
-    
-    if ($tipo === 'blisters' || $tipo === 'ambos') {
-        $recibido = $estado['blisters'] ?? false;
-        $color = $recibido ? 'text-success' : 'text-primary';
-        $style = $recibido ? 'text-decoration: line-through; opacity: 0.6;' : 'font-weight: bold;';
-        $html .= '<span title="Blisteres" class="'.$color.'" style="'.$style.'"><i class="fas fa-tablets"></i></span>';
-    }
-    
+
     $html .= '</div>';
     return $html;
 }

@@ -317,16 +317,30 @@ $n_recibidos  = count($pedidos_recibidos);
                 <input type="hidden" name="pedido_id" id="rp-pedido-id" value="">
                 
                 <div id="rp-pack-container" class="mb-4 d-none">
-                    <label class="form-label fw-bold text-secondary"> Componentes del Pack </label>
+                    <label class="form-label fw-bold text-secondary">Componentes del Pack</label>
                     <div class="card border-0 shadow-sm rounded-4">
-                        <div class="card-body py-2">
-                             <div class="form-check form-switch mb-2 pt-2" id="rp-container-cajas">
-                                <input class="form-check-input" type="checkbox" id="rp-cajas" name="pack_cajas" value="1" style="transform: scale(1.3); margin-top: 0.15rem; margin-right: 0.5rem;">
-                                <label class="form-check-label fw-bold" for="rp-cajas"><i class="fas fa-box text-primary mx-1"></i> Cajas recibidas</label>
+                        <div class="card-body py-3 d-flex flex-column gap-3">
+                            <div id="rp-container-cajas" class="d-none">
+                                <div class="d-flex align-items-center gap-3 flex-wrap">
+                                    <span class="fw-bold" style="min-width:110px;"><i class="fas fa-box text-primary me-1"></i>Cajas</span>
+                                    <span class="text-muted small">Pedidas: <strong id="rp-cajas-pedidas-text">—</strong></span>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <label for="rp-cajas" class="form-label mb-0 small text-muted">Recibidas:</label>
+                                        <input type="number" class="form-control form-control-sm" id="rp-cajas"
+                                               name="pack_cajas_recibidas" min="0" style="width:80px;" value="0">
+                                    </div>
+                                </div>
                             </div>
-                            <div class="form-check form-switch pb-2" id="rp-container-blisters">
-                                <input class="form-check-input" type="checkbox" id="rp-blisters" name="pack_blisters" value="1" style="transform: scale(1.3); margin-top: 0.15rem; margin-right: 0.5rem;">
-                                <label class="form-check-label fw-bold" for="rp-blisters"><i class="fas fa-tablets text-primary mx-1"></i> Blísteres recibidos</label>
+                            <div id="rp-container-blisters" class="d-none">
+                                <div class="d-flex align-items-center gap-3 flex-wrap">
+                                    <span class="fw-bold" style="min-width:110px; color:#6610f2;"><i class="fas fa-tablets me-1"></i>Blisters</span>
+                                    <span class="text-muted small">Pedidos: <strong id="rp-blisters-pedidas-text">—</strong></span>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <label for="rp-blisters" class="form-label mb-0 small text-muted">Recibidos:</label>
+                                        <input type="number" class="form-control form-control-sm" id="rp-blisters"
+                                               name="pack_blisters_recibidas" min="0" style="width:80px;" value="0">
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -533,32 +547,52 @@ document.addEventListener('DOMContentLoaded', function() {
             // Textarea de notas
             document.getElementById('rp-notas').value = p.notas_recepcion || '';
 
-            // Mostrar u ocultar el contenedor de pack
-            const packContainer = document.getElementById('rp-pack-container');
-            const contCajas = document.getElementById('rp-container-cajas');
-            const contBlisters = document.getElementById('rp-container-blisters');
-            const chkCajas = document.getElementById('rp-cajas');
-            const chkBlisters = document.getElementById('rp-blisters');
-            
-            chkCajas.checked = false;
-            chkBlisters.checked = false;
+            // Mostrar u ocultar el contenedor de pack y pre-rellenar cantidades
+            const packContainer  = document.getElementById('rp-pack-container');
+            const contCajas      = document.getElementById('rp-container-cajas');
+            const contBlisters   = document.getElementById('rp-container-blisters');
+            const inpCajas       = document.getElementById('rp-cajas');
+            const inpBlisters    = document.getElementById('rp-blisters');
+            const txtCajasPed    = document.getElementById('rp-cajas-pedidas-text');
+            const txtBlistPed    = document.getElementById('rp-blisters-pedidas-text');
+
+            // Resetear
+            inpCajas.value    = 0;
+            inpBlisters.value = 0;
+            contCajas.classList.add('d-none');
+            contBlisters.classList.add('d-none');
 
             if (p.pack_tipo) {
                 packContainer.classList.remove('d-none');
-                const estado = JSON.parse(p.pack_estado || '{}');
-                
+                let estado = {};
+                try { estado = JSON.parse(p.pack_estado || '{}'); } catch(e) {}
+
                 if (p.pack_tipo === 'cajas' || p.pack_tipo === 'ambos') {
                     contCajas.classList.remove('d-none');
-                    chkCajas.checked = estado.cajas || false;
-                } else {
-                    contCajas.classList.add('d-none');
+                    const v = estado.cajas;
+                    if (v && typeof v === 'object') {
+                        txtCajasPed.textContent = v.pedidas ?? '?';
+                        inpCajas.value = v.recibidas ?? 0;
+                        inpCajas.max   = v.pedidas   ?? '';
+                    } else {
+                        txtCajasPed.textContent = '?';
+                        inpCajas.value = (v === true) ? 1 : 0;
+                        inpCajas.removeAttribute('max');
+                    }
                 }
 
                 if (p.pack_tipo === 'blisters' || p.pack_tipo === 'ambos') {
                     contBlisters.classList.remove('d-none');
-                    chkBlisters.checked = estado.blisters || false;
-                } else {
-                    contBlisters.classList.add('d-none');
+                    const v = estado.blisters;
+                    if (v && typeof v === 'object') {
+                        txtBlistPed.textContent = v.pedidas ?? '?';
+                        inpBlisters.value = v.recibidas ?? 0;
+                        inpBlisters.max   = v.pedidas   ?? '';
+                    } else {
+                        txtBlistPed.textContent = '?';
+                        inpBlisters.value = (v === true) ? 1 : 0;
+                        inpBlisters.removeAttribute('max');
+                    }
                 }
             } else {
                 packContainer.classList.add('d-none');

@@ -208,6 +208,24 @@ try {
                                 </button>
                             </div>
                         </div>
+
+                        <!-- Inputs de cantidad (aparecen al seleccionar tipo de pack) -->
+                        <div id="pack-cantidades" class="mt-3 row g-3 d-none">
+                            <div class="col-auto d-none" id="pack-qty-cajas">
+                                <label class="form-label small mb-1 text-primary fw-semibold">
+                                    <i class="fas fa-box me-1"></i>Cajas pedidas
+                                </label>
+                                <input type="number" id="pack_cajas_pedidas" name="pack_cajas_pedidas"
+                                       class="form-control form-control-sm" min="1" placeholder="0" style="width:90px;">
+                            </div>
+                            <div class="col-auto d-none" id="pack-qty-blisters">
+                                <label class="form-label small mb-1 fw-semibold" style="color:#6610f2;">
+                                    <i class="fas fa-tablets me-1"></i>Blisters pedidos
+                                </label>
+                                <input type="number" id="pack_blisters_pedidas" name="pack_blisters_pedidas"
+                                       class="form-control form-control-sm" min="1" placeholder="0" style="width:90px;">
+                            </div>
+                        </div>
                     </div>
 
                     <!-- RX Multi-línea OD/OI -->
@@ -426,6 +444,34 @@ try {
         document.getElementById('btn-add-rx-linea').addEventListener('click', () => addRxLine());
 
         // --- Lógica para Pack interactivo ---
+        function actualizarCantidadesPack(tipo) {
+            const contenedor  = document.getElementById('pack-cantidades');
+            const rowCajas    = document.getElementById('pack-qty-cajas');
+            const rowBlisters = document.getElementById('pack-qty-blisters');
+
+            if (!tipo) {
+                contenedor.classList.add('d-none');
+                rowCajas.classList.add('d-none');
+                rowBlisters.classList.add('d-none');
+                document.getElementById('pack_cajas_pedidas').value = '';
+                document.getElementById('pack_blisters_pedidas').value = '';
+                return;
+            }
+            contenedor.classList.remove('d-none');
+            if (tipo === 'cajas' || tipo === 'ambos') {
+                rowCajas.classList.remove('d-none');
+            } else {
+                rowCajas.classList.add('d-none');
+                document.getElementById('pack_cajas_pedidas').value = '';
+            }
+            if (tipo === 'blisters' || tipo === 'ambos') {
+                rowBlisters.classList.remove('d-none');
+            } else {
+                rowBlisters.classList.add('d-none');
+                document.getElementById('pack_blisters_pedidas').value = '';
+            }
+        }
+
         document.getElementById('pack-options').addEventListener('click', function(event) {
             const target = event.target.closest('.pack-tag, #btn-pack-ninguno');
             if (!target) return;
@@ -438,14 +484,14 @@ try {
 
             // Si se hizo clic en "Ninguno"
             if (target.id === 'btn-pack-ninguno') {
-                // No hacer nada, ya están todos desmarcados
+                actualizarCantidadesPack(null);
             } else {
-                // Si se hizo clic en una opción de pack
                 const inputId = target.closest('label').getAttribute('for');
                 const radio = document.getElementById(inputId);
                 if (radio) {
                     radio.checked = true;
                     target.classList.add('active');
+                    actualizarCantidadesPack(radio.value);
                 }
             }
         });

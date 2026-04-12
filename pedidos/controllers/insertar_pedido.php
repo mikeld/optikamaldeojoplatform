@@ -11,15 +11,30 @@ try {
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // 1) Recoger y sanear los datos
-        $fecha_cliente      = trim($_POST['fecha_cliente']     ?? '');
-        $referencia_cliente = $_POST['referencia_cliente'] ?? '';
-        $lc_gafa_recambio   = trim($_POST['lc_gafa_recambio']  ?? '');
-        $rx                 = trim($_POST['rx']                ?? '');
-        $rx_lineas          = $_POST['rx_lineas'] ?? null;
-        $pack_tipo          = $_POST['pack_tipo'] ?? null;
-        $via                = trim($_POST['via']               ?? '');
-        $observaciones      = trim($_POST['observaciones']     ?? '');
-        $proveedor_id       = $_POST['proveedor_id'] !== '' ? (int)$_POST['proveedor_id'] : null;
+        $fecha_cliente         = trim($_POST['fecha_cliente']     ?? '');
+        $referencia_cliente    = $_POST['referencia_cliente'] ?? '';
+        $lc_gafa_recambio      = trim($_POST['lc_gafa_recambio']  ?? '');
+        $rx                    = trim($_POST['rx']                ?? '');
+        $rx_lineas             = $_POST['rx_lineas'] ?? null;
+        $pack_tipo             = $_POST['pack_tipo'] ?? null;
+        $pack_cajas_pedidas    = max(0, (int)($_POST['pack_cajas_pedidas']    ?? 0));
+        $pack_blisters_pedidas = max(0, (int)($_POST['pack_blisters_pedidas'] ?? 0));
+        $via                   = trim($_POST['via']               ?? '');
+        $observaciones         = trim($_POST['observaciones']     ?? '');
+        $proveedor_id          = $_POST['proveedor_id'] !== '' ? (int)$_POST['proveedor_id'] : null;
+
+        // Construir pack_estado inicial con cantidades pedidas y recibidas = 0
+        $pack_estado = null;
+        if ($pack_tipo) {
+            $estadoArr = [];
+            if ($pack_tipo === 'cajas' || $pack_tipo === 'ambos') {
+                $estadoArr['cajas'] = ['pedidas' => $pack_cajas_pedidas, 'recibidas' => 0];
+            }
+            if ($pack_tipo === 'blisters' || $pack_tipo === 'ambos') {
+                $estadoArr['blisters'] = ['pedidas' => $pack_blisters_pedidas, 'recibidas' => 0];
+            }
+            $pack_estado = json_encode($estadoArr);
+        }
 
         // Convertir fechas vacías a NULL
         $fecha_pedido  = trim($_POST['fecha_pedido'] )  !== '' ? $_POST['fecha_pedido']  : null;
@@ -35,11 +50,11 @@ try {
         }
 
         // 3) Preparar e insertar
-        $sql = "INSERT INTO pedidos 
-                  (fecha_cliente, referencia_cliente, lc_gafa_recambio, rx, rx_lineas, pack_tipo,
-                   fecha_pedido, via, observaciones, fecha_llegada, proveedor_id) 
-                VALUES 
-                  (:fecha_cliente, :referencia_cliente, :lc, :rx, :rx_lineas, :pack_tipo,
+        $sql = "INSERT INTO pedidos
+                  (fecha_cliente, referencia_cliente, lc_gafa_recambio, rx, rx_lineas, pack_tipo, pack_estado,
+                   fecha_pedido, via, observaciones, fecha_llegada, proveedor_id)
+                VALUES
+                  (:fecha_cliente, :referencia_cliente, :lc, :rx, :rx_lineas, :pack_tipo, :pack_estado,
                    :fecha_pedido, :via, :obs, :fecha_llegada, :proveedor_id)";
         $stmt = $conexion->pdo->prepare($sql);
 
@@ -48,8 +63,9 @@ try {
         $stmt->bindValue(':referencia_cliente', $referencia_cliente, PDO::PARAM_STR);
         $stmt->bindValue(':lc',                 $lc_gafa_recambio,   PDO::PARAM_STR);
         $stmt->bindValue(':rx',                 $rx,                 PDO::PARAM_STR);
-        $stmt->bindValue(':rx_lineas',          $rx_lineas,          $rx_lineas ? PDO::PARAM_STR : PDO::PARAM_NULL);
-        $stmt->bindValue(':pack_tipo',          $pack_tipo,          $pack_tipo ? PDO::PARAM_STR : PDO::PARAM_NULL);
+        $stmt->bindValue(':rx_lineas',          $rx_lineas,          $rx_lineas   ? PDO::PARAM_STR : PDO::PARAM_NULL);
+        $stmt->bindValue(':pack_tipo',          $pack_tipo,          $pack_tipo   ? PDO::PARAM_STR : PDO::PARAM_NULL);
+        $stmt->bindValue(':pack_estado',        $pack_estado,        $pack_estado ? PDO::PARAM_STR : PDO::PARAM_NULL);
         $stmt->bindValue(':via',                $via,                PDO::PARAM_STR);
         $stmt->bindValue(':obs',                $observaciones,      PDO::PARAM_STR);
 

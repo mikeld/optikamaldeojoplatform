@@ -85,24 +85,26 @@ include '../views/header.php';
         background: none; border: none; color: #adb5bd; cursor: pointer;
     }
 
-    /* --- Pack Reception (Tachar) --- */
-    .pack-reception-container {
-        display: flex; gap: 15px; flex-wrap: wrap; margin-top: 10px;
+    /* --- Pack Cantidades --- */
+    .pack-qty-card {
+        background: #fff; border: 1.5px solid #dee2e6; border-radius: 12px;
+        padding: 12px 16px; display: flex; align-items: center; gap: 14px;
+        flex-wrap: wrap;
     }
-    .pack-item {
-        padding: 10px 20px; border-radius: 12px; border: 2px solid #dee2e6;
-        cursor: pointer; transition: all 0.2s; user-select: none;
-        display: flex; align-items: center; gap: 10px; font-weight: 600;
+    .pack-qty-card.complete {
+        border-color: #198754; background: #f0fff4;
     }
-    .pack-item.received {
-        background-color: #f8f9fa; border-color: #198754; color: #198754;
-        text-decoration: line-through; opacity: 0.7;
+    .pack-qty-card.partial {
+        border-color: #ffc107; background: #fffdf0;
     }
-    .pack-item:not(.received) {
-        background-color: #fff; border-color: #6c757d; color: #333;
+    .pack-qty-label {
+        font-weight: 700; font-size: .9rem; display: flex; align-items: center; gap: 6px; min-width: 100px;
     }
-    .pack-item i.check-icon { display: none; }
-    .pack-item.received i.check-icon { display: inline-block; }
+    .pack-qty-group {
+        display: flex; align-items: center; gap: 6px;
+    }
+    .pack-qty-group label { font-size: .8rem; color: #6c757d; margin-bottom: 0; }
+    .pack-qty-group input { width: 80px; }
 </style>
 
 <div class="container-fluid py-4">
@@ -179,33 +181,83 @@ include '../views/header.php';
                         </div>
                     </div>
 
-                    <!-- Gestión de Recepción de PACK -->
-                    <?php if ($pedido['pack_tipo']): 
-                        $pack_estado = json_decode($pedido['pack_estado'] ?? '{}', true);
-                        $tipo = $pedido['pack_tipo'];
+                    <!-- Gestión de Pack: cantidades pedidas y recibidas -->
+                    <?php
+                    $tipo        = $pedido['pack_tipo'] ?? '';
+                    $pack_estado = json_decode($pedido['pack_estado'] ?? '{}', true) ?: [];
+
+                    // Helper: leer qty con compat. formato legado (bool)
+                    $getQty = function($estado, $key) {
+                        $val = $estado[$key] ?? false;
+                        if (is_array($val)) {
+                            return [(int)($val['pedidas'] ?? 0), (int)($val['recibidas'] ?? 0)];
+                        }
+                        // Formato antiguo: bool
+                        return [0, (bool)$val ? 1 : 0];
+                    };
+
+                    if ($tipo):
+                        [$cajas_ped,    $cajas_rec]    = ($tipo==='cajas'   ||$tipo==='ambos')    ? $getQty($pack_estado,'cajas')    : [0,0];
+                        [$blisters_ped, $blisters_rec] = ($tipo==='blisters'||$tipo==='ambos')    ? $getQty($pack_estado,'blisters') : [0,0];
                     ?>
                     <div class="mb-4">
                         <label class="form-label d-flex justify-content-between align-items-center">
-                            <span><i class="fas fa-box-open me-1 text-muted"></i>Recepción parcial (Tachar lo recibido)</span>
-                            <span class="text-muted small">Tipo pedido: <?= ucfirst($tipo) ?></span>
+                            <span><i class="fas fa-box me-1 text-muted"></i>Pack</span>
+                            <span class="text-muted small">Tipo: <?= ucfirst($tipo) ?></span>
                         </label>
-                        <div class="pack-reception-container">
-                            <?php if ($tipo === 'cajas' || $tipo === 'ambos'): ?>
-                            <div class="pack-item <?= ($pack_estado['cajas'] ?? false) ? 'received' : '' ?>" id="item-cajas" onclick="togglePackItem('cajas')">
-                                <i class="fas fa-box"></i> Cajas
-                                <i class="fas fa-check check-icon"></i>
+                        <input type="hidden" name="pack_tipo" value="<?= htmlspecialchars($tipo) ?>">
+
+                        <div class="d-flex flex-column gap-2">
+                            <?php if ($tipo === 'cajas' || $tipo === 'ambos'):
+                                $cajasComplete = $cajas_ped > 0 && $cajas_rec >= $cajas_ped;
+                                $cajasPartial  = $cajas_rec > 0 && !$cajasComplete;
+                                $cajasClass    = $cajasComplete ? 'complete' : ($cajasPartial ? 'partial' : '');
+                            ?>
+                            <div class="pack-qty-card <?= $cajasClass ?>">
+                                <span class="pack-qty-label text-primary"><i class="fas fa-box"></i> Cajas</span>
+                                <div class="pack-qty-group">
+                                    <label for="pack_cajas_pedidas">Pedidas</label>
+                                    <input type="number" id="pack_cajas_pedidas" name="pack_cajas_pedidas"
+                                           class="form-control form-control-sm" min="0"
+                                           value="<?= $cajas_ped ?>"
+                                           onchange="actualizarEstadoPack()">
+                                </div>
+                                <div class="pack-qty-group">
+                                    <label for="pack_cajas_recibidas">Recibidas</label>
+                                    <input type="number" id="pack_cajas_recibidas" name="pack_cajas_recibidas"
+                                           class="form-control form-control-sm" min="0"
+                                           value="<?= $cajas_rec ?>"
+                                           onchange="actualizarEstadoPack()">
+                                </div>
+                                <span id="pack-cajas-badge" class="ms-auto"></span>
                             </div>
                             <?php endif; ?>
 
-                            <?php if ($tipo === 'blisters' || $tipo === 'ambos'): ?>
-                            <div class="pack-item <?= ($pack_estado['blisters'] ?? false) ? 'received' : '' ?>" id="item-blisters" onclick="togglePackItem('blisters')">
-                                <i class="fas fa-tablets"></i> Blisteres
-                                <i class="fas fa-check check-icon"></i>
+                            <?php if ($tipo === 'blisters' || $tipo === 'ambos'):
+                                $blistersComplete = $blisters_ped > 0 && $blisters_rec >= $blisters_ped;
+                                $blistersPartial  = $blisters_rec > 0 && !$blistersComplete;
+                                $blistersClass    = $blistersComplete ? 'complete' : ($blistersPartial ? 'partial' : '');
+                            ?>
+                            <div class="pack-qty-card <?= $blistersClass ?>">
+                                <span class="pack-qty-label" style="color:#6610f2;"><i class="fas fa-tablets"></i> Blisters</span>
+                                <div class="pack-qty-group">
+                                    <label for="pack_blisters_pedidas">Pedidos</label>
+                                    <input type="number" id="pack_blisters_pedidas" name="pack_blisters_pedidas"
+                                           class="form-control form-control-sm" min="0"
+                                           value="<?= $blisters_ped ?>"
+                                           onchange="actualizarEstadoPack()">
+                                </div>
+                                <div class="pack-qty-group">
+                                    <label for="pack_blisters_recibidas">Recibidos</label>
+                                    <input type="number" id="pack_blisters_recibidas" name="pack_blisters_recibidas"
+                                           class="form-control form-control-sm" min="0"
+                                           value="<?= $blisters_rec ?>"
+                                           onchange="actualizarEstadoPack()">
+                                </div>
+                                <span id="pack-blisters-badge" class="ms-auto"></span>
                             </div>
                             <?php endif; ?>
                         </div>
-                        <input type="hidden" name="pack_estado" id="pack_estado_json" value="<?= htmlspecialchars($pedido['pack_estado'] ?? '{}', ENT_QUOTES, 'UTF-8') ?>">
-                        <input type="hidden" name="pack_tipo" value="<?= htmlspecialchars($tipo) ?>">
                     </div>
                     <?php endif; ?>
 
@@ -402,29 +454,52 @@ include '../views/header.php';
             document.getElementById('rx').value = textLegacy.replace(/\|\s*$/, '');
         }
 
-        // --- Pack Receptor ---
-        function togglePackItem(item) {
-            const el = document.getElementById('item-' + item);
-            el.classList.toggle('received');
-            
-            const currentJson = JSON.parse(document.getElementById('pack_estado_json').value || '{}');
-            currentJson[item] = el.classList.contains('received');
-            document.getElementById('pack_estado_json').value = JSON.stringify(currentJson);
-            
-            // Auto-update check general si ambos están true, parcial si hay alguno
-            const items = document.querySelectorAll('.pack-item');
-            const allOk = Array.from(items).every(i => i.classList.contains('received'));
-            const someOk = Array.from(items).some(i => i.classList.contains('received'));
-            if (allOk) {
-                document.getElementById('recibido').value = "1";
-            } else if (someOk) {
-                document.getElementById('recibido').value = "2";
-            } else {
-                document.getElementById('recibido').value = "0";
-            }
+        // --- Pack: actualizar estado general y estilos de tarjeta según cantidades ---
+        function actualizarEstadoPack() {
+            const tiposPresentes = [];
+            let todasCompletas = true;
+            let algunaRecibida = false;
+
+            ['cajas', 'blisters'].forEach(t => {
+                const inpPed = document.getElementById('pack_' + t + '_pedidas');
+                const inpRec = document.getElementById('pack_' + t + '_recibidas');
+                const card   = inpPed ? inpPed.closest('.pack-qty-card') : null;
+                const badge  = document.getElementById('pack-' + t + '-badge');
+                if (!inpPed || !inpRec) return;
+
+                tiposPresentes.push(t);
+                const ped = parseInt(inpPed.value) || 0;
+                const rec = parseInt(inpRec.value) || 0;
+                const completo = ped > 0 && rec >= ped;
+                const parcial  = rec > 0 && !completo;
+
+                card.classList.remove('complete', 'partial');
+                if (completo) {
+                    card.classList.add('complete');
+                    if (badge) badge.innerHTML = '<span class="badge bg-success"><i class="fas fa-check me-1"></i>Completo</span>';
+                } else if (parcial) {
+                    card.classList.add('partial');
+                    if (badge) badge.innerHTML = '<span class="badge bg-warning text-dark"><i class="fas fa-clock me-1"></i>Parcial</span>';
+                } else {
+                    if (badge) badge.innerHTML = '';
+                }
+
+                if (!completo) todasCompletas = false;
+                if (rec > 0) algunaRecibida = true;
+            });
+
+            if (tiposPresentes.length === 0) return;
+            const sel = document.getElementById('recibido');
+            if (!sel) return;
+            if (todasCompletas)      sel.value = "1";
+            else if (algunaRecibida) sel.value = "2";
+            else                     sel.value = "0";
         }
 
         document.addEventListener('DOMContentLoaded', function() {
+            // Inicializar badges de pack si existen
+            actualizarEstadoPack();
+
             const initialRx = document.getElementById('rx_lineas_json').value;
             const legacyRx = document.getElementById('rx').value; // Capturar si hay RX en formato texto antiguo
             try {

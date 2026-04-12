@@ -11,7 +11,25 @@ $lc_gafa_recambio    = trim($_POST['lc_gafa_recambio']);
 $rx                  = trim($_POST['rx'] ?? '');
 $rx_lineas           = $_POST['rx_lineas'] ?? null;
 $pack_tipo           = $_POST['pack_tipo'] ?? null;
-$pack_estado         = $_POST['pack_estado'] ?? null;
+
+// Reconstruir pack_estado desde los campos individuales de cantidad
+$pack_estado = null;
+if ($pack_tipo) {
+    $estadoArr = [];
+    if ($pack_tipo === 'cajas' || $pack_tipo === 'ambos') {
+        $estadoArr['cajas'] = [
+            'pedidas'   => max(0, (int)($_POST['pack_cajas_pedidas']    ?? 0)),
+            'recibidas' => max(0, (int)($_POST['pack_cajas_recibidas']  ?? 0)),
+        ];
+    }
+    if ($pack_tipo === 'blisters' || $pack_tipo === 'ambos') {
+        $estadoArr['blisters'] = [
+            'pedidas'   => max(0, (int)($_POST['pack_blisters_pedidas']    ?? 0)),
+            'recibidas' => max(0, (int)($_POST['pack_blisters_recibidas']  ?? 0)),
+        ];
+    }
+    $pack_estado = json_encode($estadoArr);
+}
 $via                 = trim($_POST['via'] ?? '');
 $recibido            = isset($_POST['recibido']) ? (int)$_POST['recibido'] : 0;
 $observaciones       = trim($_POST['observaciones'] ?? '');
