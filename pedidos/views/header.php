@@ -73,6 +73,12 @@ $breadcrumbs = $breadcrumbs ?? [];
           
           <?php if ($is_admin): ?>
             <li class="nav-item">
+              <a class="btn btn-nav-modern" href="copias_seguridad.php">
+                <i class="bi bi-shield-check"></i>
+                <span>Copias</span>
+              </a>
+            </li>
+            <li class="nav-item">
               <a class="btn btn-nav-modern" href="gestionar_mensajes.php">
                 <i class="bi bi-whatsapp"></i>
                 <span>Mensajes</span>

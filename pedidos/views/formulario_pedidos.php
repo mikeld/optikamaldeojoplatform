@@ -560,10 +560,11 @@ try {
         const VIA_PLACEHOLDERS = {
             'Web':       '¿Qué portal? (ej: B+L, Marlow...)',
             'WhatsApp':  '¿Con quién? (nombre del contacto)',
+            'Teléfono':  '¿Con quién / qué número?',
             'E-mail':    '¿A quién? (nombre o email)',
             'Otro':      'Describe la vía...',
         };
-        const VIA_MOSTRAR_DETALLE = ['Web', 'WhatsApp', 'E-mail', 'Otro'];
+        const VIA_MOSTRAR_DETALLE = ['Web', 'WhatsApp', 'Teléfono', 'E-mail', 'Otro'];
 
         function actualizarVia() {
             const canal   = document.getElementById('via_canal').value;
