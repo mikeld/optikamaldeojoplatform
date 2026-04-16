@@ -261,7 +261,12 @@ try {
                             <input type="date" id="fecha_pedido" name="fecha_pedido" class="form-control">
                         </div>
                         <div class="col-md-4 mb-4">
-                            <label for="proveedor_id" class="form-label">Proveedor</label>
+                            <label for="proveedor_id" class="form-label d-flex justify-content-between align-items-center">
+                                <span>Proveedor</span>
+                                <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalNuevoProveedor">
+                                    <i class="fas fa-plus"></i> Crear Proveedor
+                                </button>
+                            </label>
                             <select id="proveedor_id" name="proveedor_id" class="form-select">
                                 <option value="">Seleccionar proveedor...</option>
                                 <?php foreach($proveedores as $prov): ?>
@@ -342,6 +347,44 @@ try {
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                 <button type="button" id="btnGuardarCliente" class="btn btn-primary px-4">
                     <i class="fas fa-save me-2"></i>Guardar Cliente
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Nuevo Proveedor -->
+<div class="modal fade" id="modalNuevoProveedor" tabindex="-1" aria-labelledby="modalNuevoProveedorLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalNuevoProveedorLabel"><i class="fas fa-building me-2"></i>Nuevo Proveedor</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="formNuevoProveedor">
+                    <div class="mb-3">
+                        <label for="modal_proveedor_nombre" class="form-label">Nombre *</label>
+                        <input type="text" id="modal_proveedor_nombre" name="nombre" class="form-control" required placeholder="Ej: Essilor, Hoya, Indo...">
+                    </div>
+                    <div class="mb-3">
+                        <label for="modal_proveedor_contacto" class="form-label">Persona de Contacto (Opcional)</label>
+                        <input type="text" id="modal_proveedor_contacto" name="contacto" class="form-control" placeholder="Nombre del contacto">
+                    </div>
+                    <div class="mb-3">
+                        <label for="modal_proveedor_telefono" class="form-label">Teléfono (Opcional)</label>
+                        <input type="text" id="modal_proveedor_telefono" name="telefono" class="form-control" placeholder="Ej: 600000000">
+                    </div>
+                    <div class="mb-3">
+                        <label for="modal_proveedor_email" class="form-label">Email (Opcional)</label>
+                        <input type="email" id="modal_proveedor_email" name="email" class="form-control" placeholder="proveedor@email.com">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" id="btnGuardarProveedor" class="btn btn-primary px-4">
+                    <i class="fas fa-save me-2"></i>Guardar Proveedor
                 </button>
             </div>
         </div>
@@ -686,6 +729,67 @@ try {
 
                         // 3. Cerrar modal y limpiar
                         const modal = bootstrap.Modal.getInstance(document.getElementById('modalNuevoCliente'));
+                        modal.hide();
+                        form.reset();
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Ocurrió un error al procesar la solicitud.');
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.innerHTML = originalContent;
+                });
+            });
+
+            // Lógica para guardar nuevo proveedor vía AJAX
+            document.getElementById('btnGuardarProveedor').addEventListener('click', function() {
+                const form = document.getElementById('formNuevoProveedor');
+                const formData = new FormData(form);
+
+                // Validación básica en JS
+                if (!formData.get('nombre').trim()) {
+                    alert('El nombre del proveedor es obligatorio.');
+                    return;
+                }
+
+                // Mostrar estado de carga
+                const btn = this;
+                const originalContent = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Guardando...';
+
+                fetch('../controllers/crear_proveedor_ajax.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        const select = document.getElementById('proveedor_id');
+                        const newId = String(data.proveedor.id);
+                        const newName = data.proveedor.nombre;
+
+                        // Añadir al select y seleccionar
+                        const option = new Option(newName, newId, true, true);
+                        select.add(option);
+
+                        // Ordenar alfabéticamente manteniendo el placeholder arriba
+                        const options = Array.from(select.options);
+                        const placeholder = options.find(o => o.value === '') || null;
+                        const rest = options.filter(o => o.value !== '');
+                        rest.sort((a, b) => a.text.localeCompare(b.text, 'es', { sensitivity: 'base' }));
+
+                        select.innerHTML = '';
+                        if (placeholder) select.add(placeholder);
+                        rest.forEach(opt => select.add(opt));
+                        select.value = newId;
+
+                        // Cerrar modal y limpiar
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('modalNuevoProveedor'));
                         modal.hide();
                         form.reset();
                     } else {
