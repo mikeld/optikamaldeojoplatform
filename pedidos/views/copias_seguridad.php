@@ -1,11 +1,21 @@
 <?php
 require '../includes/auth.php';
+require '../includes/conexion.php';
 
 if (($_SESSION['usuario_rol'] ?? '') !== 'admin') {
     http_response_code(403);
     echo 'No autorizado';
     exit;
 }
+
+$db_actual = '';
+try {
+    $pdo = (new Conexion())->pdo;
+    $db_actual = (string)($pdo->query('SELECT DATABASE()')->fetchColumn() ?? '');
+} catch (Exception $e) {
+    $db_actual = '';
+}
+$entorno = (stripos($db_actual, 'test') !== false) ? 'TEST' : 'PRODUCCIÓN';
 
 $breadcrumbs = [
     ['nombre' => 'Copias de seguridad', 'url' => '#']
@@ -27,6 +37,14 @@ $error = $_GET['error'] ?? '';
         <h1 class="mb-0 section-title">
             <i class="fas fa-shield-halved"></i> Copias de seguridad
         </h1>
+        <div class="text-end">
+            <div class="badge bg-<?= $entorno === 'TEST' ? 'warning text-dark' : 'success' ?>">
+                <?= htmlspecialchars($entorno) ?>
+            </div>
+            <?php if ($db_actual): ?>
+                <div class="text-muted small mt-1"><?= htmlspecialchars($db_actual) ?></div>
+            <?php endif; ?>
+        </div>
     </div>
 
     <?php if ($ok): ?>

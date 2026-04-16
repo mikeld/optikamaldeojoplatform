@@ -13,10 +13,12 @@ try {
 
     @set_time_limit(0);
     $conexion = new Conexion();
+    $dbName = (string)($conexion->pdo->query('SELECT DATABASE()')->fetchColumn() ?? '');
+    $dbSlug = $dbName !== '' ? preg_replace('/[^a-zA-Z0-9_-]+/', '_', $dbName) : 'db';
 
     // Definir los encabezados para la descarga del archivo CSV
     header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename=pedidos.csv');
+    header('Content-Disposition: attachment; filename=pedidos_' . $dbSlug . '_' . date('Y-m-d') . '.csv');
     header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
     header('Pragma: no-cache');
 

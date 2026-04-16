@@ -12,12 +12,14 @@ try {
 
     @set_time_limit(0);
     $pdo = (new Conexion())->pdo;
+    $dbName = (string)($pdo->query('SELECT DATABASE()')->fetchColumn() ?? '');
+    $dbSlug = $dbName !== '' ? preg_replace('/[^a-zA-Z0-9_-]+/', '_', $dbName) : 'db';
     $tablas = backup_resolver_tablas_existentes($pdo, ['clientes', 'pedidos', 'proveedores', 'usuarios']);
     if (empty($tablas)) {
         throw new RuntimeException('No se encontraron tablas para exportar.');
     }
 
-    $nombre = 'backup_optikamaldeojo_' . date('Y-m-d_H-i') . '.sql';
+    $nombre = 'backup_' . $dbSlug . '_' . date('Y-m-d_H-i') . '.sql';
 
     header('Content-Type: application/sql; charset=utf-8');
     header('Content-Disposition: attachment; filename=' . $nombre);

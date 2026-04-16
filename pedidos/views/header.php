@@ -29,6 +29,23 @@ $breadcrumbs = $breadcrumbs ?? [];
 
   <!-- Estilos propios -->
   <link href="../assets/css/style.css?v=<?= filemtime('../assets/css/style.css') ?>" rel="stylesheet">
+
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#5a67d8">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Optikamaldeojo">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="apple-touch-icon" href="/assets/pwa/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/assets/pwa/icon-192.png">
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      });
+    }
+  </script>
 </head>
 <body>
 

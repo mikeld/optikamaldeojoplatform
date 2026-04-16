@@ -30,6 +30,8 @@ try {
     $incluir_sql = isset($_POST['sql']) && $_POST['sql'] == '1';
 
     $pdo = (new Conexion())->pdo;
+    $dbName = (string)($pdo->query('SELECT DATABASE()')->fetchColumn() ?? '');
+    $dbSlug = $dbName !== '' ? preg_replace('/[^a-zA-Z0-9_-]+/', '_', $dbName) : 'db';
     $tablas = backup_resolver_tablas_existentes($pdo, ['clientes', 'pedidos', 'proveedores', 'usuarios']);
     if (empty($tablas)) {
         throw new RuntimeException('No se encontraron tablas para exportar.');
@@ -40,7 +42,7 @@ try {
         throw new RuntimeException('No se pudo crear archivo temporal.');
     }
 
-    $nombreAdjunto = 'backup_optikamaldeojo_' . date('Y-m-d_H-i') . ($incluir_sql ? '_con_sql' : '') . '.zip';
+    $nombreAdjunto = 'backup_' . $dbSlug . '_' . date('Y-m-d_H-i') . ($incluir_sql ? '_con_sql' : '') . '.zip';
 
     backup_crear_zip($pdo, $tablas, $incluir_sql, $tmpZip, ';');
 
