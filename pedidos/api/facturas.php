@@ -1,11 +1,27 @@
 <?php
 // facturas.php - API completa para el módulo de facturas (Phase 1 MVP)
 header("Content-Type: application/json");
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+require_once '../../includes/auth_class.php';
 require_once '../includes/conexion.php';
+
+Auth::verificarRolesJson([Auth::ROL_ADMIN, Auth::ROL_ENCARGADO]);
 
 $pdo = (new Conexion())->pdo;
 $method = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? '';
+$usuarioActual = Auth::usuarioActual();
+
+function normalizarEstadoAuditoria($status) {
+    $validos = ['pending', 'approved', 'rejected', 'in_review'];
+    return in_array($status, $validos, true) ? $status : 'pending';
+}
+
+function usuarioAuditoria($usuarioActual) {
+    return $usuarioActual['email'] ?: ($usuarioActual['nombre'] ?: ('usuario_' . $usuarioActual['id']));
+}
 
 try {
     switch ($action) {
@@ -66,7 +82,7 @@ try {
                         $productId,
                         $oldProduct['expected_price'],
                         $data['expectedPrice'],
-                        $data['changedBy'] ?? 'system'
+                        $data['changedBy'] ?? usuarioAuditoria($usuarioActual)
                     ]);
                 }
                 
@@ -181,10 +197,19 @@ try {
         case 'saveAudit':
             if ($method === 'POST') {
                 $data = json_decode(file_get_contents('php://input'), true);
+                $globalStatus = normalizarEstadoAuditoria($data['globalStatus'] ?? 'pending');
+                $reviewedBy = $data['reviewedBy'] ?? null;
+                $reviewedAtSql = null;
+
+                if (in_array($globalStatus, ['approved', 'rejected'], true)) {
+                    $reviewedBy = $reviewedBy ?: usuarioAuditoria($usuarioActual);
+                    $reviewedAtSql = date('Y-m-d H:i:s');
+                }
+
                 $stmt = $pdo->prepare("INSERT INTO `facturas_audits` 
-                    (`id`, `invoice_date`, `provider`, `invoice_number`, `total_invoice`, `global_status`, `lines`, 
-                     `pdf_path`, `alert_count`, `critical_alert_count`, `reviewed_by`, `notes`) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (`id`, `invoice_date`, `provider`, `invoice_number`, `total_invoice`, `global_status`, `lines`,
+                     `pdf_path`, `alert_count`, `critical_alert_count`, `reviewed_by`, `reviewed_at`, `notes`)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON DUPLICATE KEY UPDATE 
                         `total_invoice`=VALUES(`total_invoice`), 
                         `global_status`=VALUES(`global_status`), 
@@ -192,6 +217,7 @@ try {
                         `alert_count`=VALUES(`alert_count`),
                         `critical_alert_count`=VALUES(`critical_alert_count`),
                         `reviewed_by`=VALUES(`reviewed_by`),
+                        `reviewed_at`=VALUES(`reviewed_at`),
                         `notes`=VALUES(`notes`)");
                 
                 $auditId = $data['id'] ?: uniqid('aud_');
@@ -201,12 +227,13 @@ try {
                     $data['provider'],
                     $data['invoiceNumber'],
                     $data['totalInvoice'],
-                    $data['globalStatus'] ?? 'pending',
+                    $globalStatus,
                     json_encode($data['lines'] ?? []),
                     $data['pdfPath'] ?? null,
                     $data['alertCount'] ?? 0,
                     $data['criticalAlertCount'] ?? 0,
-                    $data['reviewedBy'] ?? null,
+                    $reviewedBy,
+                    $reviewedAtSql,
                     $data['notes'] ?? null
                 ]);
                 echo json_encode(['status' => 'success', 'id' => $auditId]);
@@ -271,14 +298,18 @@ try {
         case 'resolveAlert':
             if ($method === 'POST') {
                 $data = json_decode(file_get_contents('php://input'), true);
+                $actionTaken = $data['action'] ?? 'approved';
+                $newStatus = $actionTaken === 'ignored' ? 'ignored' : 'resolved';
+
                 $stmt = $pdo->prepare("UPDATE `facturas_alerts` 
-                    SET `status` = 'resolved', 
+                    SET `status` = ?,
                         `resolution_action` = ?, 
                         `resolved_at` = NOW() 
                     WHERE `id` = ?");
                 
                 $stmt->execute([
-                    $data['action'] ?? 'approved',
+                    $newStatus,
+                    $actionTaken,
                     $data['alertId']
                 ]);
                 
@@ -318,7 +349,7 @@ try {
                     $data['oldPrice'] ?? null,
                     $data['newPrice'],
                     $data['reason'] ?? 'manual_update',
-                    $data['changedBy'] ?? 'system',
+                    $data['changedBy'] ?? usuarioAuditoria($usuarioActual),
                     $data['invoiceId'] ?? null
                 ]);
                 
@@ -339,6 +370,9 @@ try {
                 $alerts = [];
                 $alertCount = 0;
                 $criticalCount = 0;
+
+                $clearStmt = $pdo->prepare("DELETE FROM `facturas_alerts` WHERE `audit_id` = ?");
+                $clearStmt->execute([$auditId]);
                 
                 foreach ($lines as $index => $line) {
                     $sku = $line['sku'] ?? null;

@@ -1,7 +1,7 @@
 
 import { Product, AuditRecord, ProductFamily, PriceHistory, Alert } from './types';
 
-const API_URL = '/pedidos/api/facturas.php';
+const API_URL = '../pedidos/api/facturas.php';
 
 export const db = {
   isCloud(): boolean {

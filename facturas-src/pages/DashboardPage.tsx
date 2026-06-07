@@ -37,9 +37,9 @@ const DashboardPage: React.FC = () => {
 
   const stats = {
     total: audits.length,
-    correct: audits.filter(a => a.globalStatus === 'COMPLETED').length,
-    rejected: audits.filter(a => a.globalStatus === 'REJECTED').length,
-    pending: audits.filter(a => a.globalStatus === 'PENDING').length,
+    correct: audits.filter(a => a.globalStatus === 'approved').length,
+    rejected: audits.filter(a => a.globalStatus === 'rejected').length,
+    pending: audits.filter(a => a.globalStatus === 'pending' || a.globalStatus === 'in_review').length,
     totalVolume: audits.reduce((acc, a) => acc + a.totalInvoice, 0)
   };
 
@@ -137,13 +137,20 @@ const StatCard: React.FC<{ title: string; value: any; icon: React.ReactElement<a
 
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   const styles = {
-    COMPLETED: 'bg-emerald-100 text-emerald-700',
-    REJECTED: 'bg-rose-100 text-rose-700',
-    PENDING: 'bg-amber-100 text-amber-700',
+    approved: 'bg-emerald-100 text-emerald-700',
+    rejected: 'bg-rose-100 text-rose-700',
+    pending: 'bg-amber-100 text-amber-700',
+    in_review: 'bg-indigo-100 text-indigo-700',
+  };
+  const labels = {
+    approved: 'Correcta',
+    rejected: 'Rechazada',
+    pending: 'Pendiente',
+    in_review: 'En revision',
   };
   return (
     <span className={`px-2 py-1 rounded-full text-xs font-semibold ${styles[status as keyof typeof styles]}`}>
-      {status === 'COMPLETED' ? 'Correcta' : status === 'REJECTED' ? 'Rechazada' : 'Pendiente'}
+      {labels[status as keyof typeof labels] || status}
     </span>
   );
 };

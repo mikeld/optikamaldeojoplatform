@@ -5,12 +5,46 @@ session_start();
 // Verificar sesión
 Auth::verificarSesion();
 
-// Redirigir si es empleado (solo permitido el portal de pedidos)
 $usuarioActual = Auth::usuarioActual();
-if ($usuarioActual['rol'] === 'empleado') {
-    header('Location: pedidos/views/listado_pedidos.php?orden_columna=fecha_llegada&orden_direccion=ASC');
-    exit();
-}
+$rolActual = $usuarioActual['rol'] ?? 'empleado';
+$apps = [
+    [
+        'nombre' => 'Pedidos Maldeojo',
+        'descripcion' => 'Gestion diaria de pedidos, clientes, recepciones y avisos por WhatsApp',
+        'url' => 'pedidos/views/listado_pedidos.php?orden_columna=fecha_llegada&orden_direccion=ASC',
+        'icono' => 'fas fa-shopping-cart',
+        'clase' => 'pedidos',
+        'roles' => ['empleado', 'encargado', 'admin'],
+    ],
+    [
+        'nombre' => 'Facturas Check',
+        'descripcion' => 'Auditoria inteligente de facturas, precios, alertas y proveedores',
+        'url' => 'facturas/index.html',
+        'icono' => 'fas fa-shield-alt',
+        'clase' => 'facturas',
+        'roles' => ['encargado', 'admin'],
+    ],
+    [
+        'nombre' => 'Panel de Direccion',
+        'descripcion' => 'KPIs de pedidos, atrasos, proveedores y actividad de la optica',
+        'url' => 'pedidos/views/estadisticas.php',
+        'icono' => 'fas fa-chart-line',
+        'clase' => 'direccion',
+        'roles' => ['encargado', 'admin'],
+    ],
+    [
+        'nombre' => 'Backups y Configuracion',
+        'descripcion' => 'Copias de seguridad, mensajes y herramientas de administracion',
+        'url' => 'pedidos/views/copias_seguridad.php',
+        'icono' => 'fas fa-gear',
+        'clase' => 'configuracion',
+        'roles' => ['admin'],
+    ],
+];
+
+$appsDisponibles = array_values(array_filter($apps, function ($app) use ($rolActual) {
+    return in_array($rolActual, $app['roles'], true);
+}));
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -143,6 +177,14 @@ if ($usuarioActual['rol'] === 'empleado') {
             --card-color: #8b5cf6;
         }
 
+        .project-card.direccion {
+            --card-color: #0f766e;
+        }
+
+        .project-card.configuracion {
+            --card-color: #475569;
+        }
+
         .project-card:hover {
             border-color: var(--card-color);
         }
@@ -228,29 +270,21 @@ if ($usuarioActual['rol'] === 'empleado') {
         </div>
 
         <h2 style="text-align: center; color: #4a5568; margin-bottom: 30px; font-size: 1.3rem;">
-            Selecciona un Proyecto
+            Tus aplicaciones
         </h2>
 
         <div class="projects-grid">
-            <a href="pedidos/views/listado_pedidos.php?orden_columna=fecha_llegada&orden_direccion=ASC" class="project-card pedidos">
+            <?php foreach ($appsDisponibles as $app): ?>
+            <a href="<?= htmlspecialchars($app['url']) ?>" class="project-card <?= htmlspecialchars($app['clase']) ?>">
                 <div class="project-icon">
-                    <i class="fas fa-shopping-cart"></i>
+                    <i class="<?= htmlspecialchars($app['icono']) ?>"></i>
                 </div>
-                <h3 class="project-name">Pedidos Maldeojo</h3>
+                <h3 class="project-name"><?= htmlspecialchars($app['nombre']) ?></h3>
                 <p class="project-description">
-                    Gestión completa de pedidos ópticos, seguimiento y control de inventario
+                    <?= htmlspecialchars($app['descripcion']) ?>
                 </p>
             </a>
-
-            <a href="facturas/index.html" class="project-card facturas">
-                <div class="project-icon">
-                    <i class="fas fa-shield-alt"></i>
-                </div>
-                <h3 class="project-name">Facturas Check</h3>
-                <p class="project-description">
-                    Auditoría inteligente de facturas con IA y análisis de precios
-                </p>
-            </a>
+            <?php endforeach; ?>
         </div>
 
         <button class="logout-btn" onclick="logout()">

@@ -1,3 +1,7 @@
 node_modules/
 .DS_Store
 .env*
+includes/db_config.php
+facturas-src/dist/
+deploy/dist/
+.npm-cache/

@@ -18,32 +18,27 @@ $breadcrumbs = [
 $acciones_navbar = [
     ['nombre'=>'Nuevo Pedido',     'url'=>'formulario_pedidos.php',   'icono'=>'bi-file-earmark-plus'],
     ['nombre'=>'Nuevo Cliente',    'url'=>'formulario_usuarios.php',  'icono'=>'bi-person-plus'],
+    ['nombre'=>'Búsqueda',         'url'=>'busqueda.php',             'icono'=>'bi-search'],
     ['nombre'=>'Proveedores',      'url'=>'listado_proveedores.php',  'icono'=>'bi-building'],
     ['nombre'=>'Listado Clientes', 'url'=>'listado_usuarios.php',     'icono'=>'bi-people']
 ];
 include 'header.php';
 
 // Conexión y parámetros comunes
-$pdo                    = (new Conexion())->pdo;
-$registros_por_pagina   = 2000;
-$pagina_por_pedir       = (int)($_GET['pagina_por_pedir']    ?? 1);
-$pagina_pendientes      = (int)($_GET['pagina_pendientes']   ?? 1);
-$pagina_atrasados       = (int)($_GET['pagina_atrasados']    ?? 1);
-$pagina_recibidos       = (int)($_GET['pagina_recibidos']    ?? 1);
+$pdo = (new Conexion())->pdo;
 
-$inicio_por_pedir       = ($pagina_por_pedir    - 1) * $registros_por_pagina;
-$inicio_pendientes      = ($pagina_pendientes   - 1) * $registros_por_pagina;
-$inicio_atrasados       = ($pagina_atrasados    - 1) * $registros_por_pagina;
-$inicio_recibidos       = ($pagina_recibidos    - 1) * $registros_por_pagina;
+// Filtro de fechas para "Finalizados" (por defecto: últimos 90 días)
+$rec_fecha_desde = $_GET['rec_fecha_desde'] ?? date('Y-m-d', strtotime('-90 days'));
+$rec_fecha_hasta = $_GET['rec_fecha_hasta'] ?? date('Y-m-d');
 
 // Helper para parámetros de tabla
 function getTableParams($prefix, $default_sort = 'id') {
-    $sort      = $_GET[$prefix . 'orden_columna']   ?? $default_sort;
-    $dir       = strtoupper($_GET[$prefix . 'orden_direccion'] ?? 'ASC') === 'DESC' ? 'DESC' : 'ASC';
-    $filter    = $_GET[$prefix . 'filtro'] ?? '';
+    $sort       = $_GET[$prefix . 'orden_columna']    ?? $default_sort;
+    $dir        = strtoupper($_GET[$prefix . 'orden_direccion'] ?? 'ASC') === 'DESC' ? 'DESC' : 'ASC';
+    $filter     = $_GET[$prefix . 'filtro'] ?? '';
     $valid_cols = ['id', 'referencia_cliente', 'lc_gafa_recambio', 'rx', 'fecha_pedido', 'via', 'fecha_llegada'];
     if (!in_array($sort, $valid_cols)) $sort = $default_sort;
-    
+
     return [
         'sort'   => $sort,
         'dir'    => $dir,
@@ -57,90 +52,109 @@ $p_atrasados  = getTableParams('atrasados_');
 $p_pendientes = getTableParams('pendientes_');
 $p_recibidos  = getTableParams('recibidos_');
 
+// Validar fechas del filtro de finalizados
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $rec_fecha_desde)) $rec_fecha_desde = date('Y-m-d', strtotime('-90 days'));
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $rec_fecha_hasta)) $rec_fecha_hasta = date('Y-m-d');
+
 $fecha_hoy              = date('Y-m-d');
 
-// 1) Pedidos Pendientes de Pedir (fecha_pedido IS NULL)
+// 1) Pedidos Pendientes de Pedir (fecha_pedido IS NULL) — sin límite, siempre serán pocos
 $stmt = $pdo->prepare("
     SELECT p.*, c.telefono, c.email
     FROM pedidos p
     JOIN clientes c ON p.referencia_cliente = c.referencia
     WHERE p.recibido IN (0, 2)
+      AND p.recibido != 3
       AND p.fecha_pedido IS NULL
+      AND p.deleted_at IS NULL
       {$p_pedir['cond']}
     ORDER BY {$p_pedir['sort']} {$p_pedir['dir']}
-    LIMIT :inicio, :registros
 ");
-$stmt->bindValue(':inicio',    $inicio_por_pedir,     PDO::PARAM_INT);
-$stmt->bindValue(':registros', $registros_por_pagina, PDO::PARAM_INT);
 if ($p_pedir['filter']) {
     $stmt->bindValue(':filtro_pedir_', "%{$p_pedir['filter']}%", PDO::PARAM_STR);
 }
 $stmt->execute();
 $pedidos_por_pedir = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// 2) Pedidos Atrasados (fecha_llegada <= hoy)
+// 2) Pedidos Atrasados (fecha_llegada <= hoy) — sin límite
 $stmt = $pdo->prepare("
     SELECT p.*, c.telefono, c.email
     FROM pedidos p
     JOIN clientes c ON p.referencia_cliente = c.referencia
     WHERE p.recibido IN (0, 2)
       AND p.fecha_llegada <= :fecha_hoy
+      AND p.deleted_at IS NULL
       {$p_atrasados['cond']}
     ORDER BY {$p_atrasados['sort']} {$p_atrasados['dir']}
-    LIMIT :inicio, :registros
 ");
-$stmt->bindValue(':fecha_hoy',  $fecha_hoy,             PDO::PARAM_STR);
-$stmt->bindValue(':inicio',     $inicio_atrasados,      PDO::PARAM_INT);
-$stmt->bindValue(':registros',  $registros_por_pagina,  PDO::PARAM_INT);
+$stmt->bindValue(':fecha_hoy', $fecha_hoy, PDO::PARAM_STR);
 if ($p_atrasados['filter']) {
     $stmt->bindValue(':filtro_atrasados_', "%{$p_atrasados['filter']}%", PDO::PARAM_STR);
 }
 $stmt->execute();
 $pedidos_atrasados = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// 3) Pedidos Pendientes de Recibir (fecha_llegada > hoy)
+// 3) Pedidos Pendientes de Recibir (fecha_llegada > hoy) — sin límite
 $stmt = $pdo->prepare("
     SELECT p.*, c.telefono, c.email
     FROM pedidos p
     JOIN clientes c ON p.referencia_cliente = c.referencia
     WHERE p.recibido IN (0, 2)
       AND p.fecha_llegada > :fecha_hoy
+      AND p.deleted_at IS NULL
       {$p_pendientes['cond']}
     ORDER BY {$p_pendientes['sort']} {$p_pendientes['dir']}
-    LIMIT :inicio, :registros
 ");
-$stmt->bindValue(':fecha_hoy',  $fecha_hoy,             PDO::PARAM_STR);
-$stmt->bindValue(':inicio',     $inicio_pendientes,     PDO::PARAM_INT);
-$stmt->bindValue(':registros',  $registros_por_pagina,  PDO::PARAM_INT);
+$stmt->bindValue(':fecha_hoy', $fecha_hoy, PDO::PARAM_STR);
 if ($p_pendientes['filter']) {
     $stmt->bindValue(':filtro_pendientes_', "%{$p_pendientes['filter']}%", PDO::PARAM_STR);
 }
 $stmt->execute();
 $pedidos_pendientes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// 4) Pedidos Recibidos (recibido = 1)
+// 4) Pedidos Recibidos — filtrados por rango de fechas (fecha_llegada o fecha_pedido)
 $stmt = $pdo->prepare("
     SELECT p.*, c.telefono, c.email
     FROM pedidos p
     JOIN clientes c ON p.referencia_cliente = c.referencia
     WHERE p.recibido = 1
+      AND p.deleted_at IS NULL
+      AND (p.fecha_llegada BETWEEN :rec_desde AND :rec_hasta
+           OR (p.fecha_llegada IS NULL AND p.fecha_pedido BETWEEN :rec_desde2 AND :rec_hasta2))
       {$p_recibidos['cond']}
     ORDER BY {$p_recibidos['sort']} {$p_recibidos['dir']}
-    LIMIT :inicio, :registros
 ");
-$stmt->bindValue(':inicio',    $inicio_recibidos,     PDO::PARAM_INT);
-$stmt->bindValue(':registros', $registros_por_pagina, PDO::PARAM_INT);
+$stmt->bindValue(':rec_desde',  $rec_fecha_desde, PDO::PARAM_STR);
+$stmt->bindValue(':rec_hasta',  $rec_fecha_hasta, PDO::PARAM_STR);
+$stmt->bindValue(':rec_desde2', $rec_fecha_desde, PDO::PARAM_STR);
+$stmt->bindValue(':rec_hasta2', $rec_fecha_hasta, PDO::PARAM_STR);
 if ($p_recibidos['filter']) {
     $stmt->bindValue(':filtro_recibidos_', "%{$p_recibidos['filter']}%", PDO::PARAM_STR);
 }
 $stmt->execute();
 $pedidos_recibidos = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+// Total histórico de finalizados (para informar al usuario cuántos hay fuera del rango)
+$total_recibidos_historico = (int)$pdo->query("SELECT COUNT(*) FROM pedidos WHERE recibido = 1 AND deleted_at IS NULL")->fetchColumn();
+
+// 5) Cancelados recientes (últimos 90 días)
+$cancelados_stmt = $pdo->query("
+    SELECT p.*, c.telefono, c.email
+    FROM pedidos p
+    JOIN clientes c ON p.referencia_cliente = c.referencia
+    WHERE p.recibido = 3
+      AND p.deleted_at IS NULL
+    ORDER BY p.id DESC
+    LIMIT 100
+");
+$pedidos_cancelados = $cancelados_stmt->fetchAll(PDO::FETCH_ASSOC);
+
 // Contadores para badges
 $n_pedir      = count($pedidos_por_pedir);
 $n_atrasados  = count($pedidos_atrasados);
 $n_pendientes = count($pedidos_pendientes);
 $n_recibidos  = count($pedidos_recibidos);
+$n_cancelados = count($pedidos_cancelados);
 ?>
 
 <div class="container-fluid py-4">
@@ -149,143 +163,213 @@ $n_recibidos  = count($pedidos_recibidos);
             <i class="fas fa-boxes-stacked"></i> Listado de Pedidos
         </h1>
         <div class="d-flex gap-2">
-            <a href="estadisticas.php" class="btn btn-action btn-outline-light">
+            <a href="estadisticas.php" class="btn btn-action btn-soft-primary">
                 <i class="fas fa-chart-line me-1"></i> Estadísticas
             </a>
-            <a href="calendario.php" class="btn btn-action btn-outline-light">
+            <a href="calendario.php" class="btn btn-action btn-soft-primary">
                 <i class="fas fa-calendar-alt me-1"></i> Calendario
             </a>
         </div>
     </div>
 
-    <!-- Resumen rápido en línea y Buscador Global -->
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
-        <div class="d-flex flex-wrap gap-3">
-            <a href="#card-por-pedir" class="quick-stat quick-stat-warning text-decoration-none" style="color: inherit;"><i class="fas fa-clock me-1"></i> Sin pedir: <strong><?= $n_pedir ?></strong></a>
-            <a href="#card-atrasados" class="quick-stat quick-stat-danger text-decoration-none" style="color: inherit;"><i class="fas fa-exclamation-triangle me-1"></i> Atrasados: <strong><?= $n_atrasados ?></strong></a>
-            <a href="#card-pendientes" class="quick-stat quick-stat-primary text-decoration-none" style="color: inherit;"><i class="fas fa-truck me-1"></i> En camino: <strong><?= $n_pendientes ?></strong></a>
-            <a href="#card-finalizados" class="quick-stat quick-stat-success text-decoration-none" style="color: inherit;"><i class="fas fa-check-circle me-1"></i> Finalizados: <strong><?= $n_recibidos ?></strong></a>
+    <!-- Resumen rápido + buscador global -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+        <div class="d-flex flex-wrap gap-2">
+            <a href="#card-por-pedir"   class="quick-stat quick-stat-warning text-decoration-none" style="color:inherit"><i class="fas fa-clock me-1"></i> Sin pedir: <strong><?= $n_pedir ?></strong></a>
+            <a href="#card-atrasados"   class="quick-stat quick-stat-danger  text-decoration-none" style="color:inherit"><?= $n_atrasados > 0 ? '<i class="fas fa-exclamation-triangle me-1"></i>' : '<i class="fas fa-check me-1"></i>' ?> Atrasados: <strong><?= $n_atrasados ?></strong></a>
+            <a href="#card-pendientes"  class="quick-stat quick-stat-primary text-decoration-none" style="color:inherit"><i class="fas fa-truck me-1"></i> En camino: <strong><?= $n_pendientes ?></strong></a>
+            <a href="#card-finalizados" class="quick-stat quick-stat-success text-decoration-none" style="color:inherit"><i class="fas fa-check-circle me-1"></i> Finalizados: <strong><?= $n_recibidos ?></strong></a>
         </div>
-        
-        <div class="ms-md-auto" style="min-width: 250px; flex: 1; max-width: 400px;">
-            <div class="input-group shadow-sm bg-white rounded-pill overflow-hidden border position-relative">
-                <span class="input-group-text bg-transparent border-0 pe-1" id="search-addon"><i class="fas fa-search text-muted"></i></span>
-                <input type="text" id="buscador-general" class="form-control border-0 shadow-none px-2" placeholder="Buscar en todas las tablas..." aria-label="Buscador global" aria-describedby="search-addon" style="padding-right: 35px;">
-                <button type="button" id="btn-clear-search" class="btn btn-link text-muted position-absolute end-0 top-50 translate-middle-y text-decoration-none d-none" style="z-index: 5;" title="Borrar búsqueda">
-                    <i class="fas fa-times"></i>
-                </button>
+        <div class="ms-md-auto" style="min-width:250px;flex:1;max-width:380px;">
+            <div class="input-group bg-white rounded-pill overflow-hidden border position-relative" style="border-color:var(--border-2)!important">
+                <span class="input-group-text bg-transparent border-0 pe-1"><i class="fas fa-search text-muted"></i></span>
+                <input type="text" id="buscador-general" class="form-control border-0 shadow-none px-2" placeholder="Buscar cliente, producto, RX…" style="padding-right:35px;border-radius:0!important">
+                <button type="button" id="btn-clear-search" class="btn btn-link text-muted position-absolute end-0 top-50 translate-middle-y text-decoration-none d-none" style="z-index:5"><i class="fas fa-times"></i></button>
             </div>
         </div>
     </div>
 
+    <!-- Filtros rápidos -->
+    <?php
+    // Recoger vías únicas de todos los pedidos activos
+    $todas_vias_raw = array_merge(
+        array_column($pedidos_por_pedir, 'via'),
+        array_column($pedidos_atrasados, 'via'),
+        array_column($pedidos_pendientes, 'via')
+    );
+    $vias_unicas = [];
+    foreach ($todas_vias_raw as $v) {
+        if (trim($v ?? '') === '') continue;
+        $canal = parsearVia($v)['canal'] ?: 'Otro';
+        $vias_unicas[$canal] = true;
+    }
+    $vias_unicas = array_keys($vias_unicas);
+    sort($vias_unicas);
+    ?>
+    <div class="d-flex flex-wrap gap-2 mb-4" id="filtros-rapidos">
+        <span class="small text-muted d-flex align-items-center me-1"><i class="fas fa-filter me-1"></i> Filtrar:</span>
+        <button class="btn btn-sm btn-soft-primary filtro-rapido active" data-filtro="">
+            Todos <span class="badge bg-primary ms-1"><?= $n_pedir + $n_atrasados + $n_pendientes ?></span>
+        </button>
+        <button class="btn btn-sm filtro-rapido" style="background:var(--warning-l);color:var(--warning);border:1px solid rgba(217,119,6,.2)" data-filtro="WhatsApp">
+            <i class="fab fa-whatsapp me-1"></i> WhatsApp
+        </button>
+        <button class="btn btn-sm filtro-rapido" style="background:var(--primary-l);color:var(--primary);border:1px solid rgba(37,99,235,.2)" data-filtro="hoy">
+            <i class="fas fa-calendar-day me-1"></i> Llega hoy
+        </button>
+        <?php foreach ($vias_unicas as $via): ?>
+        <?php if (!in_array($via, ['WhatsApp'])): ?>
+        <button class="btn btn-sm filtro-rapido" style="background:var(--surface-2);color:var(--text-2);border:1px solid var(--border-2)" data-filtro="<?= htmlspecialchars($via) ?>">
+            <?= htmlspecialchars($via) ?>
+        </button>
+        <?php endif; ?>
+        <?php endforeach; ?>
+    </div>
+
     <!-- 1) Pedidos Pendientes de Pedir -->
-    <div id="card-por-pedir" class="modern-card">
+    <?php $n_carrito = count(array_filter($pedidos_por_pedir, fn($x) => !empty($x['en_carrito']))); ?>
+    <div id="card-por-pedir" class="modern-card section-card-warning">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h2 class="text-dark mb-0 section-title">
                 <i class="fas fa-clock text-warning"></i> Pendientes de Pedir
                 <span class="badge bg-warning text-dark ms-2 fs-6"><?= $n_pedir ?></span>
             </h2>
             <div class="d-flex gap-2">
-                <form action="" method="GET" class="d-flex search-box-inline" onsubmit="return false;">
-                    <input type="text" name="pedir_filtro" class="form-control form-control-sm live-search" placeholder="Buscar..." data-target="tabla-por-pedir" value="<?= htmlspecialchars($p_pedir['filter']) ?>">
-                    <button type="button" class="btn btn-sm btn-nav-modern border-0"><i class="fas fa-search"></i></button>
-                </form>
-                <button id="btn-por-pedir" class="btn btn-action btn-outline-primary"
-                        onclick="toggleTable('tabla-por-pedir','btn-por-pedir', 'Pendientes de Pedir')">
+                <?php if ($n_carrito > 0): ?>
+                <a href="carrito_pedidos.php" class="btn btn-info text-white btn-action">
+                    <i class="fas fa-shopping-cart me-1"></i> Carrito <span class="badge bg-white text-info ms-1"><?= $n_carrito ?></span>
+                </a>
+                <?php else: ?>
+                <a href="carrito_pedidos.php" class="btn btn-outline-info btn-action">
+                    <i class="fas fa-shopping-cart me-1"></i> Carrito
+                </a>
+                <?php endif; ?>
+                <button id="btn-por-pedir" class="btn btn-action btn-outline-secondary"
+                        onclick="toggleTable('tabla-por-pedir','btn-por-pedir')">
                     <i class="fas fa-eye-slash me-1"></i> Ocultar
                 </button>
             </div>
         </div>
         <div id="tabla-por-pedir" class="slide">
-            <?php mostrarTabla(
-                $pedidos_por_pedir,
-                2,
-                "No hay pedidos pendientes de pedir.",
-                true,
-                $p_pedir['sort'],
-                $p_pedir['dir'],
-                'pedir_',
-                true
-            ); ?>
+            <?php mostrarTabla($pedidos_por_pedir, 2, "No hay pedidos pendientes de pedir.", true, $p_pedir['sort'], $p_pedir['dir'], 'pedir_', true); ?>
         </div>
     </div>
 
     <!-- 2) Pedidos Atrasados -->
-    <div id="card-atrasados" class="modern-card">
+    <div id="card-atrasados" class="modern-card section-card-danger <?= $n_atrasados > 0 ? 'section-alert' : '' ?>">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h2 class="text-dark mb-0 section-title">
                 <i class="fas fa-exclamation-triangle text-danger"></i> Pedidos Atrasados
                 <span class="badge bg-danger ms-2 fs-6"><?= $n_atrasados ?></span>
             </h2>
-            <div class="d-flex gap-2">
-                <form action="" method="GET" class="d-flex search-box-inline" onsubmit="return false;">
-                    <input type="text" name="atrasados_filtro" class="form-control form-control-sm live-search" placeholder="Buscar..." data-target="tabla-atrasados" value="<?= htmlspecialchars($p_atrasados['filter']) ?>">
-                    <button type="button" class="btn btn-sm btn-nav-modern border-0"><i class="fas fa-search"></i></button>
-                </form>
-                <button id="btn-atrasados" class="btn btn-action btn-outline-primary"
-                        onclick="toggleTable('tabla-atrasados','btn-atrasados', 'Pedidos Atrasados')">
-                    <i class="fas fa-eye-slash me-1"></i> Ocultar
-                </button>
-            </div>
+            <button id="btn-atrasados" class="btn btn-action btn-outline-secondary"
+                    onclick="toggleTable('tabla-atrasados','btn-atrasados')">
+                <i class="fas fa-eye-slash me-1"></i> Ocultar
+            </button>
         </div>
         <div id="tabla-atrasados" class="slide">
-            <?php mostrarTabla(
-                $pedidos_atrasados,
-                1,
-                "No hay pedidos atrasados.",
-                true,
-                $p_atrasados['sort'],
-                $p_atrasados['dir'],
-                'atrasados_'
-            ); ?>
+            <?php mostrarTabla($pedidos_atrasados, 1, "No hay pedidos atrasados. 🎉", true, $p_atrasados['sort'], $p_atrasados['dir'], 'atrasados_'); ?>
         </div>
     </div>
 
     <!-- 3) Pedidos Pendientes de Recibir -->
-    <div id="card-pendientes" class="modern-card">
+    <div id="card-pendientes" class="modern-card section-card-primary">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h2 class="text-dark mb-0 section-title">
-                <i class="fas fa-truck-loading text-primary"></i> Pendientes de Recibir
+                <i class="fas fa-truck text-primary"></i> Pendientes de Recibir
                 <span class="badge bg-primary ms-2 fs-6"><?= $n_pendientes ?></span>
             </h2>
-            <div class="d-flex gap-2">
-                <form action="" method="GET" class="d-flex search-box-inline" onsubmit="return false;">
-                    <input type="text" name="pendientes_filtro" class="form-control form-control-sm live-search" placeholder="Buscar..." data-target="tabla-pendientes" value="<?= htmlspecialchars($p_pendientes['filter']) ?>">
-                    <button type="button" class="btn btn-sm btn-nav-modern border-0"><i class="fas fa-search"></i></button>
-                </form>
-                <button id="btn-pendientes" class="btn btn-action btn-outline-primary"
-                        onclick="toggleTable('tabla-pendientes','btn-pendientes', 'Pendientes de Recibir')">
-                    <i class="fas fa-eye-slash me-1"></i> Ocultar
-                </button>
-            </div>
+            <button id="btn-pendientes" class="btn btn-action btn-outline-secondary"
+                    onclick="toggleTable('tabla-pendientes','btn-pendientes')">
+                <i class="fas fa-eye-slash me-1"></i> Ocultar
+            </button>
         </div>
         <div id="tabla-pendientes" class="slide">
-            <?php mostrarTabla(
-                $pedidos_pendientes,
-                2,
-                "No hay pedidos pendientes de recibir.",
-                true,
-                $p_pendientes['sort'],
-                $p_pendientes['dir'],
-                'pendientes_'
-            ); ?>
+            <?php mostrarTabla($pedidos_pendientes, 2, "No hay pedidos pendientes de recibir.", true, $p_pendientes['sort'], $p_pendientes['dir'], 'pendientes_'); ?>
         </div>
     </div>
 
-    <!-- 4) Pedidos Finalizados -->
-    <div id="card-finalizados" class="modern-card">
+    <!-- 4) Pedidos Cancelados (colapsado por defecto) -->
+    <?php if ($n_cancelados > 0): ?>
+    <div id="card-cancelados" class="modern-card" style="border-top:4px solid #94a3b8;">
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h2 class="text-success mb-0 section-title">
-                <i class="fas fa-check-circle"></i> Pedidos Finalizados
-                <span class="badge bg-success ms-2 fs-6"><?= $n_recibidos ?></span>
+            <h2 class="text-dark mb-0 section-title">
+                <i class="fas fa-ban text-secondary"></i> Cancelados
+                <span class="badge bg-secondary ms-2 fs-6"><?= $n_cancelados ?></span>
             </h2>
-            <div class="d-flex gap-2">
-                <form action="" method="GET" class="d-flex search-box-inline" onsubmit="return false;">
-                    <input type="text" name="recibidos_filtro" class="form-control form-control-sm live-search" placeholder="Buscar..." data-target="tabla-finalizados" value="<?= htmlspecialchars($p_recibidos['filter']) ?>">
-                    <button type="button" class="btn btn-sm btn-nav-modern border-0"><i class="fas fa-search"></i></button>
+            <button id="btn-cancelados" class="btn btn-action btn-outline-secondary"
+                    onclick="toggleTable('tabla-cancelados','btn-cancelados')">
+                <i class="fas fa-eye me-1"></i> Mostrar
+            </button>
+        </div>
+        <div id="tabla-cancelados" class="slide is-collapsed">
+            <div class="table-responsive">
+                <table class="table table-hover table-filterable">
+                    <thead>
+                        <tr>
+                            <th>Cliente</th>
+                            <th>Producto</th>
+                            <th>RX</th>
+                            <th style="width:95px;">F. Cliente</th>
+                            <th>Motivo</th>
+                            <th class="text-center" style="width:44px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($pedidos_cancelados as $p): ?>
+                    <?php $p_json = htmlspecialchars(json_encode($p), ENT_QUOTES, 'UTF-8'); ?>
+                    <tr class="clickable-row" data-pedido='<?= $p_json ?>'>
+                        <td class="align-middle">
+                            <span class="fw-bold text-muted"><?= htmlspecialchars($p['referencia_cliente']) ?></span>
+                        </td>
+                        <td class="align-middle">
+                            <span class="fw-semibold text-muted"><?= htmlspecialchars($p['lc_gafa_recambio']) ?></span>
+                        </td>
+                        <td class="align-middle"><?= formatearRX($p['rx'], $p['rx_lineas'] ?? null) ?></td>
+                        <td class="align-middle text-center font-monospace small"><?= htmlspecialchars($p['fecha_cliente'] ?? '-') ?></td>
+                        <td class="align-middle text-muted small">
+                            <?php if (!empty($p['notas_recepcion'])): ?>
+                                <i class="fas fa-comment-dots me-1 opacity-50"></i><?= htmlspecialchars($p['notas_recepcion']) ?>
+                            <?php else: ?>
+                                <span class="text-muted opacity-50">—</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="align-middle text-center">
+                            <a href="../controllers/editar_pedido.php?id=<?= $p['id'] ?>" class="btn btn-edit-icon" title="Editar"><i class="fas fa-pen-to-square"></i></a>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <!-- 5) Pedidos Finalizados -->
+    <div id="card-finalizados" class="modern-card section-card-success">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <h2 class="text-dark mb-0 section-title">
+                <i class="fas fa-check-circle text-success"></i> Pedidos Finalizados
+                <span class="badge bg-success ms-2 fs-6"><?= $n_recibidos ?></span>
+                <?php if ($total_recibidos_historico > $n_recibidos): ?>
+                    <small class="text-muted fs-6 fw-normal ms-1">(<?= $total_recibidos_historico ?> en total)</small>
+                <?php endif; ?>
+            </h2>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <form method="GET" class="d-flex align-items-center gap-1">
+                    <?php foreach ($_GET as $k => $v): ?>
+                        <?php if (!in_array($k, ['rec_fecha_desde', 'rec_fecha_hasta'])): ?>
+                            <input type="hidden" name="<?= htmlspecialchars($k) ?>" value="<?= htmlspecialchars($v) ?>">
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                    <input type="date" name="rec_fecha_desde" class="form-control form-control-sm" style="width:140px;" value="<?= htmlspecialchars($rec_fecha_desde) ?>">
+                    <span class="text-muted small">—</span>
+                    <input type="date" name="rec_fecha_hasta" class="form-control form-control-sm" style="width:140px;" value="<?= htmlspecialchars($rec_fecha_hasta) ?>">
+                    <button type="submit" class="btn btn-sm btn-success"><i class="fas fa-filter"></i></button>
                 </form>
-                <button id="btn-finalizados" class="btn btn-action btn-outline-primary"
-                        onclick="toggleTable('tabla-finalizados','btn-finalizados', 'Pedidos Finalizados')">
+                <button id="btn-finalizados" class="btn btn-action btn-outline-secondary"
+                        onclick="toggleTable('tabla-finalizados','btn-finalizados')">
                     <i class="fas fa-eye-slash me-1"></i> Ocultar
                 </button>
             </div>
@@ -426,11 +510,47 @@ $n_recibidos  = count($pedidos_recibidos);
                     </div>
                 </div>
             </div>
-            <div class="modal-footer border-0 p-4 pt-0">
+            <div class="modal-footer border-0 p-4 pt-0 flex-wrap gap-2">
                 <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Cerrar</button>
+                <?php
+                $msgES_modal = obtenerMensajeWhatsApp('recibido', 'es');
+                $msgEU_modal = obtenerMensajeWhatsApp('recibido', 'eu');
+                ?>
+                <div id="p-whatsapp-btns" class="d-flex gap-2"
+                     data-msg-es="<?= htmlspecialchars($msgES_modal) ?>"
+                     data-msg-eu="<?= htmlspecialchars($msgEU_modal) ?>">
+                </div>
                 <a id="p-btn-editar" href="#" class="btn btn-primary rounded-pill px-4">
                     <i class="fas fa-edit me-1"></i> Editar Pedido
                 </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Cancelar Pedido -->
+<div class="modal fade" id="modalCancelar" tabindex="-1" aria-labelledby="modalCancelarLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:20px;overflow:hidden;">
+            <div class="modal-header bg-danger text-white border-0 py-3">
+                <h5 class="modal-title d-flex align-items-center fw-bold" id="modalCancelarLabel">
+                    <i class="fas fa-ban me-2"></i> Cancelar Pedido #<span id="cancel-id-text"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4 bg-light">
+                <input type="hidden" id="cancel-pedido-id" value="">
+                <p class="text-muted mb-3">El pedido quedará marcado como cancelado y desaparecerá de las listas activas.</p>
+                <div>
+                    <label for="cancel-motivo" class="form-label fw-bold text-secondary">Motivo (opcional)</label>
+                    <textarea class="form-control rounded-3" id="cancel-motivo" rows="3" placeholder="Ej: Cliente canceló, producto no disponible..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer bg-white border-0 py-3 px-4 d-flex justify-content-between">
+                <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Volver</button>
+                <button type="button" id="btn-confirmar-cancelar" class="btn btn-danger fw-bold rounded-pill px-4">
+                    <i class="fas fa-ban me-1"></i> Cancelar Pedido
+                </button>
             </div>
         </div>
     </div>
@@ -540,7 +660,27 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('p-via').textContent = p.via || '-';
             document.getElementById('p-fecha-llegada').textContent = p.fecha_llegada || '-';
             document.getElementById('p-btn-editar').href = '../controllers/editar_pedido.php?id=' + p.id;
-            
+
+            // WhatsApp en el modal
+            const tel = encodeURIComponent(p.telefono || '');
+            const cliente = p.referencia_cliente || '';
+            const producto = p.lc_gafa_recambio || '';
+            const waBtns = document.getElementById('p-whatsapp-btns');
+            if (waBtns) {
+                const msgES = waBtns.dataset.msgEs || '';
+                const msgEU = waBtns.dataset.msgEu || '';
+                const fillMsg = (t) => t.replace(/{cliente}/g, cliente).replace(/{producto}/g, producto);
+                waBtns.innerHTML = `
+                    <a href="../includes/whatsapp_redirect.php?telefono=${tel}&mensaje=${encodeURIComponent(fillMsg(msgES))}"
+                       class="btn btn-ws-pill btn-ws-es btn-wa-modal" data-pedido-id="${p.id}" target="_blank" rel="noopener noreferrer">
+                       <i class="fab fa-whatsapp"></i> ES
+                    </a>
+                    <a href="../includes/whatsapp_redirect.php?telefono=${tel}&mensaje=${encodeURIComponent(fillMsg(msgEU))}"
+                       class="btn btn-ws-pill btn-ws-eu btn-wa-modal" data-pedido-id="${p.id}" target="_blank" rel="noopener noreferrer">
+                       <i class="fab fa-whatsapp"></i> EU
+                    </a>`;
+            }
+
             modal.show();
         });
     });
@@ -624,153 +764,184 @@ document.addEventListener('DOMContentLoaded', function() {
         const btn = e.target.closest('.btn-toggle-carrito');
         if (!btn) return;
         e.stopPropagation();
-
-        const pedidoId  = btn.dataset.pedidoId;
-        const enCarrito = btn.dataset.enCarrito === '1';
-
         fetch('../controllers/toggle_carrito.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'pedido_id=' + encodeURIComponent(pedidoId)
+            body: 'pedido_id=' + encodeURIComponent(btn.dataset.pedidoId)
         })
         .then(r => r.json())
         .then(data => {
-            if (!data.success) { alert('Error: ' + data.error); return; }
-
+            if (!data.success) { showToast('Error: ' + data.error, 'error'); return; }
             const ahora = data.en_carrito === 1;
             btn.dataset.enCarrito = ahora ? '1' : '0';
+            btn.className = ahora
+                ? btn.className.replace('btn-outline-info', 'btn-info text-white')
+                : btn.className.replace('btn-info text-white', 'btn-outline-info');
+            btn.innerHTML = ahora
+                ? '<i class="fas fa-cart-arrow-down"></i>'
+                : '<i class="fas fa-cart-plus"></i>';
+            btn.title = ahora ? 'Quitar del carrito' : 'Añadir al carrito';
+            showToast(ahora ? 'Añadido al carrito' : 'Quitado del carrito', ahora ? 'success' : 'info');
 
-            if (ahora) {
-                btn.className = btn.className.replace('btn-outline-info', 'btn-info text-white');
-                btn.innerHTML = '<i class="fas fa-cart-arrow-down me-1"></i>En carrito';
-                btn.title = 'Quitar del carrito';
-            } else {
-                btn.className = btn.className.replace('btn-info text-white', 'btn-outline-info');
-                btn.innerHTML = '<i class="fas fa-cart-plus me-1"></i>Carrito';
-                btn.title = 'Añadir al carrito';
-            }
-
-            // Actualizar badge en columna Producto de la misma fila
+            // Actualizar badge "En carrito" en la celda Cliente (primera td)
             const row = btn.closest('tr');
             if (row) {
-                let badge = row.querySelector('.badge-en-carrito');
-                if (ahora && !badge) {
-                    const prodCell = row.querySelector('td:nth-child(3)');
-                    if (prodCell) {
-                        const b = document.createElement('div');
-                        b.className = 'mt-1 badge-en-carrito';
-                        b.innerHTML = '<span class="badge bg-info text-white" style="font-size:.7rem;"><i class="fas fa-shopping-cart me-1"></i>En carrito</span>';
-                        prodCell.appendChild(b);
-                    }
+                const clienteCell = row.querySelector('td:first-child');
+                let badge = clienteCell?.querySelector('.badge-en-carrito');
+                if (ahora && !badge && clienteCell) {
+                    const div = document.createElement('div');
+                    div.className = 'mt-1 badge-en-carrito';
+                    div.innerHTML = '<span class="badge bg-info" style="font-size:.65rem;"><i class="fas fa-cart-plus me-1"></i>En carrito</span>';
+                    clienteCell.appendChild(div);
                 } else if (!ahora && badge) {
                     badge.remove();
                 }
             }
         })
-        .catch(() => alert('Error de conexión al cambiar estado de carrito.'));
+        .catch(() => showToast('Error de conexión', 'error'));
     });
 
-    // Lógica de filtrado en vivo global con persistencia
-    const buscadorGeneral = document.getElementById('buscador-general');
-    const btnClearSearch = document.getElementById('btn-clear-search');
-    
-    if (buscadorGeneral) {
-        // Restaurar valor previo
-        const savedTerm = sessionStorage.getItem('buscadorGlobalPedidos');
-        if (savedTerm) {
-            buscadorGeneral.value = savedTerm;
-            if (btnClearSearch) btnClearSearch.classList.remove('d-none');
-        }
-
-        buscadorGeneral.addEventListener('input', function() {
-            const term = this.value;
-            // Guardar en sesión
-            sessionStorage.setItem('buscadorGlobalPedidos', term);
-            
-            // Mostrar u ocultar botón de borrar
-            if (term.length > 0) {
-                if (btnClearSearch) btnClearSearch.classList.remove('d-none');
-            } else {
-                if (btnClearSearch) btnClearSearch.classList.add('d-none');
+    // Toggle "Avisado cliente"
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('.btn-toggle-avisado');
+        if (!btn) return;
+        e.stopPropagation();
+        fetch('../controllers/toggle_avisado.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'pedido_id=' + encodeURIComponent(btn.dataset.pedidoId)
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) { showToast('Error: ' + data.error, 'error'); return; }
+            const avisado = data.avisado === 1;
+            btn.dataset.avisado = avisado ? '1' : '0';
+            btn.className = avisado
+                ? btn.className.replace('btn-avisado-off', 'btn-avisado-on')
+                : btn.className.replace('btn-avisado-on', 'btn-avisado-off');
+            btn.title = avisado ? 'Avisado ✓ (clic para desmarcar)' : 'Marcar como avisado';
+            showToast(avisado ? 'Cliente marcado como avisado' : 'Aviso desmarcado', avisado ? 'success' : 'info');
+            // Actualizar indicador en columna cliente
+            const row = btn.closest('tr');
+            if (row) {
+                const clienteCell = row.querySelector('td:first-child');
+                let badge = clienteCell?.querySelector('.badge-avisado');
+                if (avisado && !badge && clienteCell) {
+                    const b = document.createElement('span');
+                    b.className = 'badge badge-avisado ms-1';
+                    b.title = 'Cliente avisado';
+                    b.innerHTML = '<i class="fas fa-phone-volume"></i>';
+                    clienteCell.querySelector('.fw-bold')?.after(b);
+                } else if (!avisado && badge) {
+                    badge.remove();
+                }
             }
-            
-            document.querySelectorAll('.live-search').forEach(input => {
-                input.value = term;
-                // Disparamos el evento de 'input' en cada buscador para que filtre su respectiva tabla
-                input.dispatchEvent(new Event('input'));
+        })
+        .catch(() => showToast('Error de conexión', 'error'));
+    });
+
+    // WhatsApp desde modal → marcar como avisado automáticamente
+    document.addEventListener('click', function(e) {
+        const link = e.target.closest('.btn-wa-modal');
+        if (!link) return;
+        const pedidoId = link.dataset.pedidoId;
+        if (!pedidoId) return;
+        fetch('../controllers/toggle_avisado.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'pedido_id=' + encodeURIComponent(pedidoId) + '&forzar=1'
+        }).catch(() => {});
+    });
+
+    // Cancelar pedido
+    const modalCancelarEl = document.getElementById('modalCancelar');
+    const modalCancelar   = new bootstrap.Modal(modalCancelarEl);
+
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('.btn-cancelar-pedido');
+        if (!btn) return;
+        e.stopPropagation();
+        document.getElementById('cancel-pedido-id').value = btn.dataset.pedidoId;
+        document.getElementById('cancel-id-text').textContent = btn.dataset.pedidoId;
+        document.getElementById('cancel-motivo').value = '';
+        modalCancelar.show();
+    });
+
+    document.getElementById('btn-confirmar-cancelar')?.addEventListener('click', function() {
+        const pedidoId = document.getElementById('cancel-pedido-id').value;
+        const motivo   = document.getElementById('cancel-motivo').value.trim();
+        this.disabled = true;
+        fetch('../controllers/cancelar_pedido.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'pedido_id=' + encodeURIComponent(pedidoId) + '&motivo=' + encodeURIComponent(motivo)
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) { showToast('Error: ' + (data.error || 'desconocido'), 'error'); this.disabled = false; return; }
+            modalCancelar.hide();
+            showToast('Pedido cancelado', 'warning');
+            document.querySelectorAll('.clickable-row').forEach(row => {
+                try {
+                    const p = JSON.parse(row.dataset.pedido);
+                    if (String(p.id) === String(pedidoId)) row.remove();
+                } catch(e) {}
+            });
+        })
+        .catch(() => { showToast('Error de conexión', 'error'); this.disabled = false; });
+    });
+
+    // Filtros rápidos
+    document.querySelectorAll('.filtro-rapido').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.filtro-rapido').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            const filtro = this.dataset.filtro;
+            const hoy = new Date().toISOString().slice(0,10);
+            document.querySelectorAll('.table-filterable tbody tr').forEach(row => {
+                if (!filtro) { row.style.display = ''; return; }
+                const texto = row.innerText.toLowerCase();
+                if (filtro === 'hoy') {
+                    row.style.display = texto.includes(hoy) ? '' : 'none';
+                } else {
+                    row.style.display = texto.toLowerCase().includes(filtro.toLowerCase()) ? '' : 'none';
+                }
             });
         });
+    });
 
-        if (btnClearSearch) {
-            btnClearSearch.addEventListener('click', function() {
-                buscadorGeneral.value = '';
-                sessionStorage.removeItem('buscadorGlobalPedidos');
-                btnClearSearch.classList.add('d-none');
-                
-                // Limpiar los inputs individuales y disparar su input
-                document.querySelectorAll('.live-search').forEach(input => {
-                    input.value = '';
-                    input.dispatchEvent(new Event('input'));
-                });
-                
-                buscadorGeneral.focus();
-            });
-        }
-        
-        // Si había valor guardado, disparamos la búsqueda inicial para que filtre las tablas al cargar
-        if (savedTerm) {
-            setTimeout(() => {
-                document.querySelectorAll('.live-search').forEach(input => {
-                    input.value = savedTerm;
-                    input.dispatchEvent(new Event('input'));
-                });
-            }, 100);
-        }
+    // Buscador global — filtra directamente en las tablas
+    const buscadorGeneral = document.getElementById('buscador-general');
+    const btnClearSearch  = document.getElementById('btn-clear-search');
+
+    function filtrarTablas(term) {
+        const t = term.toLowerCase().trim();
+        document.querySelectorAll('.table-filterable tbody tr').forEach(row => {
+            row.style.display = row.innerText.toLowerCase().includes(t) ? '' : 'none';
+        });
+        btnClearSearch?.classList.toggle('d-none', term.length === 0);
+        sessionStorage.setItem('buscadorGlobalPedidos', term);
     }
 
-    // Lógica de filtrado en vivo individual
-    document.querySelectorAll('.live-search').forEach(input => {
-        input.addEventListener('input', function() {
-            const term = this.value.toLowerCase().trim();
-            const targetId = this.dataset.target;
-            const table = document.getElementById(targetId);
-            if (!table) return;
-
-            const rows = table.querySelectorAll('tbody tr');
-            rows.forEach(row => {
-                const text = row.innerText.toLowerCase();
-                row.style.display = text.includes(term) ? '' : 'none';
-            });
-            
-            // Actualizar contador si existe
-            const countBadge = this.closest('.modern-card').querySelector('.badge');
-            if (countBadge) {
-                const visibleRows = Array.from(rows).filter(r => r.style.display !== 'none').length;
-                countBadge.textContent = visibleRows;
-            }
+    if (buscadorGeneral) {
+        const saved = sessionStorage.getItem('buscadorGlobalPedidos');
+        if (saved) { buscadorGeneral.value = saved; filtrarTablas(saved); }
+        buscadorGeneral.addEventListener('input', e => filtrarTablas(e.target.value));
+        btnClearSearch?.addEventListener('click', () => {
+            buscadorGeneral.value = '';
+            filtrarTablas('');
+            buscadorGeneral.focus();
         });
-        
-        // Ejecutar al cargar si ya tiene valor
-        if (input.value.trim() !== '') {
-            input.dispatchEvent(new Event('input'));
-        }
-    });
+    }
 });
 
-function toggleTable(id, btnId, title) {
-    const element = document.getElementById(id);
+function toggleTable(id, btnId) {
+    const el  = document.getElementById(id);
     const btn = document.getElementById(btnId);
-    if (element.classList.contains('is-collapsed')) {
-        element.classList.remove('is-collapsed');
-        btn.innerHTML = '<i class="fas fa-eye-slash me-1"></i> Ocultar';
-        btn.classList.add('btn-outline-primary');
-        btn.classList.remove('btn-primary');
-    } else {
-        element.classList.add('is-collapsed');
-        btn.innerHTML = '<i class="fas fa-eye me-1"></i> Mostrar';
-        btn.classList.remove('btn-outline-primary');
-        btn.classList.add('btn-primary');
-    }
+    const collapsed = el.classList.toggle('is-collapsed');
+    btn.innerHTML = collapsed
+        ? '<i class="fas fa-eye me-1"></i> Mostrar'
+        : '<i class="fas fa-eye-slash me-1"></i> Ocultar';
 }
 </script>
 

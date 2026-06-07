@@ -1,10 +1,12 @@
 <?php
+require_once __DIR__ . '/db_config.php';
+
 class Conexion {
-    private $host = "localhost"; // En Hostinger suele ser 'localhost'
-    private $db = "u373487989_maldeojo"; 
-    private $user = "u373487989_mikel"; 
-    private $password = "R4;vk+3pT>Nq";
-    private $charset = "utf8mb4";
+    private $host     = DB_HOST;
+    private $db       = DB_NAME;
+    private $user     = DB_USER;
+    private $password = DB_PASS;
+    private $charset  = DB_CHARSET;
     public $pdo;
 
     public function __construct() {

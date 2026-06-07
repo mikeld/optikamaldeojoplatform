@@ -363,8 +363,8 @@ include '../views/header.php';
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body p-4 text-center">
-                <p class="fs-5">¿Estás seguro de que deseas eliminar este pedido permanentemente?</p>
-                <p class="text-muted">Esta acción no se puede deshacer.</p>
+                <p class="fs-5">¿Eliminar el pedido #<?= htmlspecialchars($pedido['id']) ?>?</p>
+                <p class="text-muted">El pedido quedará oculto pero podrás recuperarlo si cometes un error.</p>
             </div>
             <div class="modal-footer border-0 justify-content-center pb-4">
                 <button type="button" class="btn btn-outline-secondary px-4 rounded-pill" data-bs-dismiss="modal">Cancelar</button>

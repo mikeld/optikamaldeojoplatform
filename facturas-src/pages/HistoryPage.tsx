@@ -155,11 +155,18 @@ const HistoryPage: React.FC = () => {
 
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   const styles = {
-    COMPLETED: 'bg-emerald-100 text-emerald-700',
-    REJECTED: 'bg-rose-100 text-rose-700',
-    PENDING: 'bg-amber-100 text-amber-700',
+    approved: 'bg-emerald-100 text-emerald-700 border-emerald-100',
+    rejected: 'bg-rose-100 text-rose-700 border-rose-100',
+    pending: 'bg-amber-100 text-amber-700 border-amber-100',
+    in_review: 'bg-indigo-100 text-indigo-700 border-indigo-100',
   };
-  return <span className={`px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest uppercase border ${styles[status as keyof typeof styles]}`}>{status}</span>;
+  const labels = {
+    approved: 'Correcta',
+    rejected: 'Rechazada',
+    pending: 'Pendiente',
+    in_review: 'En revision',
+  };
+  return <span className={`px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest uppercase border ${styles[status as keyof typeof styles] || 'bg-slate-100 text-slate-600 border-slate-100'}`}>{labels[status as keyof typeof labels] || status}</span>;
 };
 
 export default HistoryPage;

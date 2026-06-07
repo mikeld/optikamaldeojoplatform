@@ -16,19 +16,22 @@ $acciones_navbar = [
 ];
 include 'header.php';
 
-// Validar parámetro
-if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
-    header('Location: listado_usuarios.php');
-    exit();
-}
-
-$id  = (int) $_GET['id'];
+// Validar parámetro — acepta ?id=N o ?ref=REFERENCIA
 $pdo = (new Conexion())->pdo;
 
-// Datos del cliente
-$stmt = $pdo->prepare("SELECT * FROM clientes WHERE id = :id");
-$stmt->execute([':id' => $id]);
+if (isset($_GET['id']) && is_numeric($_GET['id'])) {
+    $id = (int) $_GET['id'];
+    $stmt = $pdo->prepare("SELECT * FROM clientes WHERE id = :id");
+    $stmt->execute([':id' => $id]);
+} elseif (isset($_GET['ref']) && $_GET['ref'] !== '') {
+    $stmt = $pdo->prepare("SELECT * FROM clientes WHERE referencia = :ref LIMIT 1");
+    $stmt->execute([':ref' => $_GET['ref']]);
+} else {
+    header('Location: listado_usuarios.php'); exit();
+}
+
 $cliente = $stmt->fetch(PDO::FETCH_ASSOC);
+$id = $cliente['id'] ?? 0;
 
 if (!$cliente) {
     echo '<div class="container py-5"><div class="alert alert-danger">Cliente no encontrado.</div></div>';
@@ -36,49 +39,42 @@ if (!$cliente) {
     exit();
 }
 
-// Todos los pedidos del cliente
+// Todos los pedidos del cliente (sin borrados)
 $stmt = $pdo->prepare("
-    SELECT * FROM pedidos 
-    WHERE referencia_cliente = :ref 
+    SELECT * FROM pedidos
+    WHERE referencia_cliente = :ref AND deleted_at IS NULL
     ORDER BY fecha_cliente DESC
 ");
 $stmt->execute([':ref' => $cliente['referencia']]);
 $pedidos = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Estadísticas
-$total_pedidos    = count($pedidos);
-$pedidos_activos  = 0;
-$pedidos_acabados = 0;
-$ultimo_pedido    = null;
-$ultimo_producto  = null;
+$total_pedidos   = count($pedidos);
+$pedidos_activos = $pedidos_acabados = $pedidos_cancelados_c = 0;
+$fecha_hoy_local = date('Y-m-d');
 
 foreach ($pedidos as $p) {
-    if ($p['recibido']) {
-        $pedidos_acabados++;
-    } else {
-        $pedidos_activos++;
-    }
-    if (!$ultimo_pedido) {
-        $ultimo_pedido  = $p['fecha_cliente'];
-        $ultimo_producto = $p['lc_gafa_recambio'];
-    }
+    $rv = (int)$p['recibido'];
+    if ($rv === 1) $pedidos_acabados++;
+    elseif ($rv === 3) $pedidos_cancelados_c++;
+    else $pedidos_activos++;
 }
 
 // Tiempo medio de entrega para este cliente
 $stmt_avg = $pdo->prepare("
     SELECT ROUND(AVG(DATEDIFF(fecha_llegada, fecha_pedido)),1)
     FROM pedidos
-    WHERE referencia_cliente = :ref
-      AND recibido = 1
-      AND fecha_pedido IS NOT NULL
-      AND fecha_llegada IS NOT NULL
+    WHERE referencia_cliente = :ref AND recibido = 1
+      AND deleted_at IS NULL
+      AND fecha_pedido IS NOT NULL AND fecha_llegada IS NOT NULL
 ");
 $stmt_avg->execute([':ref' => $cliente['referencia']]);
 $avg_entrega = $stmt_avg->fetchColumn() ?: '—';
 
 // Primera compra
 $stmt_first = $pdo->prepare("
-    SELECT MIN(fecha_cliente) FROM pedidos WHERE referencia_cliente = :ref
+    SELECT MIN(fecha_cliente) FROM pedidos
+    WHERE referencia_cliente = :ref AND deleted_at IS NULL
 ");
 $stmt_first->execute([':ref' => $cliente['referencia']]);
 $primera_compra = $stmt_first->fetchColumn() ?: '—';
@@ -130,37 +126,25 @@ $msg_eu = obtenerMensajeWhatsApp('recibido', 'eu');
         <div class="col-6 col-lg-3">
             <div class="kpi-card kpi-info">
                 <div class="kpi-icon"><i class="fas fa-shopping-bag"></i></div>
-                <div class="kpi-body">
-                    <div class="kpi-value"><?= $total_pedidos ?></div>
-                    <div class="kpi-label">Total Pedidos</div>
-                </div>
+                <div><div class="kpi-value"><?= $total_pedidos ?></div><div class="kpi-label">Total Pedidos</div></div>
             </div>
         </div>
         <div class="col-6 col-lg-3">
             <div class="kpi-card kpi-warning">
-                <div class="kpi-icon"><i class="fas fa-spinner"></i></div>
-                <div class="kpi-body">
-                    <div class="kpi-value"><?= $pedidos_activos ?></div>
-                    <div class="kpi-label">Pedidos Activos</div>
-                </div>
+                <div class="kpi-icon"><i class="fas fa-hourglass-half"></i></div>
+                <div><div class="kpi-value"><?= $pedidos_activos ?></div><div class="kpi-label">Activos</div></div>
             </div>
         </div>
         <div class="col-6 col-lg-3">
             <div class="kpi-card kpi-success">
-                <div class="kpi-icon"><i class="fas fa-shipping-fast"></i></div>
-                <div class="kpi-body">
-                    <div class="kpi-value"><?= $avg_entrega ?> <small>días</small></div>
-                    <div class="kpi-label">Entrega Media</div>
-                </div>
+                <div class="kpi-icon"><i class="fas fa-tachometer-alt"></i></div>
+                <div><div class="kpi-value"><?= $avg_entrega ?><small> d</small></div><div class="kpi-label">Entrega Media</div></div>
             </div>
         </div>
         <div class="col-6 col-lg-3">
-            <div class="kpi-card kpi-danger">
-                <div class="kpi-icon"><i class="fas fa-calendar-alt"></i></div>
-                <div class="kpi-body">
-                    <div class="kpi-value" style="font-size:1.2rem"><?= $primera_compra ?></div>
-                    <div class="kpi-label">Cliente Desde</div>
-                </div>
+            <div class="kpi-card kpi-info" style="border-left-color:#6366f1">
+                <div class="kpi-icon" style="background:var(--indigo-l);color:var(--indigo)"><i class="fas fa-calendar-star"></i></div>
+                <div><div class="kpi-value" style="font-size:1.05rem"><?= $primera_compra ?></div><div class="kpi-label">Cliente Desde</div></div>
             </div>
         </div>
     </div>
@@ -181,64 +165,51 @@ $msg_eu = obtenerMensajeWhatsApp('recibido', 'eu');
                 <table class="table align-middle">
                     <thead>
                         <tr>
-                            <th>ID</th>
-                            <th>Fecha</th>
+                            <th>F. Cliente</th>
                             <th>Producto</th>
                             <th>RX</th>
                             <th>Vía</th>
                             <th>Estado</th>
                             <th>F. Pedido</th>
                             <th>F. Llegada</th>
-                            <th>Acciones</th>
+                            <th class="text-center" style="width:44px"></th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($pedidos as $p): ?>
                         <?php
-                            $fecha_hoy = date('Y-m-d');
-                            if ($p['recibido']) {
-                                $estado_class = 'bg-success';
-                                $estado_text  = 'Finalizado';
+                            $rv = (int)$p['recibido'];
+                            if ($rv === 1) {
+                                $estado_class = 'bg-success'; $estado_text = 'Finalizado';
+                            } elseif ($rv === 3) {
+                                $estado_class = 'bg-secondary'; $estado_text = 'Cancelado';
                             } elseif (!$p['fecha_pedido']) {
-                                $estado_class = 'bg-secondary';
-                                $estado_text  = 'Sin pedir';
-                            } elseif ($p['fecha_llegada'] && $p['fecha_llegada'] <= $fecha_hoy) {
-                                $estado_class = 'bg-danger';
-                                $estado_text  = 'Atrasado';
+                                $estado_class = 'bg-warning text-dark'; $estado_text = 'Sin pedir';
+                            } elseif ($p['fecha_llegada'] && $p['fecha_llegada'] <= $fecha_hoy_local) {
+                                $estado_class = 'bg-danger'; $estado_text = 'Atrasado';
+                            } elseif ($rv === 2) {
+                                $estado_class = 'bg-warning text-dark'; $estado_text = 'Parcial';
                             } else {
-                                $estado_class = 'bg-primary';
-                                $estado_text  = 'En camino';
+                                $estado_class = 'bg-primary'; $estado_text = 'En camino';
                             }
+                            $via_data = parsearVia($p['via'] ?? '');
                         ?>
-                        <tr>
-                            <td><strong>#<?= $p['id'] ?></strong></td>
-                            <td><?= $p['fecha_cliente'] ?></td>
-                            <td><?= htmlspecialchars($p['lc_gafa_recambio'] ?? '') ?></td>
-                            <td><small><?= htmlspecialchars($p['rx'] ?? '') ?></small></td>
-                            <td><?= htmlspecialchars($p['via'] ?? '') ?></td>
-                            <td><span class="badge <?= $estado_class ?>"><?= $estado_text ?></span></td>
-                            <td><?= $p['fecha_pedido'] ?? '<span class="text-muted">—</span>' ?></td>
-                            <td><?= $p['fecha_llegada'] ?? '<span class="text-muted">—</span>' ?></td>
+                        <tr class="<?= $rv === 3 ? 'opacity-60' : '' ?>">
+                            <td class="font-monospace small text-muted"><?= $p['fecha_cliente'] ?? '—' ?></td>
+                            <td class="fw-600"><?= htmlspecialchars($p['lc_gafa_recambio'] ?? '') ?></td>
+                            <td><?= formatearRX($p['rx'] ?? '', $p['rx_lineas'] ?? null) ?></td>
                             <td>
-                                <a href="formulario_pedidos.php?editar=<?= $p['id'] ?>" 
-                                   class="btn btn-sm btn-outline-secondary" title="Editar">
-                                    <i class="fas fa-edit"></i>
+                                <?php if ($via_data['canal']): ?>
+                                <span class="badge bg-light text-dark border" style="font-size:.7rem"><?= htmlspecialchars($via_data['canal']) ?></span>
+                                <?php else: ?><span class="text-muted">—</span><?php endif; ?>
+                            </td>
+                            <td><span class="badge <?= $estado_class ?>"><?= $estado_text ?></span></td>
+                            <td class="font-monospace small"><?= $p['fecha_pedido'] ?? '<span class="text-muted">—</span>' ?></td>
+                            <td class="font-monospace small fw-bold text-primary"><?= $p['fecha_llegada'] ?? '<span class="text-muted">—</span>' ?></td>
+                            <td class="text-center">
+                                <a href="../controllers/editar_pedido.php?id=<?= $p['id'] ?>" class="btn btn-edit-icon" title="Editar">
+                                    <i class="fas fa-pen-to-square"></i>
                                 </a>
-                                <?php if (!$p['recibido'] && $p['fecha_pedido']): ?>
-                                <?php
-                                    $producto_enc = urlencode($p['lc_gafa_recambio'] ?? '');
-                                    $nombre_enc = urlencode($cliente['referencia']);
-                                    $tel = preg_replace('/[^0-9+]/', '', $cliente['telefono'] ?? '');
-                                    if ($tel && strpos($tel, '+') !== 0 && strpos($tel, '00') !== 0) {
-                                        $tel = '+34' . $tel;
-                                    }
-                                    $msg = str_replace(['{cliente}','{producto}'], [$cliente['referencia'], $p['lc_gafa_recambio'] ?? ''], $msg_es);
-                                    $wa_link = "https://wa.me/" . preg_replace('/[^0-9]/', '', $tel) . "?text=" . urlencode($msg);
-                                ?>
-                                <a href="<?= $wa_link ?>" target="_blank" class="btn btn-sm btn-outline-success" title="WhatsApp">
-                                    <i class="fab fa-whatsapp"></i>
-                                </a>
-                                <?php endif; ?>
                             </td>
                         </tr>
                         <?php endforeach; ?>

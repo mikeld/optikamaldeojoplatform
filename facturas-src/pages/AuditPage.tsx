@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Upload, FileText, Loader2, CheckCircle2, XCircle, AlertCircle, RefreshCw, Save, ArrowLeft, PlusCircle, Database, Trash2, X, CheckSquare, Edit3, AlertTriangle, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 import { extractInvoiceData } from '../services/geminiService';
 import { db } from '../db';
-import { InvoiceData, AuditLine, LineStatus, Product, AuditRecord } from '../types';
+import { InvoiceData, AuditLine, LineStatus, Product, AuditRecord, AuditStatus } from '../types';
 
 const AuditPage: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
@@ -73,7 +73,7 @@ const AuditPage: React.FC = () => {
           invoiceNumber: extracted.invoiceNumber || 'S/N',
           lines: auditLines,
           totalInvoice: extracted.total,
-          globalStatus: 'PENDING'
+          globalStatus: 'in_review'
         });
         setIsProcessing(false);
       };
@@ -238,7 +238,7 @@ const AuditPage: React.FC = () => {
     setIsBulkProcessing(false);
   };
 
-  const executeFinalize = async (status: 'COMPLETED' | 'REJECTED') => {
+  const executeFinalize = async (status: AuditStatus) => {
     if (!auditResult) return;
     try {
       await db.saveAudit({ ...auditResult, globalStatus: status });
@@ -360,7 +360,7 @@ const AuditPage: React.FC = () => {
               {isBulkProcessing ? <Loader2 className="animate-spin w-4 h-4" /> : <CheckSquare className="w-4 h-4" />}
               Validar Todo
             </button>
-            <button onClick={() => executeFinalize('COMPLETED')} className="px-5 py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 flex items-center gap-2 shadow-lg shadow-indigo-100 transition-all">
+            <button onClick={() => executeFinalize('approved')} className="px-5 py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 flex items-center gap-2 shadow-lg shadow-indigo-100 transition-all">
               <Save className="w-5 h-5" /> Finalizar Auditoría
             </button>
           </div>

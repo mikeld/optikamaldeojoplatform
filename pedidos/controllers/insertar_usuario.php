@@ -1,4 +1,5 @@
 <?php
+require '../includes/auth.php';
 require '../includes/conexion.php';
 
 $mensaje = '';
@@ -62,11 +63,14 @@ try {
 <body class="bg-light">
     <div class="container mt-5">
         <div class="alert <?= $es_error ? 'alert-danger' : 'alert-success' ?> text-center shadow-sm">
-            <?php if ($es_error): ?>
+            <?php
+require '../includes/auth.php'; if ($es_error): ?>
                 <h1>❌ Error en la Inserción</h1>
-            <?php else: ?>
+            <?php
+require '../includes/auth.php'; else: ?>
                 <h1>✅ ¡Usuario Insertado Correctamente!</h1>
-            <?php endif; ?>
+            <?php
+require '../includes/auth.php'; endif; ?>
             <p><?= htmlspecialchars($mensaje) ?></p>
         </div>
 

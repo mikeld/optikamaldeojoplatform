@@ -25,6 +25,7 @@ $stmt = $pdo->prepare("
            DATEDIFF(:hoy, p.fecha_llegada) as dias_diff
     FROM pedidos p
     WHERE p.fecha_llegada IS NOT NULL
+      AND p.deleted_at IS NULL
       AND p.fecha_llegada >= DATE_SUB(:hoy2, INTERVAL 3 MONTH)
       AND p.fecha_llegada <= DATE_ADD(:hoy3, INTERVAL 3 MONTH)
     ORDER BY p.fecha_llegada ASC
@@ -35,18 +36,12 @@ $pedidos = $stmt->fetchAll(PDO::FETCH_ASSOC);
 // Construir eventos para FullCalendar
 $eventos = [];
 foreach ($pedidos as $p) {
-    if ($p['recibido']) {
-        $color = '#48bb78'; // verde
-        $estado = 'Finalizado';
-        $emoji = '✅';
+    if ($p['recibido'] == 1) {
+        $color = '#059669'; $estado = 'Finalizado'; $emoji = '✅';
     } elseif ($p['dias_diff'] > 0) {
-        $color = '#f56565'; // rojo
-        $estado = 'Atrasado (' . $p['dias_diff'] . 'd)';
-        $emoji = '⚠️';
+        $color = '#dc2626'; $estado = 'Atrasado ('.$p['dias_diff'].'d)'; $emoji = '⚠️';
     } else {
-        $color = '#4299e1'; // azul
-        $estado = 'Pendiente';
-        $emoji = '📦';
+        $color = '#2563eb'; $estado = 'Pendiente'; $emoji = '📦';
     }
     $eventos[] = [
         'title' => $emoji . ' ' . ($p['referencia_cliente'] ?? '') . ' — ' . ($p['lc_gafa_recambio'] ?? ''),
@@ -141,46 +136,37 @@ foreach ($pedidos as $p) {
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/locales/es.global.min.js"></script>
 
 <style>
-    #calendario .fc { font-family: inherit; }
-    #calendario .fc-toolbar-title { color: var(--text-main) !important; font-size: 1.4rem !important; }
+    #calendario .fc { font-family: 'Inter', system-ui, sans-serif; }
+    #calendario .fc-toolbar-title { color: var(--text) !important; font-size: 1.25rem !important; font-weight: 700 !important; }
     #calendario .fc-button-primary {
-        background: var(--primary-color) !important;
-        border-color: var(--primary-color) !important;
-        border-radius: 8px !important;
+        background: var(--primary) !important;
+        border-color: var(--primary) !important;
+        border-radius: var(--r-sm) !important;
+        font-size: .82rem !important;
         font-weight: 600 !important;
-        transition: all 0.2s;
+        padding: 6px 14px !important;
+        box-shadow: none !important;
+        transition: opacity .15s !important;
     }
-    #calendario .fc-button-primary:hover {
-        background: #4c51bf !important;
-        transform: translateY(-1px);
-    }
+    #calendario .fc-button-primary:hover { opacity: .85 !important; }
     #calendario .fc-button-active {
-        background: #3730a3 !important;
-        border-color: #3730a3 !important;
+        background: var(--indigo-d) !important;
+        border-color: var(--indigo-d) !important;
     }
-    #calendario .fc-daygrid-day.fc-day-today {
-        background: rgba(90,103,216,0.08) !important;
-    }
+    #calendario .fc-daygrid-day.fc-day-today { background: var(--primary-l) !important; }
     #calendario .fc-event {
-        border-radius: 6px !important;
+        border-radius: 5px !important;
         padding: 2px 6px !important;
-        font-size: 0.75rem !important;
+        font-size: .72rem !important;
         font-weight: 600 !important;
         cursor: pointer;
-        transition: transform 0.15s, box-shadow 0.15s;
+        border: none !important;
+        transition: opacity .15s;
     }
-    #calendario .fc-event:hover {
-        transform: scale(1.03);
-        box-shadow: 0 3px 10px rgba(0,0,0,0.15);
-    }
-    #calendario .fc-daygrid-day-number {
-        font-weight: 700;
-        color: var(--text-main);
-    }
-    /* List view styling */
-    #calendario .fc-list-event:hover td {
-        background: rgba(90,103,216,0.05) !important;
-    }
+    #calendario .fc-event:hover { opacity: .85; }
+    #calendario .fc-daygrid-day-number { font-weight: 700; color: var(--text); }
+    #calendario .fc-col-header-cell { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+    #calendario .fc-list-event:hover td { background: var(--primary-l) !important; }
 </style>
 
 <script>

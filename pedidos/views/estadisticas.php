@@ -5,9 +5,7 @@ require '../includes/funciones.php';
 
 date_default_timezone_set('Europe/Madrid');
 
-$breadcrumbs = [
-    ['nombre' => 'Estadísticas', 'url' => '#']
-];
+$breadcrumbs = [['nombre' => 'Estadísticas', 'url' => '#']];
 $acciones_navbar = [
     ['nombre'=>'Listado Pedidos',  'url'=>'listado_pedidos.php',   'icono'=>'bi-card-list'],
     ['nombre'=>'Calendario',       'url'=>'calendario.php',        'icono'=>'bi-calendar3'],
@@ -18,195 +16,187 @@ include 'header.php';
 $pdo       = (new Conexion())->pdo;
 $fecha_hoy = date('Y-m-d');
 
-// ── KPI Counts ──
+// ── KPIs ──
 $kpi = [];
 
-$stmt = $pdo->query("SELECT COUNT(*) FROM pedidos WHERE recibido = 0 AND fecha_pedido IS NULL");
-$kpi['pendientes'] = (int)$stmt->fetchColumn();
+$r = $pdo->query("SELECT COUNT(*) FROM pedidos WHERE recibido IN (0,2) AND fecha_pedido IS NULL AND deleted_at IS NULL");
+$kpi['pendientes'] = (int)$r->fetchColumn();
 
-$stmt = $pdo->prepare("SELECT COUNT(*) FROM pedidos WHERE recibido = 0 AND fecha_llegada <= :hoy");
-$stmt->execute([':hoy' => $fecha_hoy]);
-$kpi['atrasados'] = (int)$stmt->fetchColumn();
+$r = $pdo->prepare("SELECT COUNT(*) FROM pedidos WHERE recibido IN (0,2) AND fecha_llegada <= :hoy AND deleted_at IS NULL");
+$r->execute([':hoy'=>$fecha_hoy]); $kpi['atrasados'] = (int)$r->fetchColumn();
 
-$stmt = $pdo->prepare("SELECT COUNT(*) FROM pedidos WHERE recibido = 0 AND fecha_pedido IS NOT NULL AND (fecha_llegada IS NULL OR fecha_llegada > :hoy)");
-$stmt->execute([':hoy' => $fecha_hoy]);
-$kpi['en_camino'] = (int)$stmt->fetchColumn();
+$r = $pdo->prepare("SELECT COUNT(*) FROM pedidos WHERE recibido IN (0,2) AND fecha_pedido IS NOT NULL AND (fecha_llegada IS NULL OR fecha_llegada > :hoy) AND deleted_at IS NULL");
+$r->execute([':hoy'=>$fecha_hoy]); $kpi['en_camino'] = (int)$r->fetchColumn();
 
-$stmt = $pdo->prepare("SELECT COUNT(*) FROM pedidos WHERE recibido = 1 AND fecha_llegada = :hoy");
-$stmt->execute([':hoy' => $fecha_hoy]);
-$kpi['finalizados_hoy'] = (int)$stmt->fetchColumn();
+$r = $pdo->prepare("SELECT COUNT(*) FROM pedidos WHERE recibido = 1 AND fecha_llegada = :hoy AND deleted_at IS NULL");
+$r->execute([':hoy'=>$fecha_hoy]); $kpi['finalizados_hoy'] = (int)$r->fetchColumn();
 
-$stmt = $pdo->query("SELECT COUNT(*) FROM pedidos WHERE recibido = 1");
-$kpi['total_finalizados'] = (int)$stmt->fetchColumn();
+$r = $pdo->query("SELECT COUNT(*) FROM pedidos WHERE recibido = 1 AND deleted_at IS NULL");
+$kpi['total_finalizados'] = (int)$r->fetchColumn();
 
-$stmt = $pdo->query("SELECT COUNT(*) FROM clientes");
-$kpi['total_clientes'] = (int)$stmt->fetchColumn();
+$r = $pdo->query("SELECT COUNT(*) FROM pedidos WHERE recibido = 3 AND deleted_at IS NULL");
+$kpi['cancelados'] = (int)$r->fetchColumn();
 
-// ── Tiempo medio de entrega (90 días) ──
-$stmt = $pdo->prepare("
-    SELECT ROUND(AVG(DATEDIFF(fecha_llegada, fecha_pedido)),1) 
-    FROM pedidos 
-    WHERE recibido = 1 
-      AND fecha_pedido IS NOT NULL 
-      AND fecha_llegada IS NOT NULL
+$r = $pdo->query("SELECT COUNT(*) FROM clientes");
+$kpi['total_clientes'] = (int)$r->fetchColumn();
+
+// Tiempo medio global (últimos 90 días)
+$r = $pdo->prepare("
+    SELECT ROUND(AVG(DATEDIFF(fecha_llegada, fecha_pedido)),1)
+    FROM pedidos
+    WHERE recibido = 1 AND deleted_at IS NULL
+      AND fecha_pedido IS NOT NULL AND fecha_llegada IS NOT NULL
       AND fecha_llegada >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)
 ");
-$stmt->execute();
-$kpi['tiempo_medio'] = $stmt->fetchColumn() ?: '—';
+$r->execute(); $kpi['tiempo_medio'] = $r->fetchColumn() ?: '—';
 
-// ── Gráfico semanal (últimos 14 días) ──
-$stmt = $pdo->prepare("
+// ── Gráfico actividad 14 días ──
+$r = $pdo->prepare("
     SELECT DATE(fecha_cliente) as dia, COUNT(*) as total
-    FROM pedidos
-    WHERE fecha_cliente >= DATE_SUB(:hoy, INTERVAL 13 DAY)
-    GROUP BY DATE(fecha_cliente)
-    ORDER BY dia ASC
+    FROM pedidos WHERE deleted_at IS NULL
+      AND fecha_cliente >= DATE_SUB(:hoy, INTERVAL 13 DAY)
+    GROUP BY DATE(fecha_cliente) ORDER BY dia
 ");
-$stmt->execute([':hoy' => $fecha_hoy]);
-$chart_raw = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$r->execute([':hoy'=>$fecha_hoy]);
 $chart_map = [];
-foreach ($chart_raw as $r) $chart_map[$r['dia']] = (int)$r['total'];
-
-$chart_labels = [];
-$chart_values = [];
+foreach ($r->fetchAll(PDO::FETCH_ASSOC) as $row) $chart_map[$row['dia']] = (int)$row['total'];
+$chart_labels = $chart_values = [];
 for ($i = 13; $i >= 0; $i--) {
     $d = date('Y-m-d', strtotime("-{$i} days"));
-    $chart_labels[] = date('D d', strtotime($d));
+    $chart_labels[] = date('D d/m', strtotime($d));
     $chart_values[] = $chart_map[$d] ?? 0;
 }
 
-// ── Gráfico mensual (últimos 6 meses) ──
-$stmt = $pdo->prepare("
-    SELECT DATE_FORMAT(fecha_cliente, '%Y-%m') as mes, COUNT(*) as total
-    FROM pedidos
-    WHERE fecha_cliente >= DATE_SUB(:hoy, INTERVAL 6 MONTH)
-    GROUP BY DATE_FORMAT(fecha_cliente, '%Y-%m')
-    ORDER BY mes ASC
+// ── Gráfico mensual 6 meses ──
+$r = $pdo->prepare("
+    SELECT DATE_FORMAT(fecha_cliente,'%Y-%m') as mes, COUNT(*) as total
+    FROM pedidos WHERE deleted_at IS NULL
+      AND fecha_cliente >= DATE_SUB(:hoy, INTERVAL 6 MONTH)
+    GROUP BY mes ORDER BY mes
 ");
-$stmt->execute([':hoy' => $fecha_hoy]);
-$monthly_raw = $stmt->fetchAll(PDO::FETCH_ASSOC);
-$monthly_labels = [];
-$monthly_values = [];
-foreach ($monthly_raw as $r) {
-    $monthly_labels[] = date('M Y', strtotime($r['mes'] . '-01'));
-    $monthly_values[] = (int)$r['total'];
+$r->execute([':hoy'=>$fecha_hoy]);
+$monthly_labels = $monthly_values = [];
+foreach ($r->fetchAll(PDO::FETCH_ASSOC) as $row) {
+    $monthly_labels[] = date('M Y', strtotime($row['mes'].'-01'));
+    $monthly_values[] = (int)$row['total'];
 }
 
-// ── Top 5 clientes con más pedidos ──
-$stmt = $pdo->query("
-    SELECT referencia_cliente, COUNT(*) as total 
-    FROM pedidos 
-    GROUP BY referencia_cliente 
-    ORDER BY total DESC 
-    LIMIT 5
-");
-$top_clientes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// ── Top 5 clientes ──
+$top_clientes = $pdo->query("
+    SELECT referencia_cliente, COUNT(*) as total
+    FROM pedidos WHERE deleted_at IS NULL
+    GROUP BY referencia_cliente ORDER BY total DESC LIMIT 5
+")->fetchAll(PDO::FETCH_ASSOC);
 
-// ── Top 5 vías más usadas ──
-$stmt = $pdo->query("
-    SELECT via, COUNT(*) as total 
-    FROM pedidos 
-    WHERE via IS NOT NULL AND via != ''
-    GROUP BY via 
-    ORDER BY total DESC 
-    LIMIT 5
-");
-$top_vias = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// ── Top 5 productos ──
+$top_productos = $pdo->query("
+    SELECT lc_gafa_recambio, COUNT(*) as total
+    FROM pedidos WHERE deleted_at IS NULL AND lc_gafa_recambio IS NOT NULL AND lc_gafa_recambio != ''
+    GROUP BY lc_gafa_recambio ORDER BY total DESC LIMIT 5
+")->fetchAll(PDO::FETCH_ASSOC);
+
+// ── Tiempo medio por proveedor (top 8) ──
+$prov_timing = $pdo->query("
+    SELECT pv.nombre,
+           ROUND(AVG(DATEDIFF(p.fecha_llegada, p.fecha_pedido)),1) as media_dias,
+           COUNT(*) as total_pedidos
+    FROM pedidos p
+    JOIN proveedores pv ON p.proveedor_id = pv.id
+    WHERE p.recibido = 1 AND p.deleted_at IS NULL
+      AND p.fecha_pedido IS NOT NULL AND p.fecha_llegada IS NOT NULL
+    GROUP BY pv.id, pv.nombre HAVING total_pedidos >= 1
+    ORDER BY media_dias ASC LIMIT 8
+")->fetchAll(PDO::FETCH_ASSOC);
+
+// ── Vías normalizadas ──
+$raw_vias = $pdo->query("
+    SELECT via, COUNT(*) as total FROM pedidos
+    WHERE deleted_at IS NULL AND via IS NOT NULL AND via != ''
+    GROUP BY via ORDER BY total DESC
+")->fetchAll(PDO::FETCH_ASSOC);
+$vias_grouped = [];
+foreach ($raw_vias as $v) {
+    $canal = parsearVia($v['via'])['canal'] ?: 'Otro';
+    $vias_grouped[$canal] = ($vias_grouped[$canal] ?? 0) + (int)$v['total'];
+}
+arsort($vias_grouped);
 
 // ── Alertas urgentes (atrasados > 7 días) ──
-$stmt = $pdo->prepare("
+$alertas = $pdo->prepare("
     SELECT p.id, p.referencia_cliente, p.lc_gafa_recambio, p.fecha_llegada,
            DATEDIFF(:hoy2, p.fecha_llegada) as dias_atraso
     FROM pedidos p
-    WHERE p.recibido = 0
+    WHERE p.recibido IN (0,2) AND p.deleted_at IS NULL
       AND p.fecha_llegada <= DATE_SUB(:hoy3, INTERVAL 7 DAY)
-    ORDER BY dias_atraso DESC
-    LIMIT 10
+    ORDER BY dias_atraso DESC LIMIT 10
 ");
-$stmt->execute([':hoy2' => $fecha_hoy, ':hoy3' => $fecha_hoy]);
-$alertas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$alertas->execute([':hoy2'=>$fecha_hoy, ':hoy3'=>$fecha_hoy]);
+$alertas = $alertas->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="mb-0 section-title">
-            <i class="fas fa-chart-line"></i> Estadísticas
+            <i class="fas fa-chart-line text-primary"></i> Estadísticas
         </h1>
     </div>
 
-    <!-- ══ KPIs ══ -->
+    <!-- KPIs -->
     <div class="row g-3 mb-4">
         <div class="col-6 col-md-4 col-xl-2">
             <div class="kpi-card kpi-warning">
                 <div class="kpi-icon"><i class="fas fa-clock"></i></div>
-                <div class="kpi-body">
-                    <div class="kpi-value"><?= $kpi['pendientes'] ?></div>
-                    <div class="kpi-label">Sin Pedir</div>
-                </div>
+                <div><div class="kpi-value"><?= $kpi['pendientes'] ?></div><div class="kpi-label">Sin Pedir</div></div>
             </div>
         </div>
         <div class="col-6 col-md-4 col-xl-2">
             <div class="kpi-card kpi-danger">
                 <div class="kpi-icon"><i class="fas fa-exclamation-triangle"></i></div>
-                <div class="kpi-body">
-                    <div class="kpi-value"><?= $kpi['atrasados'] ?></div>
-                    <div class="kpi-label">Atrasados</div>
-                </div>
+                <div><div class="kpi-value"><?= $kpi['atrasados'] ?></div><div class="kpi-label">Atrasados</div></div>
             </div>
         </div>
         <div class="col-6 col-md-4 col-xl-2">
             <div class="kpi-card kpi-info">
                 <div class="kpi-icon"><i class="fas fa-truck"></i></div>
-                <div class="kpi-body">
-                    <div class="kpi-value"><?= $kpi['en_camino'] ?></div>
-                    <div class="kpi-label">En Camino</div>
-                </div>
+                <div><div class="kpi-value"><?= $kpi['en_camino'] ?></div><div class="kpi-label">En Camino</div></div>
             </div>
         </div>
         <div class="col-6 col-md-4 col-xl-2">
             <div class="kpi-card kpi-success">
                 <div class="kpi-icon"><i class="fas fa-check-circle"></i></div>
-                <div class="kpi-body">
-                    <div class="kpi-value"><?= $kpi['finalizados_hoy'] ?></div>
-                    <div class="kpi-label">Finalizados Hoy</div>
-                </div>
+                <div><div class="kpi-value"><?= $kpi['finalizados_hoy'] ?></div><div class="kpi-label">Finalizados Hoy</div></div>
             </div>
         </div>
         <div class="col-6 col-md-4 col-xl-2">
             <div class="kpi-card kpi-info">
-                <div class="kpi-icon"><i class="fas fa-shipping-fast"></i></div>
-                <div class="kpi-body">
-                    <div class="kpi-value"><?= $kpi['tiempo_medio'] ?><small>d</small></div>
-                    <div class="kpi-label">Entrega Media</div>
-                </div>
+                <div class="kpi-icon"><i class="fas fa-tachometer-alt"></i></div>
+                <div><div class="kpi-value"><?= $kpi['tiempo_medio'] ?><small> d</small></div><div class="kpi-label">Entrega Media</div></div>
             </div>
         </div>
         <div class="col-6 col-md-4 col-xl-2">
-            <div class="kpi-card kpi-info">
-                <div class="kpi-icon"><i class="fas fa-users"></i></div>
-                <div class="kpi-body">
-                    <div class="kpi-value"><?= $kpi['total_clientes'] ?></div>
-                    <div class="kpi-label">Clientes</div>
-                </div>
+            <div class="kpi-card" style="border-left-color:#94a3b8">
+                <div class="kpi-icon" style="background:#f1f5f9;color:#94a3b8"><i class="fas fa-ban"></i></div>
+                <div><div class="kpi-value" style="color:#94a3b8"><?= $kpi['cancelados'] ?></div><div class="kpi-label">Cancelados</div></div>
             </div>
         </div>
     </div>
 
     <?php if (!empty($alertas)): ?>
-    <!-- ══ ALERTAS URGENTES ══ -->
-    <div class="modern-card alert-urgent mb-4" style="border-left:5px solid var(--danger-color)">
-        <h5 class="text-danger mb-3"><i class="fas fa-fire me-2"></i>Alertas — Atrasados más de 7 días</h5>
+    <div class="modern-card mb-4" style="border-top:3px solid var(--danger)">
+        <h5 class="mb-3 section-title" style="color:var(--danger)">
+            <i class="fas fa-fire"></i> Atrasados más de 7 días
+        </h5>
         <div class="table-responsive">
             <table class="table table-sm mb-0">
-                <thead><tr><th>ID</th><th>Cliente</th><th>Producto</th><th>F. Llegada</th><th>Días</th></tr></thead>
+                <thead><tr><th>Cliente</th><th>Producto</th><th>F. Llegada prevista</th><th>Días retraso</th><th></th></tr></thead>
                 <tbody>
                 <?php foreach($alertas as $a): ?>
                 <tr>
-                    <td><strong>#<?= $a['id'] ?></strong></td>
-                    <td><?= htmlspecialchars($a['referencia_cliente']) ?></td>
+                    <td class="fw-bold"><?= htmlspecialchars($a['referencia_cliente']) ?></td>
                     <td><?= htmlspecialchars($a['lc_gafa_recambio']) ?></td>
-                    <td><?= $a['fecha_llegada'] ?></td>
+                    <td class="font-monospace small"><?= $a['fecha_llegada'] ?></td>
                     <td><span class="badge bg-danger"><?= $a['dias_atraso'] ?>d</span></td>
+                    <td><a href="../controllers/editar_pedido.php?id=<?= $a['id'] ?>" class="btn btn-edit-icon"><i class="fas fa-pen-to-square"></i></a></td>
                 </tr>
                 <?php endforeach; ?>
                 </tbody>
@@ -215,131 +205,148 @@ $alertas = $stmt->fetchAll(PDO::FETCH_ASSOC);
     </div>
     <?php endif; ?>
 
-    <div class="row g-4">
-        <!-- ══ GRÁFICO ACTIVIDAD 14 DÍAS ══ -->
+    <div class="row g-4 mb-4">
+        <!-- Actividad 14 días -->
         <div class="col-lg-8">
             <div class="modern-card h-100">
-                <h5 class="text-dark mb-3 section-title"><i class="fas fa-chart-bar text-primary"></i> Actividad (Últimos 14 días)</h5>
-                <div style="height:280px; position:relative">
-                    <canvas id="chartSemanal"></canvas>
-                </div>
+                <h5 class="section-title mb-3"><i class="fas fa-chart-bar text-primary"></i> Actividad — Últimos 14 días</h5>
+                <div style="height:260px;position:relative"><canvas id="chartSemanal"></canvas></div>
             </div>
         </div>
-
-        <!-- ══ TOP CLIENTES ══ -->
+        <!-- Top clientes -->
         <div class="col-lg-4">
             <div class="modern-card h-100">
-                <h5 class="text-dark mb-3 section-title"><i class="fas fa-trophy text-warning"></i> Top Clientes</h5>
+                <h5 class="section-title mb-3"><i class="fas fa-trophy text-warning"></i> Top Clientes</h5>
                 <?php foreach($top_clientes as $i => $tc): ?>
-                <div class="d-flex justify-content-between align-items-center py-2 <?= $i > 0 ? 'border-top' : '' ?>">
-                    <div>
-                        <span class="badge bg-primary rounded-pill me-2"><?= $i+1 ?></span>
-                        <span class="fw-bold"><?= htmlspecialchars($tc['referencia_cliente']) ?></span>
+                <?php $pct = $top_clientes[0]['total'] > 0 ? round($tc['total']/$top_clientes[0]['total']*100) : 0; ?>
+                <div class="mb-2">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="small fw-600"><?= htmlspecialchars($tc['referencia_cliente']) ?></span>
+                        <span class="small text-muted"><?= $tc['total'] ?> ped.</span>
                     </div>
-                    <span class="badge bg-light text-dark"><?= $tc['total'] ?> pedidos</span>
+                    <div class="progress" style="height:6px;border-radius:3px">
+                        <div class="progress-bar" style="width:<?= $pct ?>%;background:var(--primary)"></div>
+                    </div>
                 </div>
                 <?php endforeach; ?>
             </div>
         </div>
     </div>
 
-    <div class="row g-4 mt-1">
-        <!-- ══ GRÁFICO MENSUAL ══ -->
+    <div class="row g-4 mb-4">
+        <!-- Evolución mensual -->
         <div class="col-lg-8">
             <div class="modern-card h-100">
-                <h5 class="text-dark mb-3 section-title"><i class="fas fa-chart-area text-success"></i> Evolución Mensual</h5>
-                <div style="height:250px; position:relative">
-                    <canvas id="chartMensual"></canvas>
+                <h5 class="section-title mb-3"><i class="fas fa-chart-area text-success"></i> Evolución Mensual</h5>
+                <div style="height:240px;position:relative"><canvas id="chartMensual"></canvas></div>
+            </div>
+        </div>
+        <!-- Vías -->
+        <div class="col-lg-4">
+            <div class="modern-card h-100">
+                <h5 class="section-title mb-3"><i class="fas fa-route text-info"></i> Canal de Pedido</h5>
+                <div style="height:240px;position:relative"><canvas id="chartVias"></canvas></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Top productos -->
+        <div class="col-lg-6">
+            <div class="modern-card h-100">
+                <h5 class="section-title mb-3"><i class="fas fa-glasses text-indigo"></i> Productos más pedidos</h5>
+                <?php if (empty($top_productos)): ?>
+                    <p class="text-muted small">Sin datos</p>
+                <?php else: ?>
+                <?php foreach($top_productos as $i => $tp): ?>
+                <?php $pct = $top_productos[0]['total'] > 0 ? round($tp['total']/$top_productos[0]['total']*100) : 0; ?>
+                <div class="mb-2">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="small fw-600 text-truncate" style="max-width:70%"><?= htmlspecialchars($tp['lc_gafa_recambio']) ?></span>
+                        <span class="small text-muted"><?= $tp['total'] ?>×</span>
+                    </div>
+                    <div class="progress" style="height:5px;border-radius:3px">
+                        <div class="progress-bar" style="width:<?= $pct ?>%;background:var(--indigo)"></div>
+                    </div>
                 </div>
+                <?php endforeach; ?>
+                <?php endif; ?>
             </div>
         </div>
 
-        <!-- ══ TOP VÍAS ══ -->
-        <div class="col-lg-4">
+        <!-- Tiempo por proveedor -->
+        <div class="col-lg-6">
             <div class="modern-card h-100">
-                <h5 class="text-dark mb-3 section-title"><i class="fas fa-route text-info"></i> Vías de Pedido</h5>
-                <div style="height:250px; position:relative">
-                    <canvas id="chartVias"></canvas>
+                <h5 class="section-title mb-3"><i class="fas fa-stopwatch text-success"></i> Tiempo medio por proveedor</h5>
+                <?php if (empty($prov_timing)): ?>
+                    <p class="text-muted small">Sin datos suficientes</p>
+                <?php else: ?>
+                <?php $max_dias = max(array_column($prov_timing, 'media_dias')); ?>
+                <?php foreach($prov_timing as $pt): ?>
+                <?php $pct = $max_dias > 0 ? round($pt['media_dias']/$max_dias*100) : 0; ?>
+                <?php $color = $pt['media_dias'] <= 5 ? 'var(--success)' : ($pt['media_dias'] <= 10 ? 'var(--warning)' : 'var(--danger)'); ?>
+                <div class="mb-2">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="small fw-600"><?= htmlspecialchars($pt['nombre']) ?></span>
+                        <span class="small fw-bold" style="color:<?= $color ?>"><?= $pt['media_dias'] ?>d <span class="text-muted fw-normal">(<?= $pt['total_pedidos'] ?> ped.)</span></span>
+                    </div>
+                    <div class="progress" style="height:5px;border-radius:3px">
+                        <div class="progress-bar" style="width:<?= $pct ?>%;background:<?= $color ?>"></div>
+                    </div>
                 </div>
+                <?php endforeach; ?>
+                <?php endif; ?>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script>
-// Actividad 14 días
-new Chart(document.getElementById('chartSemanal').getContext('2d'), {
+const chartDefaults = {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+};
+
+new Chart(document.getElementById('chartSemanal'), {
     type: 'bar',
     data: {
         labels: <?= json_encode($chart_labels) ?>,
-        datasets: [{
-            label: 'Pedidos',
-            data: <?= json_encode($chart_values) ?>,
-            backgroundColor: 'rgba(90,103,216,0.5)',
-            borderColor: 'rgba(90,103,216,1)',
-            borderWidth: 2,
-            borderRadius: 6,
-            barPercentage: 0.6
-        }]
+        datasets: [{ label: 'Pedidos', data: <?= json_encode($chart_values) ?>,
+            backgroundColor: 'rgba(37,99,235,.18)', borderColor: 'rgba(37,99,235,.8)',
+            borderWidth: 2, borderRadius: 6, barPercentage: 0.65 }]
     },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-            y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } },
-            x: { grid: { display: false }, ticks: { maxRotation: 45 } }
-        }
-    }
+    options: { ...chartDefaults, scales: {
+        y: { beginAtZero:true, ticks:{stepSize:1,precision:0}, grid:{color:'rgba(0,0,0,.04)'} },
+        x: { grid:{display:false}, ticks:{maxRotation:40,font:{size:11}} }
+    }}
 });
 
-// Evolución mensual
-new Chart(document.getElementById('chartMensual').getContext('2d'), {
+new Chart(document.getElementById('chartMensual'), {
     type: 'line',
     data: {
         labels: <?= json_encode($monthly_labels) ?>,
-        datasets: [{
-            label: 'Pedidos/mes',
-            data: <?= json_encode($monthly_values) ?>,
-            borderColor: '#48bb78',
-            backgroundColor: 'rgba(72,187,120,0.1)',
-            borderWidth: 3,
-            fill: true,
-            tension: 0.4,
-            pointRadius: 5,
-            pointBackgroundColor: '#48bb78'
-        }]
+        datasets: [{ label: 'Pedidos', data: <?= json_encode($monthly_values) ?>,
+            borderColor: '#059669', backgroundColor: 'rgba(5,150,105,.08)',
+            borderWidth: 2.5, fill:true, tension:0.4, pointRadius:5,
+            pointBackgroundColor:'#059669', pointBorderColor:'#fff', pointBorderWidth:2 }]
     },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-            y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } },
-            x: { grid: { display: false } }
-        }
-    }
+    options: { ...chartDefaults, scales: {
+        y: { beginAtZero:true, ticks:{stepSize:1,precision:0}, grid:{color:'rgba(0,0,0,.04)'} },
+        x: { grid:{display:false} }
+    }}
 });
 
-// Vías doughnut
-new Chart(document.getElementById('chartVias').getContext('2d'), {
+new Chart(document.getElementById('chartVias'), {
     type: 'doughnut',
     data: {
-        labels: <?= json_encode(array_column($top_vias, 'via')) ?>,
-        datasets: [{
-            data: <?= json_encode(array_column($top_vias, 'total')) ?>,
-            backgroundColor: ['#5a67d8','#48bb78','#ecc94b','#f56565','#4299e1'],
-            borderWidth: 0
-        }]
+        labels: <?= json_encode(array_keys($vias_grouped)) ?>,
+        datasets: [{ data: <?= json_encode(array_values($vias_grouped)) ?>,
+            backgroundColor: ['#2563eb','#059669','#d97706','#dc2626','#0891b2','#6366f1'],
+            borderWidth: 0, hoverOffset: 6 }]
     },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: { position: 'bottom', labels: { padding: 15, usePointStyle: true } }
-        }
+    options: { ...chartDefaults,
+        plugins: { legend: { display:true, position:'bottom', labels:{padding:12,usePointStyle:true,font:{size:11}} } }
     }
 });
 </script>
