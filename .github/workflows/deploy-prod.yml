@@ -14,6 +14,7 @@ jobs:
   deploy-prod:
     runs-on: ubuntu-latest
     environment: production
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -47,10 +48,15 @@ jobs:
           test -n "$FTP_USER"
           test -n "$FTP_PASS"
           test -n "$FTP_DIR"
-          lftp "$FTP_HOST" <<EOF
+          FTP_HOST_CLEAN="${FTP_HOST#ftp://}"
+          lftp <<EOF
+          set net:timeout 20
+          set net:max-retries 2
+          set net:reconnect-interval-base 5
           set ftp:ssl-allow true
+          set ftp:passive-mode true
           set ssl:verify-certificate no
-          user "$FTP_USER" "$FTP_PASS"
+          open -p 21 -u "$FTP_USER","$FTP_PASS" "$FTP_HOST_CLEAN"
           mkdir -p "$FTP_DIR"
           mirror -R --verbose --parallel=4 deploy/dist/release "$FTP_DIR"
           bye
