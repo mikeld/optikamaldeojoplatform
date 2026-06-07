@@ -4,7 +4,7 @@ require '../includes/conexion.php';
 require '../includes/backup.php';
 
 try {
-    if (($_SESSION['usuario_rol'] ?? '') !== 'admin') {
+    if (!Auth::esAdmin()) {
         http_response_code(403);
         echo 'No autorizado';
         exit;

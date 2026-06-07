@@ -2,6 +2,8 @@
 require '../includes/auth.php';
 require '../includes/conexion.php';
 
+Auth::verificarRoles(Auth::ROL_ADMIN, 'listado_pedidos.php');
+
 $acciones_navbar = [
   ['nombre'=>'Listado Pedidos',   'url'=>'listado_pedidos.php',    'icono'=>'bi-list'],
   ['nombre'=>'Nuevo Pedido',      'url'=>'formulario_pedidos.php', 'icono'=>'bi-file-earmark-plus'],
@@ -9,11 +11,6 @@ $acciones_navbar = [
   ['nombre'=>'Listado Clientes',  'url'=>'listado_usuarios.php',   'icono'=>'bi-people']
 ];
 require_once 'header.php';
-
-if ($_SESSION['usuario_rol'] !== 'admin') {
-    header('Location: listado_pedidos.php');
-    exit();
-}
 
 $conexion = new Conexion();
 $tipos = [

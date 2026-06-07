@@ -2,11 +2,7 @@
 require '../includes/auth.php';
 require '../includes/conexion.php';
 
-if (($_SESSION['usuario_rol'] ?? '') !== 'admin') {
-    http_response_code(403);
-    echo 'No autorizado';
-    exit;
-}
+Auth::verificarRoles(Auth::ROL_ADMIN);
 
 $db_actual = '';
 try {

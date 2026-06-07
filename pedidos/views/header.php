@@ -5,9 +5,11 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+require_once __DIR__ . '/../includes/auth_class.php';
 
 // Garantizar que $acciones_navbar está definido
-$is_admin = ($_SESSION['usuario_rol'] ?? '') === 'admin';
+$is_admin = Auth::esAdmin();
+$can_manage = Auth::puedeGestionar();
 $acciones_navbar = $acciones_navbar ?? [];
 $breadcrumbs = $breadcrumbs ?? [];
 $app_base_path = str_starts_with($_SERVER['SCRIPT_NAME'] ?? '', '/test/') ? '/test' : '';
@@ -104,7 +106,7 @@ $app_base_path = str_starts_with($_SERVER['SCRIPT_NAME'] ?? '', '/test/') ? '/te
             </li>
           <?php endif; ?>
 
-          <?php if ($_SESSION['usuario_rol'] !== 'empleado'): ?>
+          <?php if ($can_manage): ?>
             <li class="nav-item">
                 <a class="btn btn-nav-modern portal-link" href="../../home.php">
                 <i class="bi bi-grid-fill"></i>

@@ -17,7 +17,7 @@ try {
         redirigir_resultado('', 'Método no permitido.');
     }
 
-    if (($_SESSION['usuario_rol'] ?? '') !== 'admin') {
+    if (!Auth::esAdmin()) {
         redirigir_resultado('', 'No autorizado.');
     }
 

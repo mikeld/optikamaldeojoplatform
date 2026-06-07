@@ -6,6 +6,9 @@
 
 class Auth {
     private $pdo;
+    public const ROL_EMPLEADO = 'empleado';
+    public const ROL_ENCARGADO = 'encargado';
+    public const ROL_ADMIN = 'admin';
     
     public function __construct($pdo) {
         $this->pdo = $pdo;
@@ -17,13 +20,26 @@ class Auth {
     public static function estaAutenticado() {
         return isset($_SESSION['usuario_id']) && !empty($_SESSION['usuario_id']);
     }
+
+    public static function basePath() {
+        $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
+        return str_starts_with($scriptName, '/test/') ? '/test' : '';
+    }
+
+    public static function loginUrl() {
+        return self::basePath() . '/index.php';
+    }
+
+    public static function homeUrl() {
+        return self::basePath() . '/home.php';
+    }
     
     /**
      * Verifica que el usuario esté autenticado, sino redirige al login
      */
     public static function verificarSesion() {
         if (!self::estaAutenticado()) {
-            header('Location: /index.php');
+            header('Location: ' . self::loginUrl());
             exit();
         }
     }
@@ -42,6 +58,54 @@ class Auth {
             'email' => $_SESSION['usuario_email'] ?? '',
             'rol' => $_SESSION['usuario_rol'] ?? 'usuario'
         ];
+    }
+
+    public static function rolActual() {
+        return $_SESSION['usuario_rol'] ?? null;
+    }
+
+    public static function tieneRol($roles) {
+        if (!self::estaAutenticado()) {
+            return false;
+        }
+
+        $roles = is_array($roles) ? $roles : [$roles];
+        return in_array(self::rolActual(), $roles, true);
+    }
+
+    public static function esAdmin() {
+        return self::tieneRol(self::ROL_ADMIN);
+    }
+
+    public static function puedeGestionar() {
+        return self::tieneRol([self::ROL_ADMIN, self::ROL_ENCARGADO]);
+    }
+
+    public static function puedeAccederFacturas() {
+        return self::puedeGestionar();
+    }
+
+    public static function verificarRoles($roles, $redirect = null) {
+        self::verificarSesion();
+
+        if (!self::tieneRol($roles)) {
+            header('Location: ' . ($redirect ?? self::homeUrl()));
+            exit();
+        }
+    }
+
+    public static function verificarRolesJson($roles) {
+        if (!self::estaAutenticado()) {
+            http_response_code(401);
+            echo json_encode(['error' => 'No autenticado']);
+            exit();
+        }
+
+        if (!self::tieneRol($roles)) {
+            http_response_code(403);
+            echo json_encode(['error' => 'No tienes permisos para acceder a este recurso']);
+            exit();
+        }
     }
     
     /**

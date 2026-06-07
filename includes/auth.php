@@ -1,12 +1,13 @@
 <?php
-session_start();
-
-// Comprobar si el usuario no está autenticado
-if (!isset($_SESSION['usuario_id'])) {
-    header('Location: index.php');
-    exit();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
 }
+require_once __DIR__ . '/auth_class.php';
 
-$is_admin = $_SESSION['usuario_rol'] === 'admin';
+Auth::verificarSesion();
+
+$usuario_actual = Auth::usuarioActual();
+$is_admin = Auth::esAdmin();
+$can_manage = Auth::puedeGestionar();
 
 ?>
