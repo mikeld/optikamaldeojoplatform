@@ -48,7 +48,10 @@ jobs:
           test -n "$FTP_USER"
           test -n "$FTP_PASS"
           test -n "$FTP_DIR"
-          FTP_HOST_CLEAN="${FTP_HOST#ftp://}"
+          FTP_HOST_CLEAN="$(printf '%s' "${FTP_HOST#ftp://}" | tr -d '\r\n')"
+          FTP_USER_CLEAN="$(printf '%s' "$FTP_USER" | tr -d '\r\n')"
+          FTP_PASS_CLEAN="$(printf '%s' "$FTP_PASS" | tr -d '\r\n')"
+          FTP_DIR_CLEAN="$(printf '%s' "$FTP_DIR" | tr -d '\r\n')"
           lftp <<EOF
           set net:timeout 20
           set net:max-retries 2
@@ -56,8 +59,8 @@ jobs:
           set ftp:ssl-allow true
           set ftp:passive-mode true
           set ssl:verify-certificate no
-          open -p 21 -u "$FTP_USER","$FTP_PASS" "$FTP_HOST_CLEAN"
-          mkdir -p "$FTP_DIR"
-          mirror -R --verbose --parallel=4 deploy/dist/release "$FTP_DIR"
+          open -p 21 -u "$FTP_USER_CLEAN","$FTP_PASS_CLEAN" "$FTP_HOST_CLEAN"
+          mkdir -p "$FTP_DIR_CLEAN"
+          mirror -R --verbose --parallel=4 deploy/dist/release "$FTP_DIR_CLEAN"
           bye
           EOF
