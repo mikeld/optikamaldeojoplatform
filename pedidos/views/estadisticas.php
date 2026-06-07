@@ -25,8 +25,17 @@ $kpi['pendientes'] = (int)$r->fetchColumn();
 $r = $pdo->prepare("SELECT COUNT(*) FROM pedidos WHERE recibido IN (0,2) AND fecha_llegada <= :hoy AND deleted_at IS NULL");
 $r->execute([':hoy'=>$fecha_hoy]); $kpi['atrasados'] = (int)$r->fetchColumn();
 
-$r = $pdo->prepare("SELECT COUNT(*) FROM pedidos WHERE recibido IN (0,2) AND fecha_pedido IS NOT NULL AND (fecha_llegada IS NULL OR fecha_llegada > :hoy) AND deleted_at IS NULL");
+$r = $pdo->prepare("SELECT COUNT(*) FROM pedidos WHERE recibido IN (0,2) AND fecha_pedido IS NOT NULL AND fecha_llegada > :hoy AND deleted_at IS NULL");
 $r->execute([':hoy'=>$fecha_hoy]); $kpi['en_camino'] = (int)$r->fetchColumn();
+
+$r = $pdo->query("SELECT COUNT(*) FROM pedidos WHERE recibido IN (0,2) AND fecha_pedido IS NOT NULL AND fecha_llegada IS NULL AND deleted_at IS NULL");
+$kpi['sin_fecha'] = (int)$r->fetchColumn();
+
+$r = $pdo->query("SELECT COUNT(*) FROM pedidos WHERE recibido = 2 AND deleted_at IS NULL");
+$kpi['parciales'] = (int)$r->fetchColumn();
+
+$r = $pdo->query("SELECT COUNT(*) FROM pedidos WHERE recibido = 1 AND avisado_cliente = 0 AND deleted_at IS NULL");
+$kpi['por_avisar'] = (int)$r->fetchColumn();
 
 $r = $pdo->prepare("SELECT COUNT(*) FROM pedidos WHERE recibido = 1 AND fecha_llegada = :hoy AND deleted_at IS NULL");
 $r->execute([':hoy'=>$fecha_hoy]); $kpi['finalizados_hoy'] = (int)$r->fetchColumn();
@@ -132,6 +141,49 @@ $alertas = $pdo->prepare("
 ");
 $alertas->execute([':hoy2'=>$fecha_hoy, ':hoy3'=>$fecha_hoy]);
 $alertas = $alertas->fetchAll(PDO::FETCH_ASSOC);
+
+// ── Proveedores con más pedidos atrasados activos ──
+$proveedores_atrasados = $pdo->prepare("
+    SELECT COALESCE(pv.nombre, 'Sin proveedor') as nombre,
+           COUNT(*) as total_atrasados,
+           MAX(DATEDIFF(:hoy, p.fecha_llegada)) as max_dias_atraso
+    FROM pedidos p
+    LEFT JOIN proveedores pv ON p.proveedor_id = pv.id
+    WHERE p.recibido IN (0,2)
+      AND p.deleted_at IS NULL
+      AND p.fecha_llegada IS NOT NULL
+      AND p.fecha_llegada <= :hoy2
+    GROUP BY pv.id, pv.nombre
+    ORDER BY total_atrasados DESC, max_dias_atraso DESC
+    LIMIT 6
+");
+$proveedores_atrasados->execute([':hoy'=>$fecha_hoy, ':hoy2'=>$fecha_hoy]);
+$proveedores_atrasados = $proveedores_atrasados->fetchAll(PDO::FETCH_ASSOC);
+
+// ── Pedidos sin fecha prevista ──
+$pedidos_sin_fecha = $pdo->query("
+    SELECT p.id, p.referencia_cliente, p.lc_gafa_recambio, p.fecha_pedido,
+           COALESCE(pv.nombre, 'Sin proveedor') as proveedor
+    FROM pedidos p
+    LEFT JOIN proveedores pv ON p.proveedor_id = pv.id
+    WHERE p.recibido IN (0,2)
+      AND p.deleted_at IS NULL
+      AND p.fecha_pedido IS NOT NULL
+      AND p.fecha_llegada IS NULL
+    ORDER BY p.fecha_pedido ASC, p.id ASC
+    LIMIT 10
+")->fetchAll(PDO::FETCH_ASSOC);
+
+// ── Clientes con pedido finalizado pendiente de aviso ──
+$clientes_por_avisar = $pdo->query("
+    SELECT p.id, p.referencia_cliente, p.lc_gafa_recambio, p.fecha_llegada
+    FROM pedidos p
+    WHERE p.recibido = 1
+      AND p.avisado_cliente = 0
+      AND p.deleted_at IS NULL
+    ORDER BY COALESCE(p.fecha_llegada, p.fecha_pedido) DESC, p.id DESC
+    LIMIT 10
+")->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 <div class="container-fluid py-4">
@@ -143,40 +195,125 @@ $alertas = $alertas->fetchAll(PDO::FETCH_ASSOC);
 
     <!-- KPIs -->
     <div class="row g-3 mb-4">
-        <div class="col-6 col-md-4 col-xl-2">
+        <div class="col-6 col-md-3 col-xl-2">
             <div class="kpi-card kpi-warning">
                 <div class="kpi-icon"><i class="fas fa-clock"></i></div>
                 <div><div class="kpi-value"><?= $kpi['pendientes'] ?></div><div class="kpi-label">Sin Pedir</div></div>
             </div>
         </div>
-        <div class="col-6 col-md-4 col-xl-2">
+        <div class="col-6 col-md-3 col-xl-2">
             <div class="kpi-card kpi-danger">
                 <div class="kpi-icon"><i class="fas fa-exclamation-triangle"></i></div>
                 <div><div class="kpi-value"><?= $kpi['atrasados'] ?></div><div class="kpi-label">Atrasados</div></div>
             </div>
         </div>
-        <div class="col-6 col-md-4 col-xl-2">
+        <div class="col-6 col-md-3 col-xl-2">
             <div class="kpi-card kpi-info">
                 <div class="kpi-icon"><i class="fas fa-truck"></i></div>
                 <div><div class="kpi-value"><?= $kpi['en_camino'] ?></div><div class="kpi-label">En Camino</div></div>
             </div>
         </div>
-        <div class="col-6 col-md-4 col-xl-2">
+        <div class="col-6 col-md-3 col-xl-2">
+            <div class="kpi-card kpi-warning">
+                <div class="kpi-icon"><i class="fas fa-calendar-xmark"></i></div>
+                <div><div class="kpi-value"><?= $kpi['sin_fecha'] ?></div><div class="kpi-label">Sin Fecha</div></div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-xl-2">
             <div class="kpi-card kpi-success">
                 <div class="kpi-icon"><i class="fas fa-check-circle"></i></div>
                 <div><div class="kpi-value"><?= $kpi['finalizados_hoy'] ?></div><div class="kpi-label">Finalizados Hoy</div></div>
             </div>
         </div>
-        <div class="col-6 col-md-4 col-xl-2">
+        <div class="col-6 col-md-3 col-xl-2">
             <div class="kpi-card kpi-info">
                 <div class="kpi-icon"><i class="fas fa-tachometer-alt"></i></div>
                 <div><div class="kpi-value"><?= $kpi['tiempo_medio'] ?><small> d</small></div><div class="kpi-label">Entrega Media</div></div>
             </div>
         </div>
-        <div class="col-6 col-md-4 col-xl-2">
+        <div class="col-6 col-md-3 col-xl-2">
+            <div class="kpi-card kpi-warning">
+                <div class="kpi-icon"><i class="fas fa-box-open"></i></div>
+                <div><div class="kpi-value"><?= $kpi['parciales'] ?></div><div class="kpi-label">Parciales</div></div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-xl-2">
+            <div class="kpi-card kpi-success">
+                <div class="kpi-icon"><i class="fas fa-phone-volume"></i></div>
+                <div><div class="kpi-value"><?= $kpi['por_avisar'] ?></div><div class="kpi-label">Por Avisar</div></div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-xl-2">
             <div class="kpi-card" style="border-left-color:#94a3b8">
                 <div class="kpi-icon" style="background:#f1f5f9;color:#94a3b8"><i class="fas fa-ban"></i></div>
                 <div><div class="kpi-value" style="color:#94a3b8"><?= $kpi['cancelados'] ?></div><div class="kpi-label">Cancelados</div></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-lg-4">
+            <div class="modern-card h-100" style="border-top:3px solid var(--danger)">
+                <h5 class="section-title mb-3" style="color:var(--danger)">
+                    <i class="fas fa-building-circle-exclamation"></i> Proveedores con atrasos
+                </h5>
+                <?php if (empty($proveedores_atrasados)): ?>
+                    <p class="text-muted small mb-0">Sin atrasos activos por proveedor.</p>
+                <?php else: ?>
+                    <?php foreach ($proveedores_atrasados as $pa): ?>
+                    <div class="d-flex justify-content-between align-items-center border-bottom py-2">
+                        <div class="fw-bold small text-truncate pe-2"><?= htmlspecialchars($pa['nombre']) ?></div>
+                        <div class="text-end">
+                            <span class="badge bg-danger"><?= (int)$pa['total_atrasados'] ?></span>
+                            <span class="small text-muted ms-1">máx <?= (int)$pa['max_dias_atraso'] ?>d</span>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="modern-card h-100" style="border-top:3px solid var(--warning)">
+                <h5 class="section-title mb-3" style="color:var(--warning)">
+                    <i class="fas fa-calendar-xmark"></i> Sin fecha prevista
+                </h5>
+                <?php if (empty($pedidos_sin_fecha)): ?>
+                    <p class="text-muted small mb-0">No hay pedidos sin fecha prevista.</p>
+                <?php else: ?>
+                    <?php foreach ($pedidos_sin_fecha as $sf): ?>
+                    <div class="d-flex justify-content-between align-items-center border-bottom py-2">
+                        <div class="pe-2">
+                            <div class="fw-bold small"><?= htmlspecialchars($sf['referencia_cliente']) ?></div>
+                            <div class="text-muted small text-truncate" style="max-width:220px;"><?= htmlspecialchars($sf['lc_gafa_recambio']) ?></div>
+                            <div class="text-muted small"><?= htmlspecialchars($sf['proveedor']) ?></div>
+                        </div>
+                        <a href="../controllers/editar_pedido.php?id=<?= (int)$sf['id'] ?>" class="btn btn-edit-icon"><i class="fas fa-pen-to-square"></i></a>
+                    </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="modern-card h-100" style="border-top:3px solid var(--success)">
+                <h5 class="section-title mb-3" style="color:var(--success)">
+                    <i class="fas fa-phone-volume"></i> Clientes por avisar
+                </h5>
+                <?php if (empty($clientes_por_avisar)): ?>
+                    <p class="text-muted small mb-0">No hay clientes pendientes de aviso.</p>
+                <?php else: ?>
+                    <?php foreach ($clientes_por_avisar as $ca): ?>
+                    <div class="d-flex justify-content-between align-items-center border-bottom py-2">
+                        <div class="pe-2">
+                            <div class="fw-bold small"><?= htmlspecialchars($ca['referencia_cliente']) ?></div>
+                            <div class="text-muted small text-truncate" style="max-width:220px;"><?= htmlspecialchars($ca['lc_gafa_recambio']) ?></div>
+                            <div class="font-monospace small text-muted"><?= htmlspecialchars($ca['fecha_llegada'] ?? '-') ?></div>
+                        </div>
+                        <a href="../controllers/editar_pedido.php?id=<?= (int)$ca['id'] ?>" class="btn btn-edit-icon"><i class="fas fa-pen-to-square"></i></a>
+                    </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
             </div>
         </div>
     </div>
