@@ -49,6 +49,7 @@ function getTableParams($prefix, $default_sort = 'id') {
 
 $p_pedir      = getTableParams('pedir_');
 $p_atrasados  = getTableParams('atrasados_');
+$p_sin_fecha  = getTableParams('sinfecha_');
 $p_pendientes = getTableParams('pendientes_');
 $p_recibidos  = getTableParams('recibidos_');
 
@@ -94,7 +95,25 @@ if ($p_atrasados['filter']) {
 $stmt->execute();
 $pedidos_atrasados = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// 3) Pedidos Pendientes de Recibir (fecha_llegada > hoy) — sin límite
+// 3) Pedidos pedidos al proveedor pero sin fecha prevista de llegada
+$stmt = $pdo->prepare("
+    SELECT p.*, c.telefono, c.email
+    FROM pedidos p
+    JOIN clientes c ON p.referencia_cliente = c.referencia
+    WHERE p.recibido IN (0, 2)
+      AND p.fecha_pedido IS NOT NULL
+      AND p.fecha_llegada IS NULL
+      AND p.deleted_at IS NULL
+      {$p_sin_fecha['cond']}
+    ORDER BY {$p_sin_fecha['sort']} {$p_sin_fecha['dir']}
+");
+if ($p_sin_fecha['filter']) {
+    $stmt->bindValue(':filtro_sinfecha_', "%{$p_sin_fecha['filter']}%", PDO::PARAM_STR);
+}
+$stmt->execute();
+$pedidos_sin_fecha = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// 4) Pedidos Pendientes de Recibir (fecha_llegada > hoy) — sin límite
 $stmt = $pdo->prepare("
     SELECT p.*, c.telefono, c.email
     FROM pedidos p
@@ -112,7 +131,7 @@ if ($p_pendientes['filter']) {
 $stmt->execute();
 $pedidos_pendientes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// 4) Pedidos Recibidos — filtrados por rango de fechas (fecha_llegada o fecha_pedido)
+// 5) Pedidos Recibidos — filtrados por rango de fechas (fecha_llegada o fecha_pedido)
 $stmt = $pdo->prepare("
     SELECT p.*, c.telefono, c.email
     FROM pedidos p
@@ -137,7 +156,7 @@ $pedidos_recibidos = $stmt->fetchAll(PDO::FETCH_ASSOC);
 // Total histórico de finalizados (para informar al usuario cuántos hay fuera del rango)
 $total_recibidos_historico = (int)$pdo->query("SELECT COUNT(*) FROM pedidos WHERE recibido = 1 AND deleted_at IS NULL")->fetchColumn();
 
-// 5) Cancelados recientes (últimos 90 días)
+// 6) Cancelados recientes (últimos 90 días)
 $cancelados_stmt = $pdo->query("
     SELECT p.*, c.telefono, c.email
     FROM pedidos p
@@ -152,9 +171,19 @@ $pedidos_cancelados = $cancelados_stmt->fetchAll(PDO::FETCH_ASSOC);
 // Contadores para badges
 $n_pedir      = count($pedidos_por_pedir);
 $n_atrasados  = count($pedidos_atrasados);
+$n_sin_fecha  = count($pedidos_sin_fecha);
 $n_pendientes = count($pedidos_pendientes);
 $n_recibidos  = count($pedidos_recibidos);
 $n_cancelados = count($pedidos_cancelados);
+$n_llegan_hoy = count(array_filter($pedidos_atrasados, fn($p) => ($p['fecha_llegada'] ?? '') === $fecha_hoy));
+$n_parciales = count(array_filter(
+    array_merge($pedidos_atrasados, $pedidos_sin_fecha, $pedidos_pendientes),
+    fn($p) => (int)($p['recibido'] ?? 0) === 2
+));
+$n_clientes_por_avisar = count(array_filter(
+    $pedidos_recibidos,
+    fn($p) => empty($p['avisado_cliente'])
+));
 ?>
 
 <div class="container-fluid py-4">
@@ -177,6 +206,7 @@ $n_cancelados = count($pedidos_cancelados);
         <div class="d-flex flex-wrap gap-2">
             <a href="#card-por-pedir"   class="quick-stat quick-stat-warning text-decoration-none" style="color:inherit"><i class="fas fa-clock me-1"></i> Sin pedir: <strong><?= $n_pedir ?></strong></a>
             <a href="#card-atrasados"   class="quick-stat quick-stat-danger  text-decoration-none" style="color:inherit"><?= $n_atrasados > 0 ? '<i class="fas fa-exclamation-triangle me-1"></i>' : '<i class="fas fa-check me-1"></i>' ?> Atrasados: <strong><?= $n_atrasados ?></strong></a>
+            <a href="#card-sin-fecha"   class="quick-stat quick-stat-warning text-decoration-none" style="color:inherit"><i class="fas fa-calendar-xmark me-1"></i> Sin fecha: <strong><?= $n_sin_fecha ?></strong></a>
             <a href="#card-pendientes"  class="quick-stat quick-stat-primary text-decoration-none" style="color:inherit"><i class="fas fa-truck me-1"></i> En camino: <strong><?= $n_pendientes ?></strong></a>
             <a href="#card-finalizados" class="quick-stat quick-stat-success text-decoration-none" style="color:inherit"><i class="fas fa-check-circle me-1"></i> Finalizados: <strong><?= $n_recibidos ?></strong></a>
         </div>
@@ -189,12 +219,48 @@ $n_cancelados = count($pedidos_cancelados);
         </div>
     </div>
 
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <a href="#card-atrasados" class="text-decoration-none">
+                <div class="modern-card h-100 py-3 px-3" style="border-left:4px solid var(--primary);">
+                    <div class="small text-muted fw-bold text-uppercase">Llegan hoy</div>
+                    <div class="fs-3 fw-bold text-primary"><?= $n_llegan_hoy ?></div>
+                </div>
+            </a>
+        </div>
+        <div class="col-6 col-md-3">
+            <a href="#card-sin-fecha" class="text-decoration-none">
+                <div class="modern-card h-100 py-3 px-3" style="border-left:4px solid var(--warning);">
+                    <div class="small text-muted fw-bold text-uppercase">Sin fecha prevista</div>
+                    <div class="fs-3 fw-bold text-warning"><?= $n_sin_fecha ?></div>
+                </div>
+            </a>
+        </div>
+        <div class="col-6 col-md-3">
+            <a href="#card-pendientes" class="text-decoration-none">
+                <div class="modern-card h-100 py-3 px-3" style="border-left:4px solid var(--primary);">
+                    <div class="small text-muted fw-bold text-uppercase">Recepción parcial</div>
+                    <div class="fs-3 fw-bold text-info"><?= $n_parciales ?></div>
+                </div>
+            </a>
+        </div>
+        <div class="col-6 col-md-3">
+            <a href="#card-finalizados" class="text-decoration-none">
+                <div class="modern-card h-100 py-3 px-3" style="border-left:4px solid var(--success);">
+                    <div class="small text-muted fw-bold text-uppercase">Clientes por avisar</div>
+                    <div class="fs-3 fw-bold text-success"><?= $n_clientes_por_avisar ?></div>
+                </div>
+            </a>
+        </div>
+    </div>
+
     <!-- Filtros rápidos -->
     <?php
     // Recoger vías únicas de todos los pedidos activos
     $todas_vias_raw = array_merge(
         array_column($pedidos_por_pedir, 'via'),
         array_column($pedidos_atrasados, 'via'),
+        array_column($pedidos_sin_fecha, 'via'),
         array_column($pedidos_pendientes, 'via')
     );
     $vias_unicas = [];
@@ -209,7 +275,7 @@ $n_cancelados = count($pedidos_cancelados);
     <div class="d-flex flex-wrap gap-2 mb-4" id="filtros-rapidos">
         <span class="small text-muted d-flex align-items-center me-1"><i class="fas fa-filter me-1"></i> Filtrar:</span>
         <button class="btn btn-sm btn-soft-primary filtro-rapido active" data-filtro="">
-            Todos <span class="badge bg-primary ms-1"><?= $n_pedir + $n_atrasados + $n_pendientes ?></span>
+            Todos <span class="badge bg-primary ms-1"><?= $n_pedir + $n_atrasados + $n_sin_fecha + $n_pendientes ?></span>
         </button>
         <button class="btn btn-sm filtro-rapido" style="background:var(--warning-l);color:var(--warning);border:1px solid rgba(217,119,6,.2)" data-filtro="WhatsApp">
             <i class="fab fa-whatsapp me-1"></i> WhatsApp
@@ -272,7 +338,24 @@ $n_cancelados = count($pedidos_cancelados);
         </div>
     </div>
 
-    <!-- 3) Pedidos Pendientes de Recibir -->
+    <!-- 3) Pedidos sin fecha prevista -->
+    <div id="card-sin-fecha" class="modern-card section-card-warning <?= $n_sin_fecha > 0 ? 'section-alert' : '' ?>">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="text-dark mb-0 section-title">
+                <i class="fas fa-calendar-xmark text-warning"></i> Sin Fecha Prevista
+                <span class="badge bg-warning text-dark ms-2 fs-6"><?= $n_sin_fecha ?></span>
+            </h2>
+            <button id="btn-sin-fecha" class="btn btn-action btn-outline-secondary"
+                    onclick="toggleTable('tabla-sin-fecha','btn-sin-fecha')">
+                <i class="fas fa-eye-slash me-1"></i> Ocultar
+            </button>
+        </div>
+        <div id="tabla-sin-fecha" class="slide">
+            <?php mostrarTabla($pedidos_sin_fecha, 2, "No hay pedidos sin fecha prevista.", true, $p_sin_fecha['sort'], $p_sin_fecha['dir'], 'sinfecha_'); ?>
+        </div>
+    </div>
+
+    <!-- 4) Pedidos Pendientes de Recibir -->
     <div id="card-pendientes" class="modern-card section-card-primary">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h2 class="text-dark mb-0 section-title">
@@ -289,7 +372,7 @@ $n_cancelados = count($pedidos_cancelados);
         </div>
     </div>
 
-    <!-- 4) Pedidos Cancelados (colapsado por defecto) -->
+    <!-- 5) Pedidos Cancelados (colapsado por defecto) -->
     <?php if ($n_cancelados > 0): ?>
     <div id="card-cancelados" class="modern-card" style="border-top:4px solid #94a3b8;">
         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -346,7 +429,7 @@ $n_cancelados = count($pedidos_cancelados);
     </div>
     <?php endif; ?>
 
-    <!-- 5) Pedidos Finalizados -->
+    <!-- 6) Pedidos Finalizados -->
     <div id="card-finalizados" class="modern-card section-card-success">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
             <h2 class="text-dark mb-0 section-title">
