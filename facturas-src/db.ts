@@ -1,5 +1,5 @@
 
-import { Product, AuditRecord, ProductFamily, PriceHistory, Alert } from './types';
+import { Product, AuditRecord, ProductFamily, PriceHistory, Alert, AssistantContext } from './types';
 
 const API_URL = '../pedidos/api/facturas.php';
 
@@ -317,6 +317,18 @@ export const db = {
         resolvedAt: null,
         createdAt: new Date().toISOString()
       }))
+    };
+  },
+
+  async getAssistantContext(): Promise<AssistantContext> {
+    const response = await fetch(`${API_URL}?action=getAssistantContext`);
+    if (!response.ok) throw new Error('Error loading assistant context');
+    const data = await response.json();
+    return {
+      generatedAt: data.generated_at,
+      audits: data.audits || [],
+      pendingAlerts: data.pending_alerts || [],
+      priceHistory: data.price_history || []
     };
   }
 };

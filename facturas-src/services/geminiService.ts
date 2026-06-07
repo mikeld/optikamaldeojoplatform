@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { InvoiceData } from "../types";
+import { AssistantContext, InvoiceData } from "../types";
 
 export const extractInvoiceData = async (base64Image: string, mimeType: string): Promise<InvoiceData> => {
   // Usamos (process.env as any) para evitar errores de tipos en entornos que no tienen definidos los tipos de Node/Vite
@@ -61,4 +61,43 @@ export const extractInvoiceData = async (base64Image: string, mimeType: string):
   });
 
   return JSON.parse(response.text || '{}');
+};
+
+export const askInvoiceAssistant = async (question: string, context: AssistantContext): Promise<string> => {
+  const apiKey = (import.meta as any).env?.VITE_API_KEY || (process.env as any).API_KEY;
+  if (!apiKey) {
+    throw new Error("No se ha configurado la clave de API de Gemini (VITE_API_KEY)");
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+  const compactContext = {
+    generatedAt: context.generatedAt,
+    audits: context.audits,
+    pendingAlerts: context.pendingAlerts,
+    priceHistory: context.priceHistory
+  };
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: {
+      parts: [
+        {
+          text: `Eres el asistente interno de Facturas Check para una óptica.
+
+Responde en castellano, de forma breve y operativa.
+Usa SOLO el contexto JSON proporcionado. No inventes importes, fechas, proveedores ni facturas.
+Cuando menciones una factura, cita proveedor, número y fecha si están disponibles.
+Si la pregunta no se puede responder con el contexto, dilo claramente y sugiere qué dato falta.
+
+Contexto JSON:
+${JSON.stringify(compactContext)}
+
+Pregunta:
+${question}`
+        }
+      ]
+    }
+  });
+
+  return response.text || 'No he podido generar una respuesta con los datos disponibles.';
 };

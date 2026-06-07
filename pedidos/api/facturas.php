@@ -194,6 +194,39 @@ try {
             echo json_encode($results);
             break;
 
+        case 'getAssistantContext':
+            $auditsStmt = $pdo->query("SELECT `id`, `created_at`, `invoice_date`, `provider`, `invoice_number`,
+                                              `total_invoice`, `global_status`, `alert_count`, `critical_alert_count`, `lines`
+                                       FROM `facturas_audits`
+                                       ORDER BY `invoice_date` DESC, `created_at` DESC
+                                       LIMIT 30");
+            $audits = $auditsStmt->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($audits as &$audit) {
+                $decoded = json_decode($audit['lines'] ?? '[]', true);
+                $audit['lines'] = is_array($decoded) ? array_slice($decoded, 0, 30) : [];
+            }
+
+            $alertsStmt = $pdo->query("SELECT a.*, au.provider, au.invoice_number, au.invoice_date
+                                       FROM `facturas_alerts` a
+                                       LEFT JOIN `facturas_audits` au ON a.audit_id = au.id
+                                       WHERE a.status = 'pending'
+                                       ORDER BY a.severity DESC, a.created_at DESC
+                                       LIMIT 50");
+
+            $pricesStmt = $pdo->query("SELECT ph.*, p.name as product_name, p.sku, p.provider
+                                       FROM `facturas_price_history` ph
+                                       LEFT JOIN `facturas_products` p ON ph.product_id = p.id
+                                       ORDER BY ph.change_date DESC
+                                       LIMIT 50");
+
+            echo json_encode([
+                'generated_at' => date('c'),
+                'audits' => $audits,
+                'pending_alerts' => $alertsStmt->fetchAll(PDO::FETCH_ASSOC),
+                'price_history' => $pricesStmt->fetchAll(PDO::FETCH_ASSOC)
+            ]);
+            break;
+
         case 'saveAudit':
             if ($method === 'POST') {
                 $data = json_decode(file_get_contents('php://input'), true);

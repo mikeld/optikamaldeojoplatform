@@ -114,3 +114,10 @@ export interface AuditRecord {
   reviewedAt?: string | null;
   notes?: string | null;
 }
+
+export interface AssistantContext {
+  generatedAt: string;
+  audits: any[];
+  pendingAlerts: any[];
+  priceHistory: any[];
+}

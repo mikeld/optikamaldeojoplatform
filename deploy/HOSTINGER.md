@@ -71,6 +71,7 @@ TEST_DB_USER
 TEST_DB_PASS
 PROD_DB_USER
 PROD_DB_PASS
+GEMINI_API_KEY
 ```
 
 Valores esperados:
@@ -135,6 +136,18 @@ El usuario y password salen de secretos:
 TEST_DB_USER / TEST_DB_PASS
 PROD_DB_USER / PROD_DB_PASS
 ```
+
+## Gemini
+
+Facturas Check usa Gemini para extraer facturas y para el Asistente IA.
+
+Si quieres activar esas funciones en test/prod, crea este secreto de GitHub:
+
+```text
+GEMINI_API_KEY
+```
+
+Si no existe, el despliegue seguira funcionando, pero las acciones de IA mostraran un aviso de configuracion pendiente.
 
 ## Despliegue manual de respaldo
 

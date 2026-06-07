@@ -32,6 +32,7 @@ jobs:
           DB_NAME: u373487989_maldeojo
           DB_USER: ${{ secrets.PROD_DB_USER }}
           DB_PASS: ${{ secrets.PROD_DB_PASS }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: ./deploy/prepare_hostinger_release.sh prod deploy/dist/release
 
       - name: Install FTP client

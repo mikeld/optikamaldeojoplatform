@@ -1,13 +1,14 @@
 
 import React from 'react';
 import { HashRouter, Routes, Route, NavLink } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, ShieldCheck, History, Database, Cloud, HardDrive, Package, AlertTriangle } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, ShieldCheck, History, Cloud, HardDrive, Package, AlertTriangle, Bot } from 'lucide-react';
 import DashboardPage from './pages/DashboardPage';
 import InventoryPage from './pages/InventoryPage';
 import AuditPage from './pages/AuditPage';
 import HistoryPage from './pages/HistoryPage';
 import FamiliesPage from './pages/FamiliesPage';
 import AlertsPage from './pages/AlertsPage';
+import AssistantPage from './pages/AssistantPage';
 import { db } from './db';
 
 const App: React.FC = () => {
@@ -21,7 +22,7 @@ const App: React.FC = () => {
           <div className="p-6 border-b border-slate-100">
             <h1 className="text-xl font-bold text-indigo-600 flex items-center gap-2">
               <ShieldCheck className="w-8 h-8" />
-              AuditoriaAI
+              Facturas Check
             </h1>
           </div>
 
@@ -68,6 +69,13 @@ const App: React.FC = () => {
               <AlertTriangle className="w-5 h-5" />
               Alertas
             </NavLink>
+            <NavLink
+              to="/assistant"
+              className={({ isActive }) => `flex items-center gap-3 p-3 rounded-lg transition-colors ${isActive ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-50'}`}
+            >
+              <Bot className="w-5 h-5" />
+              Asistente IA
+            </NavLink>
           </nav>
 
           {/* Database Status */}
@@ -97,7 +105,7 @@ const App: React.FC = () => {
           </div>
 
           <div className="p-4 text-xs text-slate-400 text-center">
-            &copy; 2024 AuditoriaAI Pro
+            &copy; 2026 Facturas Check
           </div>
         </aside>
 
@@ -110,6 +118,7 @@ const App: React.FC = () => {
             <Route path="/history" element={<HistoryPage />} />
             <Route path="/families" element={<FamiliesPage />} />
             <Route path="/alerts" element={<AlertsPage />} />
+            <Route path="/assistant" element={<AssistantPage />} />
           </Routes>
         </main>
       </div>
