@@ -68,8 +68,64 @@ function condicionBusquedaLike($columns, $terms, &$params) {
     return '(' . implode(' OR ', $groups) . ')';
 }
 
+function facturasSchemaRequerido() {
+    return [
+        'facturas_product_families' => ['id', 'family_name', 'base_price', 'regex_pattern', 'product_type', 'provider', 'notes', 'created_at', 'updated_at'],
+        'facturas_products' => ['id', 'sku', 'name', 'family_id', 'graduation', 'expected_price', 'vat', 'provider', 'last_updated'],
+        'facturas_audits' => ['id', 'created_at', 'invoice_date', 'provider', 'invoice_number', 'total_invoice', 'global_status', 'lines', 'pdf_path', 'ocr_text', 'alert_count', 'critical_alert_count', 'reviewed_by', 'reviewed_at', 'notes'],
+        'facturas_price_history' => ['id', 'product_id', 'old_price', 'new_price', 'change_date', 'reason', 'changed_by', 'invoice_id'],
+        'facturas_alerts' => ['id', 'audit_id', 'line_number', 'alert_type', 'severity', 'product_sku', 'product_name', 'expected_value', 'actual_value', 'difference', 'difference_percent', 'status', 'resolution_action', 'resolved_at', 'created_at']
+    ];
+}
+
+function diagnosticarSchemaFacturas($pdo) {
+    $database = $pdo->query('SELECT DATABASE()')->fetchColumn();
+    $required = facturasSchemaRequerido();
+    $tables = [];
+    $missingTables = [];
+    $missingColumns = [];
+
+    foreach ($required as $table => $columns) {
+        $stmt = $pdo->prepare("
+            SELECT COLUMN_NAME
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = ?
+              AND TABLE_NAME = ?
+        ");
+        $stmt->execute([$database, $table]);
+        $existingColumns = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+        if (empty($existingColumns)) {
+            $tables[$table] = ['exists' => false, 'missing_columns' => $columns];
+            $missingTables[] = $table;
+            $missingColumns[$table] = $columns;
+            continue;
+        }
+
+        $diff = array_values(array_diff($columns, $existingColumns));
+        $tables[$table] = ['exists' => true, 'missing_columns' => $diff];
+        if (!empty($diff)) {
+            $missingColumns[$table] = $diff;
+        }
+    }
+
+    return [
+        'ok' => empty($missingTables) && empty($missingColumns),
+        'database' => $database,
+        'checked_at' => date('c'),
+        'tables' => $tables,
+        'missing_tables' => $missingTables,
+        'missing_columns' => $missingColumns,
+        'schema_file' => 'pedidos/sql/facturas_schema.sql'
+    ];
+}
+
 try {
     switch ($action) {
+        case 'getSchemaStatus':
+            echo json_encode(diagnosticarSchemaFacturas($pdo));
+            break;
+
         // ============================================================
         // PRODUCTOS
         // ============================================================

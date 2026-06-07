@@ -126,3 +126,16 @@ export interface AssistantContext {
     terms: string[];
   };
 }
+
+export interface SchemaStatus {
+  ok: boolean;
+  database: string;
+  checkedAt: string;
+  tables: Record<string, {
+    exists: boolean;
+    missingColumns: string[];
+  }>;
+  missingTables: string[];
+  missingColumns: Record<string, string[]>;
+  schemaFile: string;
+}

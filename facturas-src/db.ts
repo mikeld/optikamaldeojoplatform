@@ -1,11 +1,34 @@
 
-import { Product, AuditRecord, ProductFamily, PriceHistory, Alert, AssistantContext } from './types';
+import { Product, AuditRecord, ProductFamily, PriceHistory, Alert, AssistantContext, SchemaStatus } from './types';
 
 const API_URL = '../pedidos/api/facturas.php';
 
 export const db = {
   isCloud(): boolean {
     return true;
+  },
+
+  async getSchemaStatus(): Promise<SchemaStatus> {
+    const response = await fetch(`${API_URL}?action=getSchemaStatus`);
+    if (!response.ok) throw new Error('Error loading schema status');
+    const data = await response.json();
+    const tables: SchemaStatus['tables'] = {};
+    Object.entries(data.tables || {}).forEach(([table, status]: [string, any]) => {
+      tables[table] = {
+        exists: Boolean(status.exists),
+        missingColumns: status.missing_columns || []
+      };
+    });
+
+    return {
+      ok: Boolean(data.ok),
+      database: data.database || '',
+      checkedAt: data.checked_at || '',
+      tables,
+      missingTables: data.missing_tables || [],
+      missingColumns: data.missing_columns || {},
+      schemaFile: data.schema_file || 'pedidos/sql/facturas_schema.sql'
+    };
   },
 
   // ============================================================
