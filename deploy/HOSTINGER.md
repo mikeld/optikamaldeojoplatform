@@ -106,6 +106,8 @@ Cada despliegue:
 5. Crea `includes/db_config.php` con secretos del entorno.
 6. Sube todo a Hostinger por FTP.
 
+La subida FTP usa pocos paralelos y reintentos amplios porque Hostinger puede cortar conexiones de forma puntual. Si un deploy falla solo en el paso FTP y el build ha pasado, normalmente basta con relanzar el workflow.
+
 El servidor no recibe:
 
 - `facturas-src`
