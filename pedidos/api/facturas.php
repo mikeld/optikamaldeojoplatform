@@ -236,7 +236,14 @@ try {
                     $reviewedAtSql,
                     $data['notes'] ?? null
                 ]);
-                echo json_encode(['status' => 'success', 'id' => $auditId]);
+
+                $idStmt = $pdo->prepare("SELECT `id` FROM `facturas_audits`
+                    WHERE `provider` = ? AND `invoice_number` = ? AND `invoice_date` = ?
+                    LIMIT 1");
+                $idStmt->execute([$data['provider'], $data['invoiceNumber'], $data['invoiceDate']]);
+                $savedId = $idStmt->fetchColumn() ?: $auditId;
+
+                echo json_encode(['status' => 'success', 'id' => $savedId]);
             }
             break;
 
@@ -377,8 +384,21 @@ try {
                 foreach ($lines as $index => $line) {
                     $sku = $line['sku'] ?? null;
                     $invoicePrice = floatval($line['price'] ?? 0);
-                    
-                    if (!$sku) continue;
+
+                    if (!$sku) {
+                        $alerts[] = [
+                            'id' => uniqid('alert_'),
+                            'audit_id' => $auditId,
+                            'line_number' => $index,
+                            'alert_type' => 'unknown_product',
+                            'severity' => 'critical',
+                            'product_sku' => null,
+                            'product_name' => $line['name'] ?? 'Producto no identificado',
+                            'actual_value' => $invoicePrice
+                        ];
+                        $criticalCount++;
+                        continue;
+                    }
                     
                     // Buscar producto en el catálogo
                     $productStmt = $pdo->prepare("SELECT p.*, f.base_price as family_price 

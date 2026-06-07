@@ -17,6 +17,7 @@ const AuditPage: React.FC = () => {
   const [tempSku, setTempSku] = useState('');
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
   const [editLineData, setEditLineData] = useState<AuditLine | null>(null);
+  const [lastSaveSummary, setLastSaveSummary] = useState<{ alertCount: number; criticalCount: number; status: AuditStatus } | null>(null);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -60,6 +61,7 @@ const AuditPage: React.FC = () => {
             invoiceUnitPrice: item.unitPrice,
             masterProductPrice: match?.expectedPrice,
             masterProductId: match?.id,
+            masterProductSku: match?.sku,
             status: status,
             difference: match ? item.unitPrice - match.expectedPrice : 0
           };
@@ -129,6 +131,10 @@ const AuditPage: React.FC = () => {
     }
 
     line.status = LineStatus.ACCEPTED;
+    if (shouldUpdateMaster) {
+      line.masterProductPrice = line.invoiceUnitPrice;
+      line.difference = 0;
+    }
     setAuditResult({ ...auditResult, lines });
     setModalMode('NONE');
     setActiveLineIdx(null);
@@ -150,6 +156,7 @@ const AuditPage: React.FC = () => {
     await db.upsertProduct(newProd);
     line.status = LineStatus.ACCEPTED;
     line.masterProductId = newProd.id;
+    line.masterProductSku = newProd.sku;
     line.masterProductPrice = newProd.expectedPrice;
 
     setAuditResult({ ...auditResult, lines });
@@ -179,57 +186,12 @@ const AuditPage: React.FC = () => {
     if (!auditResult) return;
     setIsBulkProcessing(true);
     const updatedLines = [...auditResult.lines];
-    const products = await db.getProducts();
-    const createdInSession = new Map<string, Product>();
 
     for (let i = 0; i < updatedLines.length; i++) {
       const line = updatedLines[i];
       if (line.status === LineStatus.REJECTED || line.status === LineStatus.ACCEPTED) continue;
 
-      const cleanName = line.invoiceDescription.toLowerCase().trim();
-
-      if (line.status === LineStatus.NEW_PRODUCT) {
-        // Check if we already created this product in this session
-        if (createdInSession.has(cleanName)) {
-          const existing = createdInSession.get(cleanName)!;
-          line.status = LineStatus.ACCEPTED;
-          line.masterProductId = existing.id;
-          line.masterProductPrice = existing.expectedPrice;
-          continue;
-        }
-
-        // Check if it exists in DB (to be ultra-safe)
-        const dbMatch = products.find(p => p.name.toLowerCase().trim() === cleanName);
-        if (dbMatch) {
-          line.status = LineStatus.ACCEPTED;
-          line.masterProductId = dbMatch.id;
-          line.masterProductPrice = dbMatch.expectedPrice;
-          continue;
-        }
-
-        const newSku = `AUTO-${Math.floor(Math.random() * 99999)}`;
-        const newProd: Product = {
-          id: `prod-${Date.now()}-${i}`,
-          sku: newSku,
-          name: line.invoiceDescription,
-          expectedPrice: line.invoiceUnitPrice,
-          vat: 21
-        };
-        await db.upsertProduct(newProd);
-        createdInSession.set(cleanName, newProd);
-
-        line.status = LineStatus.ACCEPTED;
-        line.masterProductId = newProd.id;
-        line.masterProductPrice = newProd.expectedPrice;
-      }
-      else if (line.status === LineStatus.DISCREPANCY && line.masterProductId) {
-        const p = products.find(prod => prod.id === line.masterProductId);
-        if (p) {
-          await db.upsertProduct({ ...p, expectedPrice: line.invoiceUnitPrice });
-        }
-        line.status = LineStatus.ACCEPTED;
-      }
-      else {
+      if (line.status === LineStatus.MATCHED) {
         line.status = LineStatus.ACCEPTED;
       }
     }
@@ -238,10 +200,35 @@ const AuditPage: React.FC = () => {
     setIsBulkProcessing(false);
   };
 
-  const executeFinalize = async (status: AuditStatus) => {
+  const executeFinalize = async () => {
     if (!auditResult) return;
     try {
-      await db.saveAudit({ ...auditResult, globalStatus: status });
+      const auditId = await db.saveAudit({ ...auditResult, globalStatus: 'in_review' });
+      const validation = await db.validateInvoice(auditId, auditResult.lines
+        .filter(line => line.status !== LineStatus.REJECTED)
+        .map(line => ({
+          sku: line.masterProductSku || null,
+          name: line.invoiceDescription,
+          price: line.invoiceUnitPrice,
+          status: line.status
+        })));
+      const finalStatus: AuditStatus = validation.criticalCount > 0
+        ? 'in_review'
+        : validation.alertCount > 0
+          ? 'pending'
+          : 'approved';
+      await db.saveAudit({
+        ...auditResult,
+        id: auditId,
+        globalStatus: finalStatus,
+        alertCount: validation.alertCount,
+        criticalAlertCount: validation.criticalCount
+      });
+      setLastSaveSummary({
+        alertCount: validation.alertCount,
+        criticalCount: validation.criticalCount,
+        status: finalStatus
+      });
       setModalMode('SUCCESS');
     } catch (e: any) {
       setError(`Error: ${e.message}`);
@@ -252,6 +239,59 @@ const AuditPage: React.FC = () => {
   if (auditResult) {
     return (
       <div className="space-y-6 max-w-6xl mx-auto pb-20">
+        {/* Modal de guardado */}
+        {modalMode === 'SUCCESS' && lastSaveSummary && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[90] flex items-center justify-center p-4">
+            <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-md w-full p-9 text-center animate-in zoom-in duration-200">
+              <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-5 ${
+                lastSaveSummary.criticalCount > 0 ? 'bg-rose-50 text-rose-600' :
+                lastSaveSummary.alertCount > 0 ? 'bg-amber-50 text-amber-600' :
+                'bg-emerald-50 text-emerald-600'
+              }`}>
+                {lastSaveSummary.alertCount > 0 ? <AlertTriangle className="w-8 h-8" /> : <CheckCircle2 className="w-8 h-8" />}
+              </div>
+              <h3 className="text-2xl font-black text-slate-800 mb-2">Auditoría guardada</h3>
+              <p className="text-slate-500 text-sm mb-6 leading-relaxed">
+                {lastSaveSummary.alertCount > 0
+                  ? `Se han creado ${lastSaveSummary.alertCount} alertas (${lastSaveSummary.criticalCount} críticas) para revisar.`
+                  : 'No se han detectado diferencias pendientes.'}
+              </p>
+              <div className="grid grid-cols-3 gap-3 mb-7">
+                <div className="bg-slate-50 rounded-2xl p-3">
+                  <p className="text-[9px] uppercase font-black text-slate-400 mb-1">Estado</p>
+                  <p className="text-xs font-black text-slate-700">{lastSaveSummary.status === 'approved' ? 'OK' : 'Revisión'}</p>
+                </div>
+                <div className="bg-amber-50 rounded-2xl p-3">
+                  <p className="text-[9px] uppercase font-black text-amber-500 mb-1">Alertas</p>
+                  <p className="text-lg font-black text-amber-700">{lastSaveSummary.alertCount}</p>
+                </div>
+                <div className="bg-rose-50 rounded-2xl p-3">
+                  <p className="text-[9px] uppercase font-black text-rose-500 mb-1">Críticas</p>
+                  <p className="text-lg font-black text-rose-700">{lastSaveSummary.criticalCount}</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setAuditResult(null);
+                    setLastSaveSummary(null);
+                    setModalMode('NONE');
+                  }}
+                  className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-2xl font-black hover:bg-slate-200 transition-all"
+                >
+                  Nueva factura
+                </button>
+                <a
+                  href="#/history"
+                  className="flex-1 py-3 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 transition-all"
+                >
+                  Historial
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Modal Resolución de Precio */}
         {modalMode === 'PRICE_UPDATE' && activeLineIdx !== null && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[80] flex items-center justify-center p-4">
@@ -293,6 +333,45 @@ const AuditPage: React.FC = () => {
                   className="w-full py-3 text-slate-400 font-bold hover:text-slate-600 transition-colors"
                 >
                   Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {modalMode === 'SKU' && activeLineIdx !== null && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
+            <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-md w-full p-9 animate-in zoom-in duration-200">
+              <div className="w-16 h-16 bg-slate-900 text-white rounded-3xl flex items-center justify-center mx-auto mb-5">
+                <PlusCircle className="w-8 h-8" />
+              </div>
+              <h3 className="text-2xl font-black text-slate-800 text-center mb-2">Crear producto</h3>
+              <p className="text-slate-500 text-sm text-center mb-6 leading-relaxed">
+                Se añadirá <strong>{auditResult.lines[activeLineIdx].invoiceDescription}</strong> al catálogo maestro con el precio de esta factura.
+              </p>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">SKU / Referencia</label>
+              <input
+                value={tempSku}
+                onChange={(e) => setTempSku(e.target.value)}
+                className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none font-mono font-bold mb-6"
+              />
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setModalMode('NONE');
+                    setActiveLineIdx(null);
+                    setTempSku('');
+                  }}
+                  className="flex-1 py-4 font-black text-slate-400 hover:bg-slate-50 rounded-2xl transition-colors"
+                >
+                  CANCELAR
+                </button>
+                <button
+                  onClick={confirmCreateProduct}
+                  disabled={!tempSku.trim()}
+                  className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black hover:bg-indigo-600 disabled:bg-slate-200 transition-all shadow-xl shadow-slate-200"
+                >
+                  CREAR
                 </button>
               </div>
             </div>
@@ -358,10 +437,10 @@ const AuditPage: React.FC = () => {
           <div className="flex gap-3">
             <button onClick={validateAllItems} disabled={isBulkProcessing} className="px-5 py-2.5 bg-emerald-50 text-emerald-700 font-bold rounded-xl hover:bg-emerald-100 transition-all flex items-center gap-2">
               {isBulkProcessing ? <Loader2 className="animate-spin w-4 h-4" /> : <CheckSquare className="w-4 h-4" />}
-              Validar Todo
+              Validar líneas OK
             </button>
-            <button onClick={() => executeFinalize('approved')} className="px-5 py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 flex items-center gap-2 shadow-lg shadow-indigo-100 transition-all">
-              <Save className="w-5 h-5" /> Finalizar Auditoría
+            <button onClick={executeFinalize} className="px-5 py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 flex items-center gap-2 shadow-lg shadow-indigo-100 transition-all">
+              <Save className="w-5 h-5" /> Guardar Auditoría
             </button>
           </div>
         </div>

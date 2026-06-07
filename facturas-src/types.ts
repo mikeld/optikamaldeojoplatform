@@ -90,6 +90,7 @@ export interface AuditLine {
   invoiceUnitPrice: number;
   masterProductPrice?: number;
   masterProductId?: string;
+  masterProductSku?: string;
   status: LineStatus;
   difference: number;
 }
