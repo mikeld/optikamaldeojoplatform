@@ -47,9 +47,10 @@ jobs:
           test -n "$FTP_USER"
           test -n "$FTP_PASS"
           test -n "$FTP_DIR"
-          lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" <<EOF
+          lftp "$FTP_HOST" <<EOF
           set ftp:ssl-allow true
           set ssl:verify-certificate no
+          user "$FTP_USER" "$FTP_PASS"
           mkdir -p "$FTP_DIR"
           mirror -R --verbose --parallel=4 deploy/dist/release "$FTP_DIR"
           bye
