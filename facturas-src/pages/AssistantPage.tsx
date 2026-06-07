@@ -18,6 +18,7 @@ const AssistantPage: React.FC = () => {
   const [loadingContext, setLoadingContext] = useState(true);
   const [asking, setAsking] = useState(false);
   const [error, setError] = useState('');
+  const [retrievalTerms, setRetrievalTerms] = useState<string[]>([]);
 
   useEffect(() => {
     loadContext();
@@ -29,6 +30,7 @@ const AssistantPage: React.FC = () => {
     try {
       const data = await db.getAssistantContext();
       setContext(data);
+      setRetrievalTerms([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se ha podido cargar el contexto del asistente');
     } finally {
@@ -63,7 +65,10 @@ const AssistantPage: React.FC = () => {
     setError('');
 
     try {
-      const response = await askInvoiceAssistant(trimmedQuestion, context);
+      const focusedContext = await db.searchAssistantContext(trimmedQuestion);
+      setContext(focusedContext);
+      setRetrievalTerms(focusedContext.retrieval?.terms || []);
+      const response = await askInvoiceAssistant(trimmedQuestion, focusedContext);
       setAnswer(response);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'El asistente no ha podido responder ahora mismo');
@@ -80,7 +85,7 @@ const AssistantPage: React.FC = () => {
             <Bot className="w-8 h-8 text-indigo-600" />
             Asistente IA
           </h2>
-          <p className="text-slate-500 font-medium">Consulta facturas, alertas pendientes e historial de precios con contexto real.</p>
+          <p className="text-slate-500 font-medium">Consulta facturas, alertas e historial de precios con recuperación de contexto.</p>
         </div>
         <button
           onClick={loadContext}
@@ -146,14 +151,14 @@ const AssistantPage: React.FC = () => {
             {!loadingContext && !answer && !asking && !error && (
               <div className="h-64 flex flex-col items-center justify-center text-center text-slate-400 gap-3">
                 <Bot className="w-12 h-12 text-slate-300" />
-                <p className="max-w-md font-bold">El asistente responderá usando las últimas auditorías, alertas pendientes e historial de precios guardado.</p>
+                <p className="max-w-md font-bold">El asistente buscará primero las facturas, alertas y cambios de precio más relevantes para tu pregunta.</p>
               </div>
             )}
 
             {asking && (
               <div className="h-64 flex flex-col items-center justify-center text-indigo-500 gap-3">
                 <Loader2 className="w-8 h-8 animate-spin" />
-                <p className="font-black">Analizando contexto...</p>
+                <p className="font-black">Buscando contexto relevante...</p>
               </div>
             )}
 
@@ -174,9 +179,19 @@ const AssistantPage: React.FC = () => {
             <div className="space-y-3 text-sm">
               <ContextRow label="Generado" value={context?.generatedAt ? new Date(context.generatedAt).toLocaleString('es-ES') : 'Pendiente'} />
               <ContextRow label="Facturas" value={`${stats.audits} últimas`} />
-              <ContextRow label="Alertas" value={`${stats.pendingAlerts} pendientes`} />
+              <ContextRow label="Alertas" value={`${stats.pendingAlerts} recuperadas`} />
               <ContextRow label="Precios" value={`${stats.priceChanges} movimientos`} />
+              <ContextRow label="Modo" value={context?.retrieval?.mode === 'keyword_rag' ? 'RAG por términos' : 'Resumen inicial'} />
             </div>
+            {retrievalTerms.length > 0 && (
+              <div className="mt-5 flex flex-wrap gap-2">
+                {retrievalTerms.map(term => (
+                  <span key={term} className="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-black">
+                    {term}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           {error && (

@@ -120,4 +120,9 @@ export interface AssistantContext {
   audits: any[];
   pendingAlerts: any[];
   priceHistory: any[];
+  retrieval?: {
+    mode: string;
+    question: string;
+    terms: string[];
+  };
 }

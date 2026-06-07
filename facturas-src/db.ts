@@ -330,5 +330,22 @@ export const db = {
       pendingAlerts: data.pending_alerts || [],
       priceHistory: data.price_history || []
     };
+  },
+
+  async searchAssistantContext(question: string): Promise<AssistantContext> {
+    const response = await fetch(`${API_URL}?action=searchAssistantContext`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question })
+    });
+    if (!response.ok) throw new Error('Error searching assistant context');
+    const data = await response.json();
+    return {
+      generatedAt: data.generated_at,
+      audits: data.audits || [],
+      pendingAlerts: data.pending_alerts || [],
+      priceHistory: data.price_history || [],
+      retrieval: data.retrieval
+    };
   }
 };

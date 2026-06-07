@@ -23,6 +23,51 @@ function usuarioAuditoria($usuarioActual) {
     return $usuarioActual['email'] ?: ($usuarioActual['nombre'] ?: ('usuario_' . $usuarioActual['id']));
 }
 
+function terminosBusquedaAsistente($question) {
+    $question = trim((string)$question);
+    if ($question === '') {
+        return [];
+    }
+
+    $lowerQuestion = function_exists('mb_strtolower') ? mb_strtolower($question, 'UTF-8') : strtolower($question);
+    $parts = preg_split('/[^\p{L}\p{N}_+\-.]+/u', $lowerQuestion);
+    $stopwords = [
+        'que', 'qué', 'cual', 'cuál', 'cuales', 'cuáles', 'con', 'sin', 'para', 'por', 'del', 'las', 'los',
+        'una', 'uno', 'unos', 'unas', 'esta', 'este', 'estas', 'estos', 'hay', 'tienen', 'tiene', 'han',
+        'mas', 'más', 'menos', 'ultimas', 'últimas', 'ultimos', 'últimos', 'resume', 'recientemente'
+    ];
+
+    $terms = [];
+    foreach ($parts as $part) {
+        $part = trim($part);
+        $length = function_exists('mb_strlen') ? mb_strlen($part, 'UTF-8') : strlen($part);
+        if ($length < 3 || in_array($part, $stopwords, true)) {
+            continue;
+        }
+        $terms[] = $part;
+    }
+
+    return array_slice(array_values(array_unique($terms)), 0, 10);
+}
+
+function condicionBusquedaLike($columns, $terms, &$params) {
+    if (empty($terms)) {
+        return '1=1';
+    }
+
+    $groups = [];
+    foreach ($terms as $term) {
+        $likes = [];
+        foreach ($columns as $column) {
+            $likes[] = "$column LIKE ?";
+            $params[] = '%' . $term . '%';
+        }
+        $groups[] = '(' . implode(' OR ', $likes) . ')';
+    }
+
+    return '(' . implode(' OR ', $groups) . ')';
+}
+
 try {
     switch ($action) {
         // ============================================================
@@ -221,6 +266,90 @@ try {
 
             echo json_encode([
                 'generated_at' => date('c'),
+                'audits' => $audits,
+                'pending_alerts' => $alertsStmt->fetchAll(PDO::FETCH_ASSOC),
+                'price_history' => $pricesStmt->fetchAll(PDO::FETCH_ASSOC)
+            ]);
+            break;
+
+        case 'searchAssistantContext':
+            if ($method !== 'POST') {
+                throw new Exception('Método no permitido');
+            }
+
+            $data = json_decode(file_get_contents('php://input'), true);
+            $question = trim($data['question'] ?? '');
+            $terms = terminosBusquedaAsistente($question);
+
+            $auditParams = [];
+            $auditWhere = condicionBusquedaLike([
+                '`provider`',
+                '`invoice_number`',
+                '`global_status`',
+                '`notes`',
+                'CAST(`lines` AS CHAR)',
+                '`ocr_text`'
+            ], $terms, $auditParams);
+            $auditsStmt = $pdo->prepare("SELECT `id`, `created_at`, `invoice_date`, `provider`, `invoice_number`,
+                                                `total_invoice`, `global_status`, `alert_count`, `critical_alert_count`,
+                                                `reviewed_by`, `reviewed_at`, `notes`, `lines`
+                                         FROM `facturas_audits`
+                                         WHERE $auditWhere
+                                         ORDER BY `invoice_date` DESC, `created_at` DESC
+                                         LIMIT 12");
+            $auditsStmt->execute($auditParams);
+            $audits = $auditsStmt->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($audits as &$audit) {
+                $decoded = json_decode($audit['lines'] ?? '[]', true);
+                $audit['lines'] = is_array($decoded) ? array_slice($decoded, 0, 20) : [];
+            }
+
+            $alertParams = [];
+            $alertWhere = condicionBusquedaLike([
+                'a.`alert_type`',
+                'a.`severity`',
+                'a.`status`',
+                'a.`product_sku`',
+                'a.`product_name`',
+                'a.`resolution_action`',
+                'au.`provider`',
+                'au.`invoice_number`'
+            ], $terms, $alertParams);
+            $alertsStmt = $pdo->prepare("SELECT a.*, au.provider, au.invoice_number, au.invoice_date
+                                         FROM `facturas_alerts` a
+                                         LEFT JOIN `facturas_audits` au ON a.audit_id = au.id
+                                         WHERE $alertWhere
+                                         ORDER BY
+                                             CASE a.status WHEN 'pending' THEN 0 ELSE 1 END,
+                                             CASE a.severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END,
+                                             a.created_at DESC
+                                         LIMIT 30");
+            $alertsStmt->execute($alertParams);
+
+            $priceParams = [];
+            $priceWhere = condicionBusquedaLike([
+                'p.`name`',
+                'p.`sku`',
+                'p.`provider`',
+                'ph.`reason`',
+                'ph.`changed_by`',
+                'ph.`invoice_id`'
+            ], $terms, $priceParams);
+            $pricesStmt = $pdo->prepare("SELECT ph.*, p.name as product_name, p.sku, p.provider
+                                         FROM `facturas_price_history` ph
+                                         LEFT JOIN `facturas_products` p ON ph.product_id = p.id
+                                         WHERE $priceWhere
+                                         ORDER BY ph.change_date DESC
+                                         LIMIT 30");
+            $pricesStmt->execute($priceParams);
+
+            echo json_encode([
+                'generated_at' => date('c'),
+                'retrieval' => [
+                    'mode' => 'keyword_rag',
+                    'question' => $question,
+                    'terms' => $terms
+                ],
                 'audits' => $audits,
                 'pending_alerts' => $alertsStmt->fetchAll(PDO::FETCH_ASSOC),
                 'price_history' => $pricesStmt->fetchAll(PDO::FETCH_ASSOC)
