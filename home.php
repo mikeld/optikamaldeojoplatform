@@ -14,6 +14,8 @@ $apps = [
         'url' => 'pedidos/views/listado_pedidos.php?orden_columna=fecha_llegada&orden_direccion=ASC',
         'icono' => 'fas fa-shopping-cart',
         'clase' => 'pedidos',
+        'grupo' => 'Trabajo diario',
+        'etiqueta' => 'Tienda',
         'roles' => ['empleado', 'encargado', 'admin'],
     ],
     [
@@ -22,6 +24,8 @@ $apps = [
         'url' => 'facturas/index.html',
         'icono' => 'fas fa-shield-alt',
         'clase' => 'facturas',
+        'grupo' => 'Control',
+        'etiqueta' => 'Costes',
         'roles' => ['encargado', 'admin'],
     ],
     [
@@ -30,6 +34,8 @@ $apps = [
         'url' => 'pedidos/views/estadisticas.php',
         'icono' => 'fas fa-chart-line',
         'clase' => 'direccion',
+        'grupo' => 'Control',
+        'etiqueta' => 'KPIs',
         'roles' => ['encargado', 'admin'],
     ],
     [
@@ -38,6 +44,8 @@ $apps = [
         'url' => 'pedidos/views/copias_seguridad.php',
         'icono' => 'fas fa-gear',
         'clase' => 'configuracion',
+        'grupo' => 'Administracion',
+        'etiqueta' => 'Admin',
         'roles' => ['admin'],
     ],
 ];
@@ -45,6 +53,40 @@ $apps = [
 $appsDisponibles = array_values(array_filter($apps, function ($app) use ($rolActual) {
     return in_array($rolActual, $app['roles'], true);
 }));
+
+$appsPorGrupo = [];
+foreach ($appsDisponibles as $app) {
+    $appsPorGrupo[$app['grupo']][] = $app;
+}
+
+$rolLabels = [
+    'empleado' => 'Empleado',
+    'encargado' => 'Encargado',
+    'admin' => 'Administrador',
+];
+
+$proximasApps = [
+    [
+        'nombre' => 'Agenda y Revisiones',
+        'descripcion' => 'Citas, revisiones pendientes, recordatorios y huecos del dia.',
+        'icono' => 'fas fa-calendar-check',
+        'clase' => 'agenda',
+    ],
+    [
+        'nombre' => 'CRM Clientes',
+        'descripcion' => 'Seguimiento de clientes, compras, avisos y oportunidades de recompra.',
+        'icono' => 'fas fa-address-book',
+        'clase' => 'crm',
+    ],
+    [
+        'nombre' => 'Stock Lentes',
+        'descripcion' => 'Control de lentillas, soluciones, roturas de stock y minimos por proveedor.',
+        'icono' => 'fas fa-boxes-stacked',
+        'clase' => 'stock',
+    ],
+];
+
+$mostrarRoadmap = in_array($rolActual, ['encargado', 'admin'], true);
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -78,7 +120,7 @@ $appsDisponibles = array_values(array_filter($apps, function ($app) use ($rolAct
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #eef2f7;
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -88,10 +130,11 @@ $appsDisponibles = array_values(array_filter($apps, function ($app) use ($rolAct
 
         .home-container {
             background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            border: 1px solid #dbe3ee;
+            border-radius: 8px;
+            box-shadow: 0 18px 50px rgba(15, 23, 42, 0.10);
             padding: 40px;
-            max-width: 1100px;
+            max-width: 1180px;
             width: 100%;
             animation: fadeIn 0.5s ease-in;
         }
@@ -102,34 +145,51 @@ $appsDisponibles = array_values(array_filter($apps, function ($app) use ($rolAct
         }
 
         .header {
-            text-align: center;
-            margin-bottom: 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 24px;
+            margin-bottom: 34px;
             position: relative;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 28px;
         }
 
         .header img {
-            width: 120px;
+            width: 180px;
             height: auto;
-            margin-bottom: 20px;
             opacity: 0.9;
         }
 
         .header h1 {
-            color: #5a67d8;
+            color: #1e293b;
             font-size: 2rem;
             font-weight: 700;
-            margin-bottom: 10px;
+            margin: 0 0 8px;
+        }
+
+        .header-subtitle {
+            color: #64748b;
+            font-size: 0.98rem;
+            font-weight: 500;
+            margin: 0;
+        }
+
+        .brand-block {
+            display: flex;
+            align-items: center;
+            gap: 22px;
         }
 
         .user-info {
-            background: linear-gradient(135deg, #f6f8fb 0%, #e9ecf5 100%);
-            padding: 15px 25px;
-            border-radius: 50px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            padding: 12px 16px;
+            border-radius: 8px;
             display: inline-flex;
             align-items: center;
             gap: 12px;
-            margin-top: 15px;
-            box-shadow: 0 4px 12px rgba(90, 103, 216, 0.1);
+            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
         }
 
         .user-info i {
@@ -142,30 +202,61 @@ $appsDisponibles = array_values(array_filter($apps, function ($app) use ($rolAct
             font-weight: 600;
         }
 
+        .role-badge {
+            background: #e0e7ff;
+            color: #3730a3;
+            border-radius: 999px;
+            padding: 5px 10px;
+            font-size: 0.78rem;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .section-title {
+            color: #334155;
+            font-size: 1.05rem;
+            font-weight: 800;
+            margin: 26px 0 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-title::before {
+            content: "";
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            background: #4f46e5;
+            display: inline-block;
+        }
+
         .projects-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 30px;
-            margin: 40px 0;
+            gap: 18px;
+            margin: 0 0 10px;
         }
 
         .project-card {
-            background: linear-gradient(135deg, #ffffff 0%, #f7fafc 100%);
-            border-radius: 16px;
-            padding: 35px;
-            text-align: center;
+            background: #ffffff;
+            border-radius: 8px;
+            padding: 24px;
+            text-align: left;
             cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            border: 2px solid transparent;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+            transition: all 0.2s ease;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 15px rgba(15, 23, 42, 0.04);
             text-decoration: none;
             color: inherit;
-            display: block;
+            display: flex;
+            flex-direction: column;
+            min-height: 230px;
         }
 
         .project-card:hover {
-            transform: translateY(-8px) scale(1.02);
-            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
+            transform: translateY(-3px);
+            box-shadow: 0 14px 30px rgba(15, 23, 42, 0.10);
             border-color: currentColor;
         }
 
@@ -185,47 +276,90 @@ $appsDisponibles = array_values(array_filter($apps, function ($app) use ($rolAct
             --card-color: #475569;
         }
 
+        .project-card.agenda {
+            --card-color: #2563eb;
+        }
+
+        .project-card.crm {
+            --card-color: #db2777;
+        }
+
+        .project-card.stock {
+            --card-color: #059669;
+        }
+
+        .project-card.disabled {
+            cursor: default;
+            opacity: 0.82;
+            background: #f8fafc;
+        }
+
+        .project-card.disabled:hover {
+            transform: none;
+            border-color: #e2e8f0;
+            box-shadow: 0 4px 15px rgba(15, 23, 42, 0.04);
+        }
+
         .project-card:hover {
             border-color: var(--card-color);
         }
 
         .project-icon {
-            width: 80px;
-            height: 80px;
-            margin: 0 auto 20px;
+            width: 52px;
+            height: 52px;
+            margin: 0 0 20px;
             background: var(--card-color);
-            border-radius: 50%;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-size: 2rem;
+            font-size: 1.35rem;
             transition: all 0.3s ease;
         }
 
         .project-card:hover .project-icon {
-            transform: rotate(10deg) scale(1.1);
+            transform: translateY(-2px);
         }
 
         .project-name {
-            font-size: 1.5rem;
+            font-size: 1.22rem;
             font-weight: 700;
             color: #2d3748;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
 
         .project-description {
             color: #718096;
             font-size: 0.95rem;
             line-height: 1.5;
+            margin-bottom: 18px;
+        }
+
+        .project-tag {
+            margin-top: auto;
+            align-self: flex-start;
+            background: color-mix(in srgb, var(--card-color) 12%, white);
+            color: var(--card-color);
+            border-radius: 999px;
+            padding: 6px 11px;
+            font-size: 0.76rem;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .roadmap-note {
+            color: #64748b;
+            font-size: 0.92rem;
+            margin: -4px 0 16px;
         }
 
         .logout-btn {
-            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            background: #dc2626;
             color: white;
             border: none;
             padding: 12px 30px;
-            border-radius: 50px;
+            border-radius: 8px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
@@ -248,6 +382,12 @@ $appsDisponibles = array_values(array_filter($apps, function ($app) use ($rolAct
                 padding: 30px 20px;
             }
 
+            .header,
+            .brand-block {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
             .header h1 {
                 font-size: 1.5rem;
             }
@@ -261,31 +401,56 @@ $appsDisponibles = array_values(array_filter($apps, function ($app) use ($rolAct
 <body>
     <div class="home-container">
         <div class="header">
-            <img src="assets/images/logo.png" alt="Optikamaldeojo Logo" style="width: 200px; height: auto;">
-            <h1>Portal Optikamaldeojo</h1>
+            <div class="brand-block">
+                <img src="assets/images/logo.png" alt="Optikamaldeojo Logo">
+                <div>
+                    <h1>Portal Optikamaldeojo</h1>
+                    <p class="header-subtitle">Herramientas internas segun tu rol en la optica.</p>
+                </div>
+            </div>
             <div class="user-info">
                 <i class="fas fa-user-circle"></i>
-                <span id="userName"></span>
+                <span><?= htmlspecialchars($usuarioActual['nombre'] ?? 'Usuario') ?></span>
+                <span class="role-badge"><?= htmlspecialchars($rolLabels[$rolActual] ?? ucfirst($rolActual)) ?></span>
             </div>
         </div>
 
-        <h2 style="text-align: center; color: #4a5568; margin-bottom: 30px; font-size: 1.3rem;">
-            Tus aplicaciones
-        </h2>
+        <?php foreach ($appsPorGrupo as $grupo => $grupoApps): ?>
+            <h2 class="section-title"><?= htmlspecialchars($grupo) ?></h2>
+            <div class="projects-grid">
+                <?php foreach ($grupoApps as $app): ?>
+                <a href="<?= htmlspecialchars($app['url']) ?>" class="project-card <?= htmlspecialchars($app['clase']) ?>">
+                    <div class="project-icon">
+                        <i class="<?= htmlspecialchars($app['icono']) ?>"></i>
+                    </div>
+                    <h3 class="project-name"><?= htmlspecialchars($app['nombre']) ?></h3>
+                    <p class="project-description">
+                        <?= htmlspecialchars($app['descripcion']) ?>
+                    </p>
+                    <span class="project-tag"><?= htmlspecialchars($app['etiqueta']) ?></span>
+                </a>
+                <?php endforeach; ?>
+            </div>
+        <?php endforeach; ?>
 
-        <div class="projects-grid">
-            <?php foreach ($appsDisponibles as $app): ?>
-            <a href="<?= htmlspecialchars($app['url']) ?>" class="project-card <?= htmlspecialchars($app['clase']) ?>">
-                <div class="project-icon">
-                    <i class="<?= htmlspecialchars($app['icono']) ?>"></i>
-                </div>
-                <h3 class="project-name"><?= htmlspecialchars($app['nombre']) ?></h3>
-                <p class="project-description">
-                    <?= htmlspecialchars($app['descripcion']) ?>
-                </p>
-            </a>
-            <?php endforeach; ?>
-        </div>
+        <?php if ($mostrarRoadmap): ?>
+            <h2 class="section-title">Proximas apps</h2>
+            <p class="roadmap-note">Ideas priorizadas para dar el siguiente salto de gestion. No estan activas todavia.</p>
+            <div class="projects-grid">
+                <?php foreach ($proximasApps as $app): ?>
+                <article class="project-card disabled <?= htmlspecialchars($app['clase']) ?>">
+                    <div class="project-icon">
+                        <i class="<?= htmlspecialchars($app['icono']) ?>"></i>
+                    </div>
+                    <h3 class="project-name"><?= htmlspecialchars($app['nombre']) ?></h3>
+                    <p class="project-description">
+                        <?= htmlspecialchars($app['descripcion']) ?>
+                    </p>
+                    <span class="project-tag">Roadmap</span>
+                </article>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
 
         <button class="logout-btn" onclick="logout()">
             <i class="fas fa-sign-out-alt"></i>
@@ -294,13 +459,6 @@ $appsDisponibles = array_values(array_filter($apps, function ($app) use ($rolAct
     </div>
 
     <script>
-        // Get user data from session (passed from PHP)
-        const userData = <?php echo json_encode(Auth::usuarioActual()); ?>;
-        
-        if (userData && userData.nombre) {
-            document.getElementById('userName').textContent = userData.nombre;
-        }
-
         function logout() {
             if (confirm('¿Estás seguro de que quieres cerrar sesión?')) {
                 window.location.href = 'logout.php';
