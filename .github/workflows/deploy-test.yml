@@ -68,7 +68,7 @@ jobs:
             esac
           done < deploy/dist/changed_files.txt
 
-          for file in includes/db_config.php pedidos/views/header.php pedidos/assets/css/style.css; do
+          for file in includes/db_config.php pedidos/api/facturas.php pedidos/views/header.php pedidos/assets/css/style.css; do
             if [ -f "deploy/dist/release/$file" ]; then
               mkdir -p "deploy/dist/upload/$(dirname "$file")"
               cp "deploy/dist/release/$file" "deploy/dist/upload/$file"
