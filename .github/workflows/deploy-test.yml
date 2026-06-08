@@ -112,17 +112,13 @@ jobs:
               echo "set ssl:verify-certificate no"
               echo "open -p 21 -u \"$FTP_USER_CLEAN\",\"$FTP_PASS_CLEAN\" \"$FTP_HOST_CLEAN\""
 
-              if [ "$FILE_COUNT" -le 30 ]; then
-                echo "# Using direct file upload for $FILE_COUNT files"
-                while IFS= read -r file; do
-                  rel="${file#deploy/dist/upload/}"
-                  remote_dir="$FTP_DIR_CLEAN/$(dirname "$rel")"
-                  echo "put -O \"$remote_dir\" \"$file\""
-                done < <(find deploy/dist/upload -type f | sort)
-              else
-                echo "# Using mirror upload for $FILE_COUNT files"
-                echo "mirror -R --verbose --only-newer --parallel=1 deploy/dist/upload \"$FTP_DIR_CLEAN\""
-              fi
+              echo "# Using direct file upload for $FILE_COUNT files"
+              while IFS= read -r file; do
+                rel="${file#deploy/dist/upload/}"
+                remote_dir="$FTP_DIR_CLEAN/$(dirname "$rel")"
+                echo "mkdir -p \"$remote_dir\""
+                echo "put -O \"$remote_dir\" \"$file\""
+              done < <(find deploy/dist/upload -type f | sort)
 
               echo "bye"
             } > deploy/dist/lftp_commands.txt
