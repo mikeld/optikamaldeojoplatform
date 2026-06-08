@@ -93,7 +93,7 @@ jobs:
           test -n "$FTP_HOST"
           test -n "$FTP_USER"
           test -n "$FTP_PASS"
-          test -n "$FTP_DIR"
+          FTP_DIR="${FTP_DIR:-public_html}"
           FTP_HOST_CLEAN="$(printf '%s' "${FTP_HOST#ftp://}" | tr -d '\r\n')"
           FTP_USER_CLEAN="$(printf '%s' "$FTP_USER" | tr -d '\r\n')"
           FTP_PASS_CLEAN="$(printf '%s' "$FTP_PASS" | tr -d '\r\n')"
