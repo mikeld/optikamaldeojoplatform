@@ -78,35 +78,36 @@ body {
 }
 
 .orders-topbar-main {
-    min-height: 68px;
+    min-height: 58px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 18px;
+    gap: 14px;
 }
 
 .orders-brand {
     color: var(--text);
     display: inline-flex;
     align-items: center;
-    gap: 12px;
-    min-width: 210px;
+    flex: 0 0 auto;
+    gap: 10px;
+    min-width: 142px;
     text-decoration: none;
 }
 
 .orders-brand:hover { color: var(--text); }
 
 .orders-brand-icon {
-    width: 42px;
-    height: 42px;
+    width: 36px;
+    height: 36px;
     border-radius: var(--r-sm);
     background: var(--indigo);
     color: white;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.25rem;
-    box-shadow: 0 8px 18px rgba(79, 70, 229, .22);
+    font-size: 1.05rem;
+    box-shadow: 0 6px 14px rgba(79, 70, 229, .18);
 }
 
 .orders-brand-title,
@@ -116,27 +117,29 @@ body {
 }
 
 .orders-brand-title {
-    font-size: 1.08rem;
+    font-size: 1rem;
     font-weight: 800;
 }
 
 .orders-brand-subtitle {
     color: var(--muted);
-    font-size: .78rem;
+    font-size: .7rem;
     font-weight: 700;
     margin-top: 3px;
 }
 
 .orders-user {
     align-items: center;
+    border-left: 1px solid var(--border);
+    display: inline-flex;
     gap: 9px;
-    margin-left: auto;
+    padding-left: 10px;
 }
 
 .orders-user-name {
     color: var(--text-2);
     font-weight: 700;
-    max-width: 180px;
+    max-width: 100px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -147,48 +150,51 @@ body {
     border: 1px solid #c7d2fe;
     border-radius: var(--r-pill);
     color: var(--indigo-d);
-    font-size: .72rem;
+    font-size: .66rem;
     font-weight: 800;
-    padding: 4px 9px;
+    padding: 3px 7px;
     text-transform: uppercase;
 }
 
-.orders-topbar .navbar-toggler {
+.orders-menu-button {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
     color: var(--text);
     display: none;
-    padding: 8px 10px;
+    height: 38px;
+    padding: 0 11px;
 }
 
 .orders-nav {
     align-items: center;
-    border-top: 1px solid var(--border);
     display: flex;
-    gap: 18px;
+    flex: 1 1 auto;
+    gap: 10px;
     justify-content: space-between;
-    min-height: 54px;
+    min-width: 0;
 }
 
 .orders-nav-list,
-.orders-nav-tools,
-.orders-action-list {
+.orders-nav-tools {
     align-items: center;
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+    flex-wrap: nowrap;
+    gap: 5px;
     list-style: none;
     margin: 0;
     padding: 0;
 }
 
 .orders-nav-link,
-.orders-tool-link,
-.orders-action-link {
+.orders-tool-link {
     align-items: center;
     border-radius: var(--r-sm);
     display: inline-flex;
+    font-size: .82rem;
     font-weight: 750;
-    gap: 7px;
-    min-height: 38px;
+    gap: 6px;
+    min-height: 36px;
     text-decoration: none;
     transition: background .15s, border-color .15s, color .15s;
     white-space: nowrap;
@@ -197,7 +203,7 @@ body {
 .orders-nav-link {
     border: 1px solid transparent;
     color: var(--text-2);
-    padding: 8px 11px;
+    padding: 7px 9px;
 }
 
 .orders-nav-link:hover,
@@ -211,11 +217,23 @@ body {
     color: #7c3aed;
 }
 
+.orders-nav-link.action-link {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+}
+
+.orders-nav-link.action-link:hover {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+    color: white;
+}
+
 .orders-tool-link {
     background: var(--surface-2);
     border: 1px solid var(--border);
     color: var(--text-2);
-    padding: 8px 10px;
+    padding: 7px 9px;
 }
 
 .orders-tool-link:hover {
@@ -227,39 +245,6 @@ body {
     background: var(--danger-l);
     border-color: #fecaca;
     color: var(--danger);
-}
-
-.orders-actionbar {
-    background: var(--surface-2);
-    border-bottom: 1px solid var(--border);
-}
-
-.orders-actionbar-inner {
-    align-items: center;
-    display: flex;
-    gap: 12px;
-    min-height: 48px;
-}
-
-.orders-action-label {
-    color: var(--muted);
-    font-size: .74rem;
-    font-weight: 800;
-    text-transform: uppercase;
-}
-
-.orders-action-link {
-    background: white;
-    border: 1px solid var(--border);
-    color: var(--primary);
-    font-size: .84rem;
-    padding: 7px 10px;
-}
-
-.orders-action-link:hover {
-    background: var(--primary-l);
-    border-color: #bfdbfe;
-    color: #1d4ed8;
 }
 
 .btn-nav-modern {
@@ -832,14 +817,20 @@ textarea.form-control { resize: vertical; }
 
 /* ── Responsive header ───────────────────────── */
 @media (max-width: 1199px) {
-    .orders-topbar .navbar-toggler {
+    .orders-topbar-main {
+        flex-wrap: wrap;
+    }
+
+    .orders-menu-button {
         display: block;
     }
 
     .orders-nav {
         align-items: stretch;
+        border-top: 1px solid var(--border);
         display: none;
-        padding: 0 0 14px;
+        flex-basis: 100%;
+        padding: 10px 0 12px;
     }
 
     .orders-nav.show,
@@ -848,8 +839,7 @@ textarea.form-control { resize: vertical; }
     }
 
     .orders-nav-list,
-    .orders-nav-tools,
-    .orders-action-list {
+    .orders-nav-tools {
         align-items: stretch;
         flex-direction: column;
         gap: 7px;
@@ -862,23 +852,20 @@ textarea.form-control { resize: vertical; }
     }
 
     .orders-nav-link,
-    .orders-tool-link,
-    .orders-action-link {
+    .orders-tool-link {
         justify-content: flex-start;
         width: 100%;
     }
 
-    .orders-actionbar-inner {
-        align-items: stretch;
-        flex-direction: column;
-        gap: 8px;
-        padding: 10px 0;
+    .orders-user {
+        border-left: 0;
+        padding-left: 0;
     }
 }
 
 @media (max-width: 640px) {
     .orders-topbar-main {
-        min-height: 60px;
+        min-height: 56px;
     }
 
     .orders-brand {
@@ -886,8 +873,8 @@ textarea.form-control { resize: vertical; }
     }
 
     .orders-brand-icon {
-        height: 38px;
-        width: 38px;
+        height: 34px;
+        width: 34px;
     }
 
     .orders-brand-title {

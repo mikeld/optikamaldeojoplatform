@@ -105,75 +105,65 @@ $acciones_contextuales = array_values(array_filter($acciones_navbar, function ($
           </span>
         </a>
 
-        <div class="orders-user d-none d-md-flex">
-          <span class="orders-user-name"><?= htmlspecialchars($usuario_actual['nombre'] ?? 'Invitado') ?></span>
-          <span class="orders-role"><?= htmlspecialchars($rol_labels[$rol_actual] ?? ucfirst($rol_actual)) ?></span>
-        </div>
+        <button class="orders-menu-button" type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#ordersNav"
+                aria-controls="ordersNav"
+                aria-expanded="false"
+                aria-label="Abrir menu">
+          <i class="fas fa-bars"></i>
+        </button>
 
-      <button class="navbar-toggler border-0 shadow-none" type="button"
-              data-bs-toggle="collapse"
-              data-bs-target="#ordersNav"
-              aria-controls="ordersNav"
-              aria-expanded="false"
-              aria-label="Abrir menu">
-        <i class="fas fa-bars fa-lg"></i>
-      </button>
+        <nav class="collapse orders-nav" id="ordersNav" aria-label="Menu principal de pedidos">
+          <ul class="orders-nav-list">
+            <?php foreach ($nav_principal as $item): ?>
+              <li class="nav-item">
+                <?php $active = in_array($current_file, $item['match'], true); ?>
+                <a class="orders-nav-link <?= $active ? 'is-active' : '' ?>" href="<?= htmlspecialchars($item['url']) ?>">
+                  <i class="bi <?= htmlspecialchars($item['icono']) ?>"></i>
+                  <span><?= htmlspecialchars($item['nombre']) ?></span>
+                </a>
+              </li>
+            <?php endforeach; ?>
+
+            <?php foreach ($acciones_contextuales as $accion): ?>
+              <li class="nav-item">
+                <a class="orders-nav-link action-link" href="<?= htmlspecialchars($accion['url']) ?>">
+                  <i class="bi <?= htmlspecialchars($accion['icono']) ?>"></i>
+                  <span><?= htmlspecialchars($accion['nombre']) ?></span>
+                </a>
+              </li>
+            <?php endforeach; ?>
+
+            <?php foreach ($nav_admin as $item): ?>
+              <li class="nav-item">
+                <?php $active = in_array($current_file, $item['match'], true); ?>
+                <a class="orders-nav-link admin-link <?= $active ? 'is-active' : '' ?>" href="<?= htmlspecialchars($item['url']) ?>">
+                  <i class="bi <?= htmlspecialchars($item['icono']) ?>"></i>
+                  <span><?= htmlspecialchars($item['nombre']) ?></span>
+                </a>
+              </li>
+            <?php endforeach; ?>
+          </ul>
+
+          <div class="orders-nav-tools">
+            <a class="orders-tool-link" href="../../home.php" title="Volver al portal">
+              <i class="bi bi-grid-fill"></i>
+              <span>Portal</span>
+            </a>
+            <span class="orders-user">
+              <span class="orders-user-name"><?= htmlspecialchars($usuario_actual['nombre'] ?? 'Invitado') ?></span>
+              <span class="orders-role"><?= htmlspecialchars($rol_labels[$rol_actual] ?? ucfirst($rol_actual)) ?></span>
+            </span>
+            <a class="orders-tool-link danger" href="../../logout.php" title="Cerrar sesion">
+              <i class="bi bi-box-arrow-right"></i>
+              <span>Salir</span>
+            </a>
+          </div>
+        </nav>
       </div>
-
-      <nav class="collapse navbar-collapse orders-nav" id="ordersNav" aria-label="Menu principal de pedidos">
-        <ul class="orders-nav-list">
-          <?php foreach ($nav_principal as $item): ?>
-            <li class="nav-item">
-              <?php $active = in_array($current_file, $item['match'], true); ?>
-              <a class="orders-nav-link <?= $active ? 'is-active' : '' ?>" href="<?= htmlspecialchars($item['url']) ?>">
-                <i class="bi <?= htmlspecialchars($item['icono']) ?>"></i>
-                <span><?= htmlspecialchars($item['nombre']) ?></span>
-              </a>
-            </li>
-          <?php endforeach; ?>
-
-          <?php foreach ($nav_admin as $item): ?>
-            <li class="nav-item">
-              <?php $active = in_array($current_file, $item['match'], true); ?>
-              <a class="orders-nav-link admin-link <?= $active ? 'is-active' : '' ?>" href="<?= htmlspecialchars($item['url']) ?>">
-                <i class="bi <?= htmlspecialchars($item['icono']) ?>"></i>
-                <span><?= htmlspecialchars($item['nombre']) ?></span>
-              </a>
-            </li>
-          <?php endforeach; ?>
-        </ul>
-
-        <div class="orders-nav-tools">
-          <a class="orders-tool-link" href="../../home.php">
-            <i class="bi bi-grid-fill"></i>
-            <span>Portal</span>
-          </a>
-          <a class="orders-tool-link danger" href="../../logout.php">
-            <i class="bi bi-box-arrow-right"></i>
-            <span>Salir</span>
-          </a>
-        </div>
-      </nav>
     </div>
   </header>
-
-  <?php if (!empty($acciones_contextuales)): ?>
-  <div class="orders-actionbar">
-    <div class="container-fluid px-lg-5">
-      <div class="orders-actionbar-inner">
-        <span class="orders-action-label">Acciones</span>
-        <div class="orders-action-list">
-          <?php foreach ($acciones_contextuales as $accion): ?>
-            <a class="orders-action-link" href="<?= htmlspecialchars($accion['url']) ?>">
-              <i class="bi <?= htmlspecialchars($accion['icono']) ?>"></i>
-              <span><?= htmlspecialchars($accion['nombre']) ?></span>
-            </a>
-          <?php endforeach; ?>
-        </div>
-      </div>
-    </div>
-  </div>
-  <?php endif; ?>
 
   <!-- BREADCRUMBS -->
   <?php if (!empty($breadcrumbs)): ?>
