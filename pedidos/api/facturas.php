@@ -73,6 +73,7 @@ function facturasSchemaRequerido() {
         'facturas_product_families' => ['id', 'family_name', 'base_price', 'regex_pattern', 'product_type', 'provider', 'notes', 'created_at', 'updated_at'],
         'facturas_products' => ['id', 'sku', 'name', 'family_id', 'graduation', 'expected_price', 'vat', 'provider', 'last_updated'],
         'facturas_audits' => ['id', 'created_at', 'invoice_date', 'provider', 'invoice_number', 'total_invoice', 'global_status', 'lines', 'pdf_path', 'ocr_text', 'alert_count', 'critical_alert_count', 'reviewed_by', 'reviewed_at', 'notes'],
+        'facturas_pages' => ['id', 'audit_id', 'page_number', 'image_path', 'mime_type', 'width', 'height', 'created_at'],
         'facturas_price_history' => ['id', 'product_id', 'old_price', 'new_price', 'change_date', 'reason', 'changed_by', 'invoice_id'],
         'facturas_alerts' => ['id', 'audit_id', 'line_number', 'alert_type', 'severity', 'product_sku', 'product_name', 'expected_value', 'actual_value', 'difference', 'difference_percent', 'status', 'resolution_action', 'resolved_at', 'created_at']
     ];
@@ -94,6 +95,31 @@ function asegurarDirectorioFacturas() {
     }
 
     return $dir;
+}
+
+function asegurarDirectorioPaginasFacturas() {
+    $base = asegurarDirectorioFacturas();
+    $dir = $base . '/pages';
+    if (!is_dir($dir) && !mkdir($dir, 0755, true)) {
+        throw new Exception('No se ha podido crear el directorio de páginas de facturas');
+    }
+
+    return $dir;
+}
+
+function asegurarTablaFacturasPages($pdo) {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS `facturas_pages` (
+        `id` VARCHAR(100) PRIMARY KEY,
+        `audit_id` VARCHAR(100) NOT NULL,
+        `page_number` INT NOT NULL,
+        `image_path` VARCHAR(500) NOT NULL,
+        `mime_type` VARCHAR(100) DEFAULT 'image/jpeg',
+        `width` INT DEFAULT 0,
+        `height` INT DEFAULT 0,
+        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY `unique_audit_page` (`audit_id`, `page_number`),
+        INDEX `idx_audit_id` (`audit_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 }
 
 function nombreSeguroFactura($name) {
@@ -121,6 +147,13 @@ function rutaFacturaDesdePath($relativePath) {
     }
 
     return $real;
+}
+
+function borrarArchivoFacturaRelativo($relativePath) {
+    $path = rutaFacturaDesdePath($relativePath);
+    if ($path && is_file($path)) {
+        unlink($path);
+    }
 }
 
 function mimePermitidoFactura($mimeType) {
@@ -168,6 +201,34 @@ function diagnosticarSchemaFacturas($pdo) {
         'schema_file' => 'pedidos/sql/facturas_schema.sql',
         'gemini_configured' => defined('GEMINI_API_KEY') && trim((string)GEMINI_API_KEY) !== ''
     ];
+}
+
+function adjuntarPaginasFacturas($pdo, &$audits) {
+    if (empty($audits)) {
+        return;
+    }
+
+    asegurarTablaFacturasPages($pdo);
+    $auditIds = array_values(array_filter(array_map(fn($audit) => $audit['id'] ?? null, $audits)));
+    if (empty($auditIds)) {
+        return;
+    }
+
+    $placeholders = implode(',', array_fill(0, count($auditIds), '?'));
+    $stmt = $pdo->prepare("SELECT `id`, `audit_id`, `page_number`, `image_path`, `mime_type`, `width`, `height`, `created_at`
+                           FROM `facturas_pages`
+                           WHERE `audit_id` IN ($placeholders)
+                           ORDER BY `audit_id`, `page_number`");
+    $stmt->execute($auditIds);
+
+    $pagesByAudit = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $page) {
+        $pagesByAudit[$page['audit_id']][] = $page;
+    }
+
+    foreach ($audits as &$audit) {
+        $audit['pages'] = $pagesByAudit[$audit['id']] ?? [];
+    }
 }
 
 function geminiApiKey() {
@@ -250,6 +311,7 @@ function geminiResponseText($response) {
 try {
     switch ($action) {
         case 'getSchemaStatus':
+            asegurarTablaFacturasPages($pdo);
             echo json_encode(diagnosticarSchemaFacturas($pdo));
             break;
 
@@ -534,6 +596,7 @@ Pregunta:
                     $row['lines'] = [];
                 }
             }
+            adjuntarPaginasFacturas($pdo, $results);
             echo json_encode($results);
             break;
 
@@ -548,6 +611,7 @@ Pregunta:
                 $decoded = json_decode($audit['lines'] ?? '[]', true);
                 $audit['lines'] = is_array($decoded) ? array_slice($decoded, 0, 30) : [];
             }
+            adjuntarPaginasFacturas($pdo, $audits);
 
             $alertsStmt = $pdo->query("SELECT a.*, au.provider, au.invoice_number, au.invoice_date
                                        FROM `facturas_alerts` a
@@ -601,6 +665,7 @@ Pregunta:
                 $decoded = json_decode($audit['lines'] ?? '[]', true);
                 $audit['lines'] = is_array($decoded) ? array_slice($decoded, 0, 20) : [];
             }
+            adjuntarPaginasFacturas($pdo, $audits);
 
             $alertParams = [];
             $alertWhere = condicionBusquedaLike([
@@ -705,6 +770,61 @@ Pregunta:
             ]);
             break;
 
+        case 'uploadInvoicePages':
+            if ($method !== 'POST') {
+                throw new Exception('Método no permitido');
+            }
+
+            $data = json_decode(file_get_contents('php://input'), true) ?: [];
+            $pages = $data['pages'] ?? [];
+            if (!is_array($pages)) {
+                throw new Exception('Formato de páginas no válido');
+            }
+
+            if (count($pages) > 6) {
+                throw new Exception('Solo se pueden guardar hasta 6 páginas por factura');
+            }
+
+            asegurarTablaFacturasPages($pdo);
+            $dir = asegurarDirectorioPaginasFacturas();
+            $savedPages = [];
+
+            foreach ($pages as $page) {
+                $pageNumber = max(1, (int)($page['pageNumber'] ?? $page['page_number'] ?? 0));
+                $mimeType = $page['mimeType'] ?? $page['mime_type'] ?? 'image/jpeg';
+                $base64 = preg_replace('/^data:image\/[a-zA-Z0-9.+-]+;base64,/', '', (string)($page['base64'] ?? ''));
+
+                if ($mimeType !== 'image/jpeg' || $base64 === '') {
+                    throw new Exception('Solo se admiten páginas JPEG');
+                }
+
+                if (strlen($base64) > 2200000) {
+                    throw new Exception('Una página renderizada es demasiado grande');
+                }
+
+                $binary = base64_decode($base64, true);
+                if ($binary === false || strlen($binary) < 100) {
+                    throw new Exception('Página renderizada no válida');
+                }
+
+                $storedName = uniqid('page_', true) . '.jpg';
+                $target = $dir . '/' . $storedName;
+                if (file_put_contents($target, $binary) === false) {
+                    throw new Exception('No se ha podido guardar una página de factura');
+                }
+
+                $savedPages[] = [
+                    'page_number' => $pageNumber,
+                    'path' => 'facturas_uploads/pages/' . $storedName,
+                    'mime_type' => $mimeType,
+                    'width' => (int)($page['width'] ?? 0),
+                    'height' => (int)($page['height'] ?? 0),
+                ];
+            }
+
+            echo json_encode(['status' => 'success', 'pages' => $savedPages]);
+            break;
+
         case 'viewInvoiceFile':
             $auditId = $_GET['audit_id'] ?? '';
             if ($auditId === '') {
@@ -737,6 +857,41 @@ Pregunta:
             readfile($path);
             exit();
 
+        case 'viewInvoicePage':
+            $auditId = $_GET['audit_id'] ?? '';
+            $pageNumber = (int)($_GET['page'] ?? 0);
+            if ($auditId === '' || $pageNumber < 1) {
+                throw new Exception('Falta el ID de auditoría o la página');
+            }
+
+            asegurarTablaFacturasPages($pdo);
+            $stmt = $pdo->prepare("SELECT `image_path`, `mime_type`
+                                   FROM `facturas_pages`
+                                   WHERE `audit_id` = ? AND `page_number` = ?
+                                   LIMIT 1");
+            $stmt->execute([$auditId, $pageNumber]);
+            $page = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$page || empty($page['image_path'])) {
+                http_response_code(404);
+                echo json_encode(['error' => 'Página no encontrada']);
+                break;
+            }
+
+            $path = rutaFacturaDesdePath($page['image_path']);
+            if (!$path || !is_file($path)) {
+                http_response_code(404);
+                echo json_encode(['error' => 'Archivo de página no encontrado']);
+                break;
+            }
+
+            header_remove('Content-Type');
+            header('Content-Type: ' . ($page['mime_type'] ?: 'image/jpeg'));
+            header('Content-Length: ' . filesize($path));
+            header('Content-Disposition: inline; filename="factura_' . nombreSeguroFactura($auditId) . '_p' . $pageNumber . '.jpg"');
+            header('Cache-Control: private, max-age=300');
+            readfile($path);
+            exit();
+
         case 'deleteInvoiceFile':
             if ($method !== 'POST' && $method !== 'DELETE') {
                 throw new Exception('Método no permitido');
@@ -752,11 +907,17 @@ Pregunta:
             $stmt->execute([$auditId]);
             $relativePath = $stmt->fetchColumn();
             if ($relativePath) {
-                $path = rutaFacturaDesdePath($relativePath);
-                if ($path && is_file($path)) {
-                    unlink($path);
-                }
+                borrarArchivoFacturaRelativo($relativePath);
             }
+
+            asegurarTablaFacturasPages($pdo);
+            $pagesStmt = $pdo->prepare("SELECT `image_path` FROM `facturas_pages` WHERE `audit_id` = ?");
+            $pagesStmt->execute([$auditId]);
+            foreach ($pagesStmt->fetchAll(PDO::FETCH_COLUMN) as $pagePath) {
+                borrarArchivoFacturaRelativo($pagePath);
+            }
+            $deletePagesStmt = $pdo->prepare("DELETE FROM `facturas_pages` WHERE `audit_id` = ?");
+            $deletePagesStmt->execute([$auditId]);
 
             $clearStmt = $pdo->prepare("UPDATE `facturas_audits` SET `pdf_path` = NULL WHERE `id` = ?");
             $clearStmt->execute([$auditId]);
@@ -778,14 +939,19 @@ Pregunta:
             $stmt->execute([$auditId]);
             $relativePath = $stmt->fetchColumn();
             if ($relativePath) {
-                $path = rutaFacturaDesdePath($relativePath);
-                if ($path && is_file($path)) {
-                    unlink($path);
-                }
+                borrarArchivoFacturaRelativo($relativePath);
             }
 
             $pdo->beginTransaction();
             try {
+                asegurarTablaFacturasPages($pdo);
+                $pagesStmt = $pdo->prepare("SELECT `image_path` FROM `facturas_pages` WHERE `audit_id` = ?");
+                $pagesStmt->execute([$auditId]);
+                $pagePaths = $pagesStmt->fetchAll(PDO::FETCH_COLUMN);
+
+                $deletePagesStmt = $pdo->prepare("DELETE FROM `facturas_pages` WHERE `audit_id` = ?");
+                $deletePagesStmt->execute([$auditId]);
+
                 $alertsStmt = $pdo->prepare("DELETE FROM `facturas_alerts` WHERE `audit_id` = ?");
                 $alertsStmt->execute([$auditId]);
 
@@ -796,6 +962,10 @@ Pregunta:
                 $auditStmt->execute([$auditId]);
 
                 $pdo->commit();
+
+                foreach ($pagePaths as $pagePath) {
+                    borrarArchivoFacturaRelativo($pagePath);
+                }
             } catch (Exception $e) {
                 $pdo->rollBack();
                 throw $e;
@@ -867,9 +1037,46 @@ Pregunta:
 
                 $newPdfPath = $data['pdfPath'] ?? null;
                 if ($oldPdfPath && $newPdfPath && $oldPdfPath !== $newPdfPath) {
-                    $oldFile = rutaFacturaDesdePath($oldPdfPath);
-                    if ($oldFile && is_file($oldFile)) {
-                        unlink($oldFile);
+                    borrarArchivoFacturaRelativo($oldPdfPath);
+                }
+
+                asegurarTablaFacturasPages($pdo);
+                $incomingPages = is_array($data['pages'] ?? null) ? $data['pages'] : [];
+                if (!empty($incomingPages)) {
+                    $oldPagesStmt = $pdo->prepare("SELECT `image_path` FROM `facturas_pages` WHERE `audit_id` = ?");
+                    $oldPagesStmt->execute([$savedId]);
+                    $oldPagePaths = $oldPagesStmt->fetchAll(PDO::FETCH_COLUMN);
+
+                    $deletePagesStmt = $pdo->prepare("DELETE FROM `facturas_pages` WHERE `audit_id` = ?");
+                    $deletePagesStmt->execute([$savedId]);
+
+                    $insertPageStmt = $pdo->prepare("INSERT INTO `facturas_pages`
+                        (`id`, `audit_id`, `page_number`, `image_path`, `mime_type`, `width`, `height`)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)");
+
+                    $keptPaths = [];
+                    foreach ($incomingPages as $page) {
+                        $pagePath = $page['path'] ?? $page['image_path'] ?? null;
+                        if (!$pagePath || !rutaFacturaDesdePath($pagePath)) {
+                            continue;
+                        }
+
+                        $keptPaths[] = $pagePath;
+                        $insertPageStmt->execute([
+                            uniqid('fpage_'),
+                            $savedId,
+                            max(1, (int)($page['pageNumber'] ?? $page['page_number'] ?? 1)),
+                            $pagePath,
+                            $page['mimeType'] ?? $page['mime_type'] ?? 'image/jpeg',
+                            (int)($page['width'] ?? 0),
+                            (int)($page['height'] ?? 0),
+                        ]);
+                    }
+
+                    foreach ($oldPagePaths as $oldPagePath) {
+                        if (!in_array($oldPagePath, $keptPaths, true)) {
+                            borrarArchivoFacturaRelativo($oldPagePath);
+                        }
                     }
                 }
 

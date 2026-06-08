@@ -1,5 +1,5 @@
 
-import { Product, AuditRecord, ProductFamily, PriceHistory, Alert, AssistantContext, SchemaStatus, UploadedInvoiceFile } from './types';
+import { Product, AuditRecord, ProductFamily, PriceHistory, Alert, AssistantContext, SchemaStatus, UploadedInvoiceFile, UploadedInvoicePage } from './types';
 
 const API_URL = '../pedidos/api/facturas.php';
 
@@ -205,7 +205,8 @@ export const db = {
         criticalAlertCount: a.critical_alert_count || 0,
         reviewedBy: a.reviewed_by || null,
         reviewedAt: a.reviewed_at || null,
-        notes: a.notes || null
+        notes: a.notes || null,
+        pages: a.pages || []
       }));
     } catch (error) {
       console.error("Error fetching audits:", error);
@@ -247,6 +248,32 @@ export const db = {
 
   getInvoiceFileUrl(auditId: string): string {
     return `${API_URL}?action=viewInvoiceFile&audit_id=${encodeURIComponent(auditId)}`;
+  },
+
+  getInvoicePageUrl(auditId: string, pageNumber: number): string {
+    return `${API_URL}?action=viewInvoicePage&audit_id=${encodeURIComponent(auditId)}&page=${encodeURIComponent(pageNumber)}`;
+  },
+
+  async uploadInvoicePages(pages: Array<{ pageNumber: number; base64: string; mimeType: string; width: number; height: number }>): Promise<UploadedInvoicePage[]> {
+    if (pages.length === 0) return [];
+
+    const response = await fetch(`${API_URL}?action=uploadInvoicePages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pages })
+    });
+    const result = await parseApiJson(response, 'Error subiendo las páginas de la factura');
+    if (!response.ok) {
+      throw new Error(result.error || 'Error subiendo las páginas de la factura');
+    }
+
+    return (result.pages || []).map((page: any) => ({
+      pageNumber: Number(page.page_number || page.pageNumber || 0),
+      path: page.path,
+      mimeType: page.mime_type || page.mimeType || 'image/jpeg',
+      width: Number(page.width || 0),
+      height: Number(page.height || 0)
+    }));
   },
 
   async deleteInvoiceFile(auditId: string): Promise<void> {

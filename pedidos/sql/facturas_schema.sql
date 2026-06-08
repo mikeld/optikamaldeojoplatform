@@ -51,6 +51,19 @@ CREATE TABLE IF NOT EXISTS `facturas_audits` (
     INDEX `idx_global_status` (`global_status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `facturas_pages` (
+    `id` VARCHAR(100) PRIMARY KEY,
+    `audit_id` VARCHAR(100) NOT NULL,
+    `page_number` INT NOT NULL,
+    `image_path` VARCHAR(500) NOT NULL,
+    `mime_type` VARCHAR(100) DEFAULT 'image/jpeg',
+    `width` INT DEFAULT 0,
+    `height` INT DEFAULT 0,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY `unique_audit_page` (`audit_id`, `page_number`),
+    INDEX `idx_audit_id` (`audit_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS `facturas_price_history` (
     `id` VARCHAR(100) PRIMARY KEY,
     `product_id` VARCHAR(100) NOT NULL,

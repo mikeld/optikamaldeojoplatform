@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Upload, FileText, Loader2, CheckCircle2, XCircle, AlertCircle, RefreshCw, Save, ArrowLeft, PlusCircle, Database, Trash2, X, CheckSquare, Edit3, AlertTriangle, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 import { extractInvoiceData, extractInvoiceFile } from '../services/geminiService';
-import { renderPdfPagesAsJpeg } from '../services/pdfPreview';
+import { combineRenderedPagesAsJpeg, renderPdfPageImages } from '../services/pdfPreview';
 import { db } from '../db';
 import { InvoiceData, AuditLine, LineStatus, Product, AuditRecord, AuditStatus, ProductFamily, InvoiceItem } from '../types';
 
@@ -124,13 +124,15 @@ const AuditPage: React.FC = () => {
     setError(null);
 
     try {
+      const renderedPages = file.type === 'application/pdf' ? await renderPdfPageImages(file, 4) : [];
       const extracted = file.type === 'application/pdf'
-        ? await renderPdfPagesAsJpeg(file).then(({ base64, mimeType }) => extractInvoiceData(base64, mimeType))
+        ? await combineRenderedPagesAsJpeg(renderedPages.slice(0, 3)).then(({ base64, mimeType }) => extractInvoiceData(base64, mimeType))
         : await extractInvoiceFile(file);
-      const [masterProducts, families, uploadedFile] = await Promise.all([
+      const [masterProducts, families, uploadedFile, uploadedPages] = await Promise.all([
         db.getProducts(),
         db.getFamilies(),
-        db.uploadInvoiceFile(file)
+        db.uploadInvoiceFile(file),
+        db.uploadInvoicePages(renderedPages)
       ]);
 
       const auditLines: AuditLine[] = extracted.items.map((item, idx) => {
@@ -166,6 +168,7 @@ const AuditPage: React.FC = () => {
         totalInvoice: extracted.total,
         globalStatus: 'in_review',
         pdfPath: uploadedFile.path,
+        pages: uploadedPages,
         notes: `Archivo original: ${uploadedFile.filename}`
       });
       setIsProcessing(false);

@@ -118,6 +118,7 @@ export interface AuditRecord {
   reviewedBy?: string | null;
   reviewedAt?: string | null;
   notes?: string | null;
+  pages?: InvoicePagePreview[];
 }
 
 export interface AssistantContext {
@@ -137,6 +138,18 @@ export interface UploadedInvoiceFile {
   filename: string;
   mimeType: string;
   size: number;
+}
+
+export interface UploadedInvoicePage {
+  pageNumber: number;
+  path: string;
+  mimeType: string;
+  width: number;
+  height: number;
+}
+
+export interface InvoicePagePreview extends UploadedInvoicePage {
+  id?: string;
 }
 
 export interface SchemaStatus {
