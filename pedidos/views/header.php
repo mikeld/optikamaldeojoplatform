@@ -27,34 +27,42 @@ $pedidos_url = function (string $file) use ($views_prefix): string {
     return $views_prefix . $file;
 };
 
-$nav_principal = [
-    ['nombre' => 'Pedidos', 'url' => $pedidos_url('listado_pedidos.php'), 'icono' => 'bi-card-checklist', 'match' => ['listado_pedidos.php']],
-    ['nombre' => 'Nuevo', 'url' => $pedidos_url('formulario_pedidos.php'), 'icono' => 'bi-plus-circle', 'match' => ['formulario_pedidos.php']],
-    ['nombre' => 'Clientes', 'url' => $pedidos_url('listado_usuarios.php'), 'icono' => 'bi-people', 'match' => ['listado_usuarios.php', 'formulario_usuarios.php', 'ficha_cliente.php']],
-    ['nombre' => 'Proveedores', 'url' => $pedidos_url('listado_proveedores.php'), 'icono' => 'bi-building', 'match' => ['listado_proveedores.php', 'formulario_proveedores.php']],
+$menu_grupos = [
+    'Operacion' => [
+        ['nombre' => 'Listado pedidos', 'url' => $pedidos_url('listado_pedidos.php'), 'icono' => 'bi-card-checklist', 'match' => ['listado_pedidos.php']],
+        ['nombre' => 'Nuevo pedido', 'url' => $pedidos_url('formulario_pedidos.php'), 'icono' => 'bi-plus-circle', 'match' => ['formulario_pedidos.php']],
+        ['nombre' => 'Carrito', 'url' => $pedidos_url('carrito_pedidos.php'), 'icono' => 'bi-cart3', 'match' => ['carrito_pedidos.php']],
+        ['nombre' => 'Busqueda', 'url' => $pedidos_url('busqueda.php'), 'icono' => 'bi-search', 'match' => ['busqueda.php']],
+    ],
+    'Clientes' => [
+        ['nombre' => 'Listado clientes', 'url' => $pedidos_url('listado_usuarios.php'), 'icono' => 'bi-people', 'match' => ['listado_usuarios.php', 'ficha_cliente.php']],
+        ['nombre' => 'Nuevo cliente', 'url' => $pedidos_url('formulario_usuarios.php'), 'icono' => 'bi-person-plus', 'match' => ['formulario_usuarios.php']],
+    ],
+    'Proveedores' => [
+        ['nombre' => 'Listado proveedores', 'url' => $pedidos_url('listado_proveedores.php'), 'icono' => 'bi-building', 'match' => ['listado_proveedores.php']],
+        ['nombre' => 'Nuevo proveedor', 'url' => $pedidos_url('formulario_proveedores.php'), 'icono' => 'bi-building-add', 'match' => ['formulario_proveedores.php']],
+    ],
 ];
 
 if ($can_manage) {
-    $nav_principal[] = ['nombre' => 'Calendario', 'url' => $pedidos_url('calendario.php'), 'icono' => 'bi-calendar3', 'match' => ['calendario.php']];
-    $nav_principal[] = ['nombre' => 'KPIs', 'url' => $pedidos_url('estadisticas.php'), 'icono' => 'bi-graph-up-arrow', 'match' => ['estadisticas.php']];
+    $menu_grupos['Control'] = [
+        ['nombre' => 'Calendario', 'url' => $pedidos_url('calendario.php'), 'icono' => 'bi-calendar3', 'match' => ['calendario.php']],
+        ['nombre' => 'Estadisticas', 'url' => $pedidos_url('estadisticas.php'), 'icono' => 'bi-graph-up-arrow', 'match' => ['estadisticas.php']],
+    ];
 }
 
-$nav_admin = [];
 if ($is_admin) {
-    $nav_admin = [
+    $menu_grupos['Admin'] = [
         ['nombre' => 'Backups', 'url' => $pedidos_url('copias_seguridad.php'), 'icono' => 'bi-shield-check', 'match' => ['copias_seguridad.php']],
-        ['nombre' => 'Mensajes', 'url' => $pedidos_url('gestionar_mensajes.php'), 'icono' => 'bi-whatsapp', 'match' => ['gestionar_mensajes.php']],
+        ['nombre' => 'Mensajes WhatsApp', 'url' => $pedidos_url('gestionar_mensajes.php'), 'icono' => 'bi-whatsapp', 'match' => ['gestionar_mensajes.php']],
     ];
 }
 
 $current_file = basename($_SERVER['SCRIPT_NAME'] ?? '');
-$nav_basenames = array_map(function ($item) {
-    return basename($item['url']);
-}, array_merge($nav_principal, $nav_admin));
-
-$acciones_contextuales = array_values(array_filter($acciones_navbar, function ($accion) use ($nav_basenames) {
-    return !in_array(basename($accion['url'] ?? ''), $nav_basenames, true);
-}));
+$quick_actions = [
+    ['nombre' => 'Nuevo pedido', 'url' => $pedidos_url('formulario_pedidos.php'), 'icono' => 'bi-plus-circle', 'clase' => 'primary'],
+    ['nombre' => 'Nuevo cliente', 'url' => $pedidos_url('formulario_usuarios.php'), 'icono' => 'bi-person-plus', 'clase' => 'secondary'],
+];
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -97,6 +105,15 @@ $acciones_contextuales = array_values(array_filter($acciones_navbar, function ($
   <header class="orders-topbar">
     <div class="container-fluid px-lg-5">
       <div class="orders-topbar-main">
+        <button class="orders-menu-button" type="button"
+                data-bs-toggle="offcanvas"
+                data-bs-target="#ordersSidebar"
+                aria-controls="ordersSidebar"
+                aria-label="Abrir menu de Pedidos">
+          <i class="fas fa-bars"></i>
+          <span>Menu</span>
+        </button>
+
         <a class="orders-brand" href="<?= htmlspecialchars($pedidos_url('listado_pedidos.php')) ?>">
           <span class="orders-brand-icon"><i class="bi bi-eyeglasses"></i></span>
           <span>
@@ -105,65 +122,60 @@ $acciones_contextuales = array_values(array_filter($acciones_navbar, function ($
           </span>
         </a>
 
-        <button class="orders-menu-button" type="button"
-                data-bs-toggle="collapse"
-                data-bs-target="#ordersNav"
-                aria-controls="ordersNav"
-                aria-expanded="false"
-                aria-label="Abrir menu">
-          <i class="fas fa-bars"></i>
-        </button>
-
-        <nav class="collapse orders-nav" id="ordersNav" aria-label="Menu principal de pedidos">
-          <ul class="orders-nav-list">
-            <?php foreach ($nav_principal as $item): ?>
-              <li class="nav-item">
-                <?php $active = in_array($current_file, $item['match'], true); ?>
-                <a class="orders-nav-link <?= $active ? 'is-active' : '' ?>" href="<?= htmlspecialchars($item['url']) ?>">
-                  <i class="bi <?= htmlspecialchars($item['icono']) ?>"></i>
-                  <span><?= htmlspecialchars($item['nombre']) ?></span>
-                </a>
-              </li>
-            <?php endforeach; ?>
-
-            <?php foreach ($acciones_contextuales as $accion): ?>
-              <li class="nav-item">
-                <a class="orders-nav-link action-link" href="<?= htmlspecialchars($accion['url']) ?>">
-                  <i class="bi <?= htmlspecialchars($accion['icono']) ?>"></i>
-                  <span><?= htmlspecialchars($accion['nombre']) ?></span>
-                </a>
-              </li>
-            <?php endforeach; ?>
-
-            <?php foreach ($nav_admin as $item): ?>
-              <li class="nav-item">
-                <?php $active = in_array($current_file, $item['match'], true); ?>
-                <a class="orders-nav-link admin-link <?= $active ? 'is-active' : '' ?>" href="<?= htmlspecialchars($item['url']) ?>">
-                  <i class="bi <?= htmlspecialchars($item['icono']) ?>"></i>
-                  <span><?= htmlspecialchars($item['nombre']) ?></span>
-                </a>
-              </li>
-            <?php endforeach; ?>
-          </ul>
-
-          <div class="orders-nav-tools">
-            <a class="orders-tool-link" href="../../home.php" title="Volver al portal">
-              <i class="bi bi-grid-fill"></i>
-              <span>Portal</span>
+        <nav class="orders-quick-actions" aria-label="Acciones rapidas">
+          <?php foreach ($quick_actions as $accion): ?>
+            <a class="orders-quick-link <?= htmlspecialchars($accion['clase']) ?>" href="<?= htmlspecialchars($accion['url']) ?>">
+              <i class="bi <?= htmlspecialchars($accion['icono']) ?>"></i>
+              <span><?= htmlspecialchars($accion['nombre']) ?></span>
             </a>
-            <span class="orders-user">
-              <span class="orders-user-name"><?= htmlspecialchars($usuario_actual['nombre'] ?? 'Invitado') ?></span>
-              <span class="orders-role"><?= htmlspecialchars($rol_labels[$rol_actual] ?? ucfirst($rol_actual)) ?></span>
-            </span>
-            <a class="orders-tool-link danger" href="../../logout.php" title="Cerrar sesion">
-              <i class="bi bi-box-arrow-right"></i>
-              <span>Salir</span>
-            </a>
-          </div>
+          <?php endforeach; ?>
         </nav>
+
+        <div class="orders-topbar-tools">
+          <a class="orders-tool-link portal" href="../../home.php" title="Volver al portal">
+            <i class="bi bi-grid-fill"></i>
+            <span>Portal</span>
+          </a>
+          <span class="orders-user">
+            <span class="orders-user-name"><?= htmlspecialchars($usuario_actual['nombre'] ?? 'Invitado') ?></span>
+            <span class="orders-role"><?= htmlspecialchars($rol_labels[$rol_actual] ?? ucfirst($rol_actual)) ?></span>
+          </span>
+          <a class="orders-tool-link danger" href="../../logout.php" title="Cerrar sesion">
+            <i class="bi bi-box-arrow-right"></i>
+            <span>Salir</span>
+          </a>
+        </div>
       </div>
     </div>
   </header>
+
+  <aside class="offcanvas offcanvas-start orders-sidebar" tabindex="-1" id="ordersSidebar" aria-labelledby="ordersSidebarTitle">
+    <div class="orders-sidebar-header">
+      <div>
+        <div class="orders-sidebar-eyebrow">Menu de trabajo</div>
+        <h2 id="ordersSidebarTitle">Pedidos</h2>
+      </div>
+      <button type="button" class="orders-sidebar-close" data-bs-dismiss="offcanvas" aria-label="Cerrar menu">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+    <div class="orders-sidebar-body">
+      <?php foreach ($menu_grupos as $grupo => $items): ?>
+        <section class="orders-menu-group">
+          <h3><?= htmlspecialchars($grupo) ?></h3>
+          <div class="orders-menu-list">
+            <?php foreach ($items as $item): ?>
+              <?php $active = in_array($current_file, $item['match'], true); ?>
+              <a class="orders-menu-link <?= $active ? 'is-active' : '' ?>" href="<?= htmlspecialchars($item['url']) ?>">
+                <span class="orders-menu-icon"><i class="bi <?= htmlspecialchars($item['icono']) ?>"></i></span>
+                <span><?= htmlspecialchars($item['nombre']) ?></span>
+              </a>
+            <?php endforeach; ?>
+          </div>
+        </section>
+      <?php endforeach; ?>
+    </div>
+  </aside>
 
   <!-- BREADCRUMBS -->
   <?php if (!empty($breadcrumbs)): ?>

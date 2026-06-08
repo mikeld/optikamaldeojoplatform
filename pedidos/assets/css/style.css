@@ -81,8 +81,7 @@ body {
     min-height: 58px;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 14px;
+    gap: 12px;
 }
 
 .orders-brand {
@@ -91,7 +90,7 @@ body {
     align-items: center;
     flex: 0 0 auto;
     gap: 10px;
-    min-width: 142px;
+    min-width: 150px;
     text-decoration: none;
 }
 
@@ -157,36 +156,34 @@ body {
 }
 
 .orders-menu-button {
-    background: var(--surface-2);
+    align-items: center;
+    background: var(--indigo-l);
     border: 1px solid var(--border);
     border-radius: var(--r-sm);
-    color: var(--text);
-    display: none;
+    color: var(--indigo-d);
+    display: inline-flex;
+    font-size: .84rem;
+    font-weight: 800;
+    gap: 8px;
     height: 38px;
-    padding: 0 11px;
+    padding: 0 12px;
+    white-space: nowrap;
 }
 
-.orders-nav {
+.orders-menu-button:hover {
+    background: #e0e7ff;
+    border-color: #c7d2fe;
+}
+
+.orders-quick-actions {
     align-items: center;
     display: flex;
     flex: 1 1 auto;
-    gap: 10px;
-    justify-content: space-between;
+    gap: 8px;
     min-width: 0;
 }
 
-.orders-nav-list,
-.orders-nav-tools {
-    align-items: center;
-    display: flex;
-    flex-wrap: nowrap;
-    gap: 5px;
-    list-style: none;
-    margin: 0;
-    padding: 0;
-}
-
-.orders-nav-link,
+.orders-quick-link,
 .orders-tool-link {
     align-items: center;
     border-radius: var(--r-sm);
@@ -200,33 +197,38 @@ body {
     white-space: nowrap;
 }
 
-.orders-nav-link {
-    border: 1px solid transparent;
-    color: var(--text-2);
-    padding: 7px 9px;
+.orders-quick-link {
+    border: 1px solid var(--border);
+    padding: 7px 11px;
 }
 
-.orders-nav-link:hover,
-.orders-nav-link.is-active {
-    background: var(--indigo-l);
-    border-color: #c7d2fe;
-    color: var(--indigo-d);
-}
-
-.orders-nav-link.admin-link {
-    color: #7c3aed;
-}
-
-.orders-nav-link.action-link {
+.orders-quick-link.primary {
     background: var(--primary);
     border-color: var(--primary);
     color: white;
 }
 
-.orders-nav-link.action-link:hover {
+.orders-quick-link.primary:hover {
     background: #1d4ed8;
-    border-color: #1d4ed8;
     color: white;
+}
+
+.orders-quick-link.secondary {
+    background: var(--surface);
+    color: var(--primary);
+}
+
+.orders-quick-link.secondary:hover {
+    background: var(--primary-l);
+    border-color: #bfdbfe;
+    color: #1d4ed8;
+}
+
+.orders-topbar-tools {
+    align-items: center;
+    display: flex;
+    flex: 0 0 auto;
+    gap: 8px;
 }
 
 .orders-tool-link {
@@ -234,6 +236,12 @@ body {
     border: 1px solid var(--border);
     color: var(--text-2);
     padding: 7px 9px;
+}
+
+.orders-tool-link.portal {
+    background: #eef2ff;
+    border-color: #c7d2fe;
+    color: var(--indigo-d);
 }
 
 .orders-tool-link:hover {
@@ -245,6 +253,100 @@ body {
     background: var(--danger-l);
     border-color: #fecaca;
     color: var(--danger);
+}
+
+.orders-sidebar {
+    --bs-offcanvas-width: 330px;
+    background: #f8fafc;
+    border-right: 1px solid var(--border);
+}
+
+.orders-sidebar-header {
+    align-items: center;
+    background: white;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    padding: 18px 20px;
+}
+
+.orders-sidebar-eyebrow {
+    color: var(--muted);
+    font-size: .72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.orders-sidebar-header h2 {
+    font-size: 1.35rem;
+    font-weight: 850;
+    margin-top: 2px;
+}
+
+.orders-sidebar-close {
+    align-items: center;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    color: var(--text-2);
+    display: inline-flex;
+    height: 36px;
+    justify-content: center;
+    width: 36px;
+}
+
+.orders-sidebar-body {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding: 18px;
+}
+
+.orders-menu-group h3 {
+    color: var(--muted);
+    font-size: .72rem;
+    font-weight: 850;
+    margin: 0 0 8px 4px;
+    text-transform: uppercase;
+}
+
+.orders-menu-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.orders-menu-link {
+    align-items: center;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    color: var(--text-2);
+    display: flex;
+    font-weight: 750;
+    gap: 10px;
+    min-height: 44px;
+    padding: 9px 11px;
+    text-decoration: none;
+    transition: background .15s, border-color .15s, color .15s, transform .15s;
+}
+
+.orders-menu-link:hover,
+.orders-menu-link.is-active {
+    background: var(--indigo-l);
+    border-color: #c7d2fe;
+    color: var(--indigo-d);
+    transform: translateX(2px);
+}
+
+.orders-menu-icon {
+    align-items: center;
+    background: var(--surface-2);
+    border-radius: var(--r-xs);
+    display: inline-flex;
+    height: 30px;
+    justify-content: center;
+    width: 30px;
 }
 
 .btn-nav-modern {
@@ -817,49 +919,17 @@ textarea.form-control { resize: vertical; }
 
 /* ── Responsive header ───────────────────────── */
 @media (max-width: 1199px) {
-    .orders-topbar-main {
-        flex-wrap: wrap;
+    .orders-brand {
+        min-width: 132px;
     }
 
-    .orders-menu-button {
-        display: block;
-    }
-
-    .orders-nav {
-        align-items: stretch;
-        border-top: 1px solid var(--border);
+    .orders-quick-link.secondary {
         display: none;
-        flex-basis: 100%;
-        padding: 10px 0 12px;
     }
 
-    .orders-nav.show,
-    .orders-nav.collapsing {
-        display: block;
-    }
-
-    .orders-nav-list,
-    .orders-nav-tools {
-        align-items: stretch;
-        flex-direction: column;
-        gap: 7px;
-    }
-
-    .orders-nav-tools {
-        border-top: 1px solid var(--border);
-        margin-top: 10px;
-        padding-top: 10px;
-    }
-
-    .orders-nav-link,
-    .orders-tool-link {
-        justify-content: flex-start;
-        width: 100%;
-    }
-
+    .orders-tool-link span,
     .orders-user {
-        border-left: 0;
-        padding-left: 0;
+        display: none;
     }
 }
 
@@ -870,6 +940,26 @@ textarea.form-control { resize: vertical; }
 
     .orders-brand {
         min-width: 0;
+    }
+
+    .orders-brand-subtitle {
+        display: none;
+    }
+
+    .orders-quick-actions {
+        justify-content: flex-end;
+    }
+
+    .orders-quick-link {
+        padding-inline: 10px;
+    }
+
+    .orders-quick-link span {
+        display: none;
+    }
+
+    .orders-topbar-tools {
+        gap: 5px;
     }
 
     .orders-brand-icon {
@@ -883,6 +973,10 @@ textarea.form-control { resize: vertical; }
 
     .orders-brand-subtitle {
         font-size: .72rem;
+    }
+
+    .orders-sidebar {
+        --bs-offcanvas-width: min(88vw, 330px);
     }
 
     .breadcrumb-bar .breadcrumb {
