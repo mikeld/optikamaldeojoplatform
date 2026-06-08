@@ -1,9 +1,9 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Upload, FileText, Loader2, CheckCircle2, XCircle, AlertCircle, RefreshCw, Save, ArrowLeft, PlusCircle, Database, Trash2, X, CheckSquare, Edit3, AlertTriangle, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
-import { extractInvoiceData } from '../services/geminiService';
+import { extractInvoiceFile } from '../services/geminiService';
 import { db } from '../db';
-import { InvoiceData, AuditLine, LineStatus, Product, AuditRecord, AuditStatus } from '../types';
+import { InvoiceData, AuditLine, LineStatus, Product, AuditRecord, AuditStatus, ProductFamily, InvoiceItem } from '../types';
 
 const invoiceSummary = (audit: AuditRecord) => {
   const activeLines = audit.lines.filter(line => line.status !== LineStatus.REJECTED);
@@ -22,6 +22,73 @@ const invoiceSummary = (audit: AuditRecord) => {
     matched,
     invoiceTotal: Number(audit.totalInvoice || 0)
   };
+};
+
+const normalizeLensName = (value: string) => value
+  .toLowerCase()
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[+-]?\d{1,2}([.,]\d{1,2})/g, ' ')
+  .replace(/\b(od|oi|os|add|low|med|high|bc|dia|cyl|cil|axis|eje|sph|esf|pwr|power)\b/g, ' ')
+  .replace(/\b\d{1,4}\b/g, ' ')
+  .replace(/[^a-z0-9]+/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+const extractGraduation = (item: InvoiceItem) => {
+  if (item.graduation) return item.graduation;
+  const match = item.description.match(/[+-]\s?\d{1,2}([.,]\d{1,2})/);
+  return match ? match[0].replace(/\s+/g, '').replace(',', '.') : null;
+};
+
+const matchInvoiceItem = (item: InvoiceItem, products: Product[], families: ProductFamily[]) => {
+  const itemBase = item.baseProductName || item.description;
+  const normalizedDescription = normalizeLensName(item.description);
+  const normalizedBase = normalizeLensName(itemBase);
+  const candidateText = normalizedBase || normalizedDescription;
+
+  const productMatch = products.find(product => {
+    const sku = product.sku.toLowerCase().trim();
+    const productName = normalizeLensName(product.name);
+    return sku === item.description.toLowerCase().trim()
+      || productName === normalizedDescription
+      || productName === normalizedBase;
+  });
+
+  if (productMatch) {
+    return {
+      price: productMatch.familyBasePrice ?? productMatch.expectedPrice,
+      productId: productMatch.id,
+      sku: productMatch.sku,
+      familyId: productMatch.familyId || undefined,
+      familyName: productMatch.familyName || undefined,
+    };
+  }
+
+  const familyMatch = families.find(family => {
+    const familyName = normalizeLensName(family.familyName);
+    if (family.regexPattern) {
+      try {
+        const regex = new RegExp(family.regexPattern, 'i');
+        if (regex.test(item.description) || regex.test(itemBase)) return true;
+      } catch {
+        // Ignore invalid regex configured by the user.
+      }
+    }
+
+    if (!familyName || !candidateText) return false;
+    return candidateText.includes(familyName) || familyName.includes(candidateText);
+  });
+
+  if (familyMatch) {
+    return {
+      price: familyMatch.basePrice,
+      familyId: familyMatch.id,
+      familyName: familyMatch.familyName,
+    };
+  }
+
+  return null;
 };
 
 const AuditPage: React.FC = () => {
@@ -56,39 +123,33 @@ const AuditPage: React.FC = () => {
     setError(null);
 
     try {
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve((reader.result as string).split(',')[1]);
-        reader.onerror = () => reject(new Error('No se ha podido leer el archivo'));
-        reader.readAsDataURL(file);
-      });
-
-      const extracted = await extractInvoiceData(base64, file.type);
-      const [masterProducts, uploadedFile] = await Promise.all([
+      const extracted = await extractInvoiceFile(file);
+      const [masterProducts, families, uploadedFile] = await Promise.all([
         db.getProducts(),
+        db.getFamilies(),
         db.uploadInvoiceFile(file)
       ]);
 
       const auditLines: AuditLine[] = extracted.items.map((item, idx) => {
-        const match = masterProducts.find(p =>
-          p.name.toLowerCase().trim() === item.description.toLowerCase().trim() ||
-          p.sku.toLowerCase().trim() === item.description.toLowerCase().trim()
-        );
+        const match = matchInvoiceItem(item, masterProducts, families);
 
         let status = LineStatus.DISCREPANCY;
         if (!match) status = LineStatus.NEW_PRODUCT;
-        else if (Math.abs(match.expectedPrice - item.unitPrice) < 0.01) status = LineStatus.MATCHED;
+        else if (Math.abs(match.price - item.unitPrice) < 0.01) status = LineStatus.MATCHED;
 
         return {
           id: `line-${idx}-${Date.now()}`,
           invoiceDescription: item.description,
           quantity: item.quantity,
           invoiceUnitPrice: item.unitPrice,
-          masterProductPrice: match?.expectedPrice,
-          masterProductId: match?.id,
+          masterProductPrice: match?.price,
+          masterProductId: match?.productId,
           masterProductSku: match?.sku,
+          matchedFamilyId: match?.familyId,
+          matchedFamilyName: match?.familyName,
+          graduation: extractGraduation(item),
           status: status,
-          difference: match ? item.unitPrice - match.expectedPrice : 0
+          difference: match ? item.unitPrice - match.price : 0
         };
       });
 
@@ -235,6 +296,8 @@ const AuditPage: React.FC = () => {
         .map(line => ({
           sku: line.masterProductSku || null,
           name: line.invoiceDescription,
+          familyName: line.matchedFamilyName || null,
+          expectedPrice: line.masterProductPrice ?? null,
           price: line.invoiceUnitPrice,
           status: line.status
         })));
@@ -516,7 +579,11 @@ const AuditPage: React.FC = () => {
                   <tr key={line.id} className={`transition-all ${isDiscrepancy ? 'bg-rose-50/20' : 'hover:bg-slate-50/30'}`}>
                     <td className="px-6 py-4">
                       <p className="font-bold text-slate-800 leading-tight">{line.invoiceDescription}</p>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Cantidad: {line.quantity}</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">
+                        Cantidad: {line.quantity}
+                        {line.graduation ? ` · Grad: ${line.graduation}` : ''}
+                        {line.matchedFamilyName ? ` · Familia: ${line.matchedFamilyName}` : ''}
+                      </p>
                     </td>
                     <td className="px-6 py-4 text-center">
                       <span className="font-mono text-indigo-400 font-bold">{line.masterProductPrice ? `${line.masterProductPrice.toFixed(2)}€` : '--'}</span>

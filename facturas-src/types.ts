@@ -61,6 +61,8 @@ export interface Alert {
 export interface InvoiceItem {
   id: string;
   description: string;
+  baseProductName?: string;
+  graduation?: string | null;
   quantity: number;
   unitPrice: number;
   total: number;
@@ -91,6 +93,9 @@ export interface AuditLine {
   masterProductPrice?: number;
   masterProductId?: string;
   masterProductSku?: string;
+  matchedFamilyId?: string;
+  matchedFamilyName?: string;
+  graduation?: string | null;
   status: LineStatus;
   difference: number;
 }

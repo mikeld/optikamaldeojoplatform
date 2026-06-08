@@ -3,6 +3,17 @@ import { Product, AuditRecord, ProductFamily, PriceHistory, Alert, AssistantCont
 
 const API_URL = '../pedidos/api/facturas.php';
 
+const parseApiJson = async (response: Response, fallbackMessage: string) => {
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    const plain = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    const detail = plain ? ` Respuesta del servidor: ${plain.slice(0, 180)}` : '';
+    throw new Error(`${fallbackMessage}. El servidor no ha devuelto JSON.${detail}`);
+  }
+};
+
 export const db = {
   isCloud(): boolean {
     return true;
@@ -221,7 +232,7 @@ export const db = {
       method: 'POST',
       body: formData
     });
-    const result = await response.json();
+    const result = await parseApiJson(response, 'Error subiendo la factura');
     if (!response.ok) {
       throw new Error(result.error || 'Error subiendo la factura');
     }
@@ -244,7 +255,7 @@ export const db = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ auditId })
     });
-    const result = await response.json();
+    const result = await parseApiJson(response, 'Error borrando la factura');
     if (!response.ok) {
       throw new Error(result.error || 'Error borrando la factura');
     }
@@ -256,7 +267,7 @@ export const db = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ auditId })
     });
-    const result = await response.json();
+    const result = await parseApiJson(response, 'Error borrando la auditoría');
     if (!response.ok) {
       throw new Error(result.error || 'Error borrando la auditoría');
     }

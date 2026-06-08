@@ -258,9 +258,33 @@ try {
                 throw new Exception('Método no permitido');
             }
 
-            $data = json_decode(file_get_contents('php://input'), true);
-            $base64Image = $data['base64Image'] ?? '';
-            $mimeType = $data['mimeType'] ?? 'image/jpeg';
+            $base64Image = '';
+            $mimeType = 'image/jpeg';
+
+            if (!empty($_FILES['file']) && is_uploaded_file($_FILES['file']['tmp_name'])) {
+                $file = $_FILES['file'];
+                if (($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+                    throw new Exception('Error recibiendo la factura para extraer datos');
+                }
+                if (($file['size'] ?? 0) > 15 * 1024 * 1024) {
+                    throw new Exception('La factura supera el máximo de 15 MB');
+                }
+                $finfo = new finfo(FILEINFO_MIME_TYPE);
+                $mimeType = $finfo->file($file['tmp_name']) ?: ($file['type'] ?? 'application/octet-stream');
+                if (!mimePermitidoFactura($mimeType)) {
+                    throw new Exception('Formato no permitido. Sube PDF, JPG, PNG o WEBP');
+                }
+                $base64Image = base64_encode(file_get_contents($file['tmp_name']));
+            } else {
+                $rawBody = file_get_contents('php://input');
+                $data = json_decode($rawBody, true);
+                if (!is_array($data)) {
+                    throw new Exception('La petición de extracción no tiene un formato válido');
+                }
+                $base64Image = $data['base64Image'] ?? '';
+                $mimeType = $data['mimeType'] ?? 'image/jpeg';
+            }
+
             if ($base64Image === '') {
                 throw new Exception('Falta la imagen de la factura');
             }
@@ -275,12 +299,15 @@ try {
                             ],
                         ],
                         [
-                            'text' => 'Extract invoice data.
+                            'text' => 'Extract invoice data for an optical store invoice.
 IMPORTANT Rules for Item Extraction:
-1. Clean Descriptions: Remove technical noise from product names such as internal references, graduation/powers, and other numeric codes.
-2. Grouping: If multiple lines refer to the same product with the same unit price, group them into one item summing quantities.
-3. Date Format: MUST be in YYYY-MM-DD.
-4. Return JSON only with providerName, date, invoiceNumber, items and total.',
+1. Contact lenses are critical. Read lens powers/graduations exactly when present (examples: -1.50, +2.25, -03.00, ADD LOW, BC/DIA values), but do not treat different powers as different base products.
+2. Keep product identity separate from graduation: each item must include description, baseProductName, graduation, quantity, unitPrice and total.
+3. baseProductName must be the same for the same lens family regardless of graduation/power. Remove powers, sphere/cylinder, BC, DIA and eye-specific numeric noise from baseProductName.
+4. unitPrice is the price per unit/box from the invoice line. Preserve decimals exactly.
+5. Group only when baseProductName, graduation and unitPrice are the same. Do not merge different graduations, but keep baseProductName equal.
+6. Date Format: MUST be in YYYY-MM-DD.
+7. Return JSON only with providerName, date, invoiceNumber, items and total.',
                         ],
                     ],
                 ]],
@@ -992,8 +1019,11 @@ Pregunta:
                 foreach ($lines as $index => $line) {
                     $sku = $line['sku'] ?? null;
                     $invoicePrice = floatval($line['price'] ?? 0);
+                    $expectedPriceFromFamily = array_key_exists('expectedPrice', $line) && $line['expectedPrice'] !== null
+                        ? floatval($line['expectedPrice'])
+                        : null;
 
-                    if (!$sku) {
+                    if (!$sku && $expectedPriceFromFamily === null) {
                         $alerts[] = [
                             'id' => uniqid('alert_'),
                             'audit_id' => $auditId,
@@ -1005,6 +1035,33 @@ Pregunta:
                             'actual_value' => $invoicePrice
                         ];
                         $criticalCount++;
+                        continue;
+                    }
+
+                    if (!$sku && $expectedPriceFromFamily !== null) {
+                        $diff = $invoicePrice - $expectedPriceFromFamily;
+                        $diffPercent = $expectedPriceFromFamily > 0 ? ($diff / $expectedPriceFromFamily) * 100 : 0;
+
+                        if (abs($diff) > 0.01) {
+                            $severity = abs($diffPercent) > 10 ? 'critical' : 'warning';
+                            $alerts[] = [
+                                'id' => uniqid('alert_'),
+                                'audit_id' => $auditId,
+                                'line_number' => $index,
+                                'alert_type' => abs($diffPercent) > 5 ? 'price_error' : 'price_change',
+                                'severity' => $severity,
+                                'product_sku' => null,
+                                'product_name' => $line['familyName'] ?? ($line['name'] ?? 'Familia detectada'),
+                                'expected_value' => $expectedPriceFromFamily,
+                                'actual_value' => $invoicePrice,
+                                'difference' => $diff,
+                                'difference_percent' => round($diffPercent, 2)
+                            ];
+
+                            if ($severity === 'critical') {
+                                $criticalCount++;
+                            }
+                        }
                         continue;
                     }
                     
