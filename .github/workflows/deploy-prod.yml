@@ -64,7 +64,6 @@ jobs:
           set ftp:passive-mode true
           set ssl:verify-certificate no
           open -p 21 -u "$FTP_USER_CLEAN","$FTP_PASS_CLEAN" "$FTP_HOST_CLEAN"
-          mkdir -p "$FTP_DIR_CLEAN"
           mirror -R --verbose --parallel=1 deploy/dist/release "$FTP_DIR_CLEAN"
           bye
           EOF
