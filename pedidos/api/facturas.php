@@ -178,7 +178,20 @@ function geminiApiKey() {
     return $key;
 }
 
-function geminiGenerateContent($payload, $model = 'gemini-1.5-flash') {
+function geminiModelosCandidatos($preferredModel = null) {
+    $configured = defined('GEMINI_MODEL') ? trim((string)GEMINI_MODEL) : '';
+    $candidates = [
+        $preferredModel,
+        $configured,
+        'gemini-2.5-flash',
+        'gemini-2.5-flash-lite',
+        'gemini-2.0-flash',
+    ];
+
+    return array_values(array_unique(array_filter($candidates)));
+}
+
+function geminiGenerateContentWithModel($payload, $model) {
     if (!function_exists('curl_init')) {
         throw new Exception('El servidor no tiene cURL habilitado para conectar con Gemini');
     }
@@ -209,6 +222,25 @@ function geminiGenerateContent($payload, $model = 'gemini-1.5-flash') {
     }
 
     return $response;
+}
+
+function geminiGenerateContent($payload, $preferredModel = null) {
+    $lastError = null;
+
+    foreach (geminiModelosCandidatos($preferredModel) as $model) {
+        try {
+            return geminiGenerateContentWithModel($payload, $model);
+        } catch (Exception $e) {
+            $lastError = $e;
+            $message = $e->getMessage();
+            $isModelError = str_contains($message, 'not found') || str_contains($message, 'not supported for generateContent');
+            if (!$isModelError) {
+                throw $e;
+            }
+        }
+    }
+
+    throw new Exception('Gemini no tiene disponible ninguno de los modelos configurados para generateContent. Último error: ' . ($lastError ? $lastError->getMessage() : 'sin detalle'));
 }
 
 function geminiResponseText($response) {
