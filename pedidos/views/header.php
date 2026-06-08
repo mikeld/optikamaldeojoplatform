@@ -13,6 +13,48 @@ $can_manage = Auth::puedeGestionar();
 $acciones_navbar = $acciones_navbar ?? [];
 $breadcrumbs = $breadcrumbs ?? [];
 $app_base_path = str_starts_with($_SERVER['SCRIPT_NAME'] ?? '', '/test/') ? '/test' : '';
+$script_dir = basename(dirname($_SERVER['SCRIPT_NAME'] ?? ''));
+$views_prefix = $script_dir === 'controllers' ? '../views/' : '';
+$usuario_actual = Auth::usuarioActual();
+$rol_actual = $usuario_actual['rol'] ?? 'empleado';
+$rol_labels = [
+    'empleado' => 'Empleado',
+    'encargado' => 'Encargado',
+    'admin' => 'Admin',
+];
+
+$pedidos_url = function (string $file) use ($views_prefix): string {
+    return $views_prefix . $file;
+};
+
+$nav_principal = [
+    ['nombre' => 'Pedidos', 'url' => $pedidos_url('listado_pedidos.php'), 'icono' => 'bi-card-checklist', 'match' => ['listado_pedidos.php']],
+    ['nombre' => 'Nuevo', 'url' => $pedidos_url('formulario_pedidos.php'), 'icono' => 'bi-plus-circle', 'match' => ['formulario_pedidos.php']],
+    ['nombre' => 'Clientes', 'url' => $pedidos_url('listado_usuarios.php'), 'icono' => 'bi-people', 'match' => ['listado_usuarios.php', 'formulario_usuarios.php', 'ficha_cliente.php']],
+    ['nombre' => 'Proveedores', 'url' => $pedidos_url('listado_proveedores.php'), 'icono' => 'bi-building', 'match' => ['listado_proveedores.php', 'formulario_proveedores.php']],
+];
+
+if ($can_manage) {
+    $nav_principal[] = ['nombre' => 'Calendario', 'url' => $pedidos_url('calendario.php'), 'icono' => 'bi-calendar3', 'match' => ['calendario.php']];
+    $nav_principal[] = ['nombre' => 'KPIs', 'url' => $pedidos_url('estadisticas.php'), 'icono' => 'bi-graph-up-arrow', 'match' => ['estadisticas.php']];
+}
+
+$nav_admin = [];
+if ($is_admin) {
+    $nav_admin = [
+        ['nombre' => 'Backups', 'url' => $pedidos_url('copias_seguridad.php'), 'icono' => 'bi-shield-check', 'match' => ['copias_seguridad.php']],
+        ['nombre' => 'Mensajes', 'url' => $pedidos_url('gestionar_mensajes.php'), 'icono' => 'bi-whatsapp', 'match' => ['gestionar_mensajes.php']],
+    ];
+}
+
+$current_file = basename($_SERVER['SCRIPT_NAME'] ?? '');
+$nav_basenames = array_map(function ($item) {
+    return basename($item['url']);
+}, array_merge($nav_principal, $nav_admin));
+
+$acciones_contextuales = array_values(array_filter($acciones_navbar, function ($accion) use ($nav_basenames) {
+    return !in_array(basename($accion['url'] ?? ''), $nav_basenames, true);
+}));
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -52,79 +94,86 @@ $app_base_path = str_starts_with($_SERVER['SCRIPT_NAME'] ?? '', '/test/') ? '/te
 </head>
 <body>
 
-  <!-- NAVBAR -->
-  <nav class="navbar navbar-expand-xl navbar-dark main-header">
+  <header class="orders-topbar">
     <div class="container-fluid px-lg-5">
-      <!-- Logo y Info del Usuario -->
-      <a class="navbar-brand d-flex align-items-center" href="#">
-        <div class="user-avatar-shell me-3">
-            <i class="fas fa-user-circle"></i>
+      <div class="orders-topbar-main">
+        <a class="orders-brand" href="<?= htmlspecialchars($pedidos_url('listado_pedidos.php')) ?>">
+          <span class="orders-brand-icon"><i class="bi bi-eyeglasses"></i></span>
+          <span>
+            <span class="orders-brand-title">Pedidos</span>
+            <span class="orders-brand-subtitle">Optikamaldeojo</span>
+          </span>
+        </a>
+
+        <div class="orders-user d-none d-md-flex">
+          <span class="orders-user-name"><?= htmlspecialchars($usuario_actual['nombre'] ?? 'Invitado') ?></span>
+          <span class="orders-role"><?= htmlspecialchars($rol_labels[$rol_actual] ?? ucfirst($rol_actual)) ?></span>
         </div>
-        <div class="d-none d-md-block">
-            <div class="navbar-user-welcome">SISTEMA</div>
-            <div class="navbar-user-info">
-                <?= htmlspecialchars($_SESSION['usuario_nombre'] ?? 'Invitado') ?>
-            </div>
-        </div>
-      </a>
-      
-      <!-- Toggle móvil -->
+
       <button class="navbar-toggler border-0 shadow-none" type="button"
               data-bs-toggle="collapse"
-              data-bs-target="#navbarNav"
-              aria-controls="navbarNav"
+              data-bs-target="#ordersNav"
+              aria-controls="ordersNav"
               aria-expanded="false"
-              aria-label="Toggle navigation">
-        <i class="fas fa-bars fa-lg text-white"></i>
+              aria-label="Abrir menu">
+        <i class="fas fa-bars fa-lg"></i>
       </button>
+      </div>
 
-      <!-- Enlaces -->
-      <div class="collapse navbar-collapse" id="navbarNav">
-        <ul class="navbar-nav ms-auto gap-3 align-items-center mt-3 mt-xl-0">
-          <?php foreach ($acciones_navbar as $accion): ?>
+      <nav class="collapse navbar-collapse orders-nav" id="ordersNav" aria-label="Menu principal de pedidos">
+        <ul class="orders-nav-list">
+          <?php foreach ($nav_principal as $item): ?>
             <li class="nav-item">
-              <a class="btn btn-nav-modern"
-                 href="<?= htmlspecialchars($accion['url']) ?>">
-                <i class="bi <?= htmlspecialchars($accion['icono']) ?>"></i>
-                <span><?= htmlspecialchars($accion['nombre']) ?></span>
+              <?php $active = in_array($current_file, $item['match'], true); ?>
+              <a class="orders-nav-link <?= $active ? 'is-active' : '' ?>" href="<?= htmlspecialchars($item['url']) ?>">
+                <i class="bi <?= htmlspecialchars($item['icono']) ?>"></i>
+                <span><?= htmlspecialchars($item['nombre']) ?></span>
               </a>
             </li>
           <?php endforeach; ?>
-          
-          <?php if ($is_admin): ?>
+
+          <?php foreach ($nav_admin as $item): ?>
             <li class="nav-item">
-              <a class="btn btn-nav-modern" href="copias_seguridad.php">
-                <i class="bi bi-shield-check"></i>
-                <span>Copias</span>
+              <?php $active = in_array($current_file, $item['match'], true); ?>
+              <a class="orders-nav-link admin-link <?= $active ? 'is-active' : '' ?>" href="<?= htmlspecialchars($item['url']) ?>">
+                <i class="bi <?= htmlspecialchars($item['icono']) ?>"></i>
+                <span><?= htmlspecialchars($item['nombre']) ?></span>
               </a>
             </li>
-            <li class="nav-item">
-              <a class="btn btn-nav-modern" href="gestionar_mensajes.php">
-                <i class="bi bi-whatsapp"></i>
-                <span>Mensajes</span>
-              </a>
-            </li>
-          <?php endif; ?>
-
-          <?php if ($can_manage): ?>
-            <li class="nav-item">
-                <a class="btn btn-nav-modern portal-link" href="../../home.php">
-                <i class="bi bi-grid-fill"></i>
-                <span>Portal</span>
-                </a>
-            </li>
-          <?php endif; ?>
-
-          <li class="nav-item ms-lg-2">
-            <a class="btn btn-nav-modern bg-danger bg-opacity-75 border-0 hover-scale" href="../../logout.php">
-              <i class="bi bi-box-arrow-right"></i>
-              <span>Salir</span>
-            </a>
-          </li>
+          <?php endforeach; ?>
         </ul>
+
+        <div class="orders-nav-tools">
+          <a class="orders-tool-link" href="../../home.php">
+            <i class="bi bi-grid-fill"></i>
+            <span>Portal</span>
+          </a>
+          <a class="orders-tool-link danger" href="../../logout.php">
+            <i class="bi bi-box-arrow-right"></i>
+            <span>Salir</span>
+          </a>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <?php if (!empty($acciones_contextuales)): ?>
+  <div class="orders-actionbar">
+    <div class="container-fluid px-lg-5">
+      <div class="orders-actionbar-inner">
+        <span class="orders-action-label">Acciones</span>
+        <div class="orders-action-list">
+          <?php foreach ($acciones_contextuales as $accion): ?>
+            <a class="orders-action-link" href="<?= htmlspecialchars($accion['url']) ?>">
+              <i class="bi <?= htmlspecialchars($accion['icono']) ?>"></i>
+              <span><?= htmlspecialchars($accion['nombre']) ?></span>
+            </a>
+          <?php endforeach; ?>
+        </div>
       </div>
     </div>
-  </nav>
+  </div>
+  <?php endif; ?>
 
   <!-- BREADCRUMBS -->
   <?php if (!empty($breadcrumbs)): ?>

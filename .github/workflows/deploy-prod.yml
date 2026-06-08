@@ -53,15 +53,28 @@ jobs:
           FTP_USER_CLEAN="$(printf '%s' "$FTP_USER" | tr -d '\r\n')"
           FTP_PASS_CLEAN="$(printf '%s' "$FTP_PASS" | tr -d '\r\n')"
           FTP_DIR_CLEAN="$(printf '%s' "$FTP_DIR" | tr -d '\r\n')"
-          lftp <<EOF
-          set net:timeout 45
-          set net:max-retries 5
-          set net:reconnect-interval-base 8
+          for attempt in 1 2 3; do
+            echo "FTP upload attempt $attempt/3"
+            if timeout 360 lftp <<EOF
+          set cmd:fail-exit yes
+          set net:timeout 30
+          set net:max-retries 3
+          set net:reconnect-interval-base 6
           set ftp:ssl-allow true
           set ftp:passive-mode true
           set ssl:verify-certificate no
           open -p 21 -u "$FTP_USER_CLEAN","$FTP_PASS_CLEAN" "$FTP_HOST_CLEAN"
           mkdir -p "$FTP_DIR_CLEAN"
-          mirror -R --verbose --parallel=2 deploy/dist/release "$FTP_DIR_CLEAN"
+          mirror -R --verbose --parallel=1 deploy/dist/release "$FTP_DIR_CLEAN"
           bye
           EOF
+            then
+              exit 0
+            fi
+
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+
+            sleep 20
+          done
