@@ -736,6 +736,47 @@ Pregunta:
             echo json_encode(['status' => 'success']);
             break;
 
+        case 'deleteAudit':
+            if ($method !== 'POST' && $method !== 'DELETE') {
+                throw new Exception('Método no permitido');
+            }
+
+            $data = json_decode(file_get_contents('php://input'), true) ?: [];
+            $auditId = $_GET['audit_id'] ?? ($data['auditId'] ?? '');
+            if ($auditId === '') {
+                throw new Exception('Falta el ID de auditoría');
+            }
+
+            $stmt = $pdo->prepare("SELECT `pdf_path` FROM `facturas_audits` WHERE `id` = ?");
+            $stmt->execute([$auditId]);
+            $relativePath = $stmt->fetchColumn();
+            if ($relativePath) {
+                $path = rutaFacturaDesdePath($relativePath);
+                if ($path && is_file($path)) {
+                    unlink($path);
+                }
+            }
+
+            $pdo->beginTransaction();
+            try {
+                $alertsStmt = $pdo->prepare("DELETE FROM `facturas_alerts` WHERE `audit_id` = ?");
+                $alertsStmt->execute([$auditId]);
+
+                $historyStmt = $pdo->prepare("UPDATE `facturas_price_history` SET `invoice_id` = NULL WHERE `invoice_id` = ?");
+                $historyStmt->execute([$auditId]);
+
+                $auditStmt = $pdo->prepare("DELETE FROM `facturas_audits` WHERE `id` = ?");
+                $auditStmt->execute([$auditId]);
+
+                $pdo->commit();
+            } catch (Exception $e) {
+                $pdo->rollBack();
+                throw $e;
+            }
+
+            echo json_encode(['status' => 'success']);
+            break;
+
         case 'saveAudit':
             if ($method === 'POST') {
                 $data = json_decode(file_get_contents('php://input'), true);

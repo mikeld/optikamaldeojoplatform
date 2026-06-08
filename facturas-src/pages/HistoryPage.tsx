@@ -1,13 +1,14 @@
 
 import React, { useEffect, useState } from 'react';
 import { db } from '../db';
-import { AuditRecord, LineStatus } from '../types';
+import { AuditRecord } from '../types';
 import { FileText, Eye, X, Download, Trash2, ExternalLink, Loader2 } from 'lucide-react';
 
 const HistoryPage: React.FC = () => {
   const [history, setHistory] = useState<AuditRecord[]>([]);
   const [selectedAudit, setSelectedAudit] = useState<AuditRecord | null>(null);
   const [deletingPdfId, setDeletingPdfId] = useState<string | null>(null);
+  const [deletingAuditId, setDeletingAuditId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchHistory();
@@ -58,6 +59,22 @@ const HistoryPage: React.FC = () => {
       }
     } finally {
       setDeletingPdfId(null);
+    }
+  };
+
+  const deleteAudit = async (audit: AuditRecord) => {
+    const confirmed = confirm(`¿Borrar la auditoría completa de ${audit.provider} - ${audit.invoiceNumber}?\n\nSe eliminará el registro, sus alertas y el PDF asociado si existe.`);
+    if (!confirmed) return;
+
+    setDeletingAuditId(audit.id);
+    try {
+      await db.deleteAudit(audit.id);
+      setHistory(history.filter(item => item.id !== audit.id));
+      if (selectedAudit?.id === audit.id) {
+        setSelectedAudit(null);
+      }
+    } finally {
+      setDeletingAuditId(null);
     }
   };
 
@@ -119,6 +136,9 @@ const HistoryPage: React.FC = () => {
                         <button onClick={() => setSelectedAudit(record)} className="p-2.5 bg-slate-100 text-slate-400 hover:bg-indigo-600 hover:text-white rounded-xl transition-all shadow-sm" title="Ver detalle">
                           <Eye className="w-5 h-5" />
                         </button>
+                        <button onClick={() => deleteAudit(record)} disabled={deletingAuditId === record.id} className="p-2.5 bg-slate-100 text-slate-400 hover:bg-rose-600 hover:text-white rounded-xl transition-all shadow-sm disabled:opacity-60" title="Borrar auditoría">
+                          {deletingAuditId === record.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5" />}
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -154,6 +174,9 @@ const HistoryPage: React.FC = () => {
                 )}
                 <button onClick={() => exportToCSV(selectedAudit)} className="flex items-center gap-2 px-5 py-2.5 bg-emerald-50 text-emerald-700 font-black rounded-xl hover:bg-emerald-100 transition-all text-sm shadow-sm border border-emerald-100">
                   <Download className="w-4 h-4" /> EXPORTAR CSV
+                </button>
+                <button onClick={() => deleteAudit(selectedAudit)} disabled={deletingAuditId === selectedAudit.id} className="flex items-center gap-2 px-5 py-2.5 bg-slate-100 text-slate-600 font-black rounded-xl hover:bg-rose-600 hover:text-white transition-all text-sm shadow-sm disabled:opacity-60">
+                  {deletingAuditId === selectedAudit.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} BORRAR AUDITORÍA
                 </button>
                 <button onClick={() => setSelectedAudit(null)} className="p-3 bg-slate-100 text-slate-400 hover:text-rose-500 rounded-xl"><X className="w-6 h-6" /></button>
               </div>

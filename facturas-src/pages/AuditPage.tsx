@@ -5,6 +5,25 @@ import { extractInvoiceData } from '../services/geminiService';
 import { db } from '../db';
 import { InvoiceData, AuditLine, LineStatus, Product, AuditRecord, AuditStatus } from '../types';
 
+const invoiceSummary = (audit: AuditRecord) => {
+  const activeLines = audit.lines.filter(line => line.status !== LineStatus.REJECTED);
+  const units = activeLines.reduce((sum, line) => sum + Number(line.quantity || 0), 0);
+  const detectedTotal = activeLines.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.invoiceUnitPrice || 0), 0);
+  const unknown = activeLines.filter(line => line.status === LineStatus.NEW_PRODUCT).length;
+  const discrepancies = activeLines.filter(line => line.status === LineStatus.DISCREPANCY).length;
+  const matched = activeLines.filter(line => line.status === LineStatus.MATCHED || line.status === LineStatus.ACCEPTED).length;
+
+  return {
+    lines: activeLines.length,
+    units,
+    detectedTotal,
+    unknown,
+    discrepancies,
+    matched,
+    invoiceTotal: Number(audit.totalInvoice || 0)
+  };
+};
+
 const AuditPage: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -244,6 +263,8 @@ const AuditPage: React.FC = () => {
   };
 
   if (auditResult) {
+    const summary = invoiceSummary(auditResult);
+
     return (
       <div className="space-y-6 max-w-6xl mx-auto pb-20">
         {/* Modal de guardado */}
@@ -458,6 +479,25 @@ const AuditPage: React.FC = () => {
           </div>
         </div>
 
+        <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+          <SummaryCard label="Total factura" value={`${summary.invoiceTotal.toFixed(2)}€`} tone="indigo" />
+          <SummaryCard label="Total líneas" value={`${summary.detectedTotal.toFixed(2)}€`} tone={Math.abs(summary.detectedTotal - summary.invoiceTotal) > 0.05 ? 'amber' : 'slate'} />
+          <SummaryCard label="Líneas" value={summary.lines.toString()} tone="slate" />
+          <SummaryCard label="Unidades" value={summary.units.toString()} tone="slate" />
+          <SummaryCard label="Sin catálogo" value={summary.unknown.toString()} tone={summary.unknown > 0 ? 'amber' : 'emerald'} />
+          <SummaryCard label="Diferencias" value={summary.discrepancies.toString()} tone={summary.discrepancies > 0 ? 'rose' : 'emerald'} />
+        </div>
+
+        {(summary.unknown > 0 || summary.discrepancies > 0 || Math.abs(summary.detectedTotal - summary.invoiceTotal) > 0.05) && (
+          <div className="rounded-2xl border border-amber-100 bg-amber-50 px-5 py-4 text-amber-800 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
+            <p className="text-sm font-bold leading-relaxed">
+              Revisa la factura antes de guardarla: hay {summary.unknown} productos sin catálogo, {summary.discrepancies} diferencias de precio
+              {Math.abs(summary.detectedTotal - summary.invoiceTotal) > 0.05 ? ` y el total de líneas detectado no coincide con el total de factura (${summary.detectedTotal.toFixed(2)}€ vs ${summary.invoiceTotal.toFixed(2)}€).` : '.'}
+            </p>
+          </div>
+        )}
+
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
           <table className="w-full text-left">
             <thead>
@@ -579,6 +619,23 @@ const StatusBadge: React.FC<{ status: LineStatus, diff: number }> = ({ status, d
   };
   const { color, label } = cfg[status] || cfg[LineStatus.PENDING];
   return <span className={`px-3 py-1.5 rounded-lg text-[9px] font-black border tracking-wider ${color}`}>{label}</span>;
+};
+
+const SummaryCard: React.FC<{ label: string; value: string; tone: 'slate' | 'indigo' | 'emerald' | 'amber' | 'rose' }> = ({ label, value, tone }) => {
+  const tones = {
+    slate: 'bg-white border-slate-100 text-slate-800',
+    indigo: 'bg-indigo-50 border-indigo-100 text-indigo-700',
+    emerald: 'bg-emerald-50 border-emerald-100 text-emerald-700',
+    amber: 'bg-amber-50 border-amber-100 text-amber-700',
+    rose: 'bg-rose-50 border-rose-100 text-rose-700',
+  };
+
+  return (
+    <div className={`rounded-2xl border p-4 shadow-sm ${tones[tone]}`}>
+      <p className="text-[9px] uppercase font-black tracking-widest opacity-60 mb-1">{label}</p>
+      <p className="text-xl font-black font-mono">{value}</p>
+    </div>
+  );
 };
 
 export default AuditPage;
