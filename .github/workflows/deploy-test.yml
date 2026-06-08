@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -33,6 +35,49 @@ jobs:
           DB_PASS: ${{ secrets.TEST_DB_PASS }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: ./deploy/prepare_hostinger_release.sh test deploy/dist/release
+
+      - name: Prepare incremental upload
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          rm -rf deploy/dist/upload
+          mkdir -p deploy/dist/upload
+
+          if [ "$EVENT_NAME" != "push" ] || [ -z "$BEFORE_SHA" ] || [[ "$BEFORE_SHA" =~ ^0+$ ]]; then
+            cp -a deploy/dist/release/. deploy/dist/upload/
+            exit 0
+          fi
+
+          git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA" > deploy/dist/changed_files.txt
+
+          if grep -Eq '^(facturas-src/|package.json|package-lock.json|vite.config|tsconfig)' deploy/dist/changed_files.txt; then
+            mkdir -p deploy/dist/upload/facturas
+            cp -a deploy/dist/release/facturas/. deploy/dist/upload/facturas/
+          fi
+
+          while IFS= read -r file; do
+            case "$file" in
+              assets/*|includes/*|pedidos/*|home.php|index.php|logout.php|manifest.json|offline.html|sw.js)
+                if [ -f "deploy/dist/release/$file" ]; then
+                  mkdir -p "deploy/dist/upload/$(dirname "$file")"
+                  cp "deploy/dist/release/$file" "deploy/dist/upload/$file"
+                fi
+                ;;
+            esac
+          done < deploy/dist/changed_files.txt
+
+          for file in pedidos/views/header.php pedidos/assets/css/style.css; do
+            if [ -f "deploy/dist/release/$file" ]; then
+              mkdir -p "deploy/dist/upload/$(dirname "$file")"
+              cp "deploy/dist/release/$file" "deploy/dist/upload/$file"
+            fi
+          done
+
+          if ! find deploy/dist/upload -type f | grep -q .; then
+            cp -a deploy/dist/release/. deploy/dist/upload/
+          fi
 
       - name: Install FTP client
         run: sudo apt-get update && sudo apt-get install -y lftp
@@ -63,7 +108,7 @@ jobs:
           set ftp:passive-mode true
           set ssl:verify-certificate no
           open -p 21 -u "$FTP_USER_CLEAN","$FTP_PASS_CLEAN" "$FTP_HOST_CLEAN"
-          mirror -R --verbose --parallel=1 deploy/dist/release "$FTP_DIR_CLEAN"
+          mirror -R --verbose --only-newer --parallel=1 deploy/dist/upload "$FTP_DIR_CLEAN"
           bye
           EOF
             then
