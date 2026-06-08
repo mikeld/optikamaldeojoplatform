@@ -548,16 +548,21 @@ try {
         
         case 'getPriceHistory':
             $productId = $_GET['product_id'] ?? null;
-            if (!$productId) {
-                throw new Exception('Product ID required');
+
+            $sql = "SELECT ph.*, p.name as product_name, p.sku
+                    FROM `facturas_price_history` ph
+                    JOIN `facturas_products` p ON ph.product_id = p.id";
+            $params = [];
+
+            if ($productId) {
+                $sql .= " WHERE ph.product_id = ?";
+                $params[] = $productId;
             }
-            
-            $stmt = $pdo->prepare("SELECT ph.*, p.name as product_name, p.sku 
-                                   FROM `facturas_price_history` ph 
-                                   JOIN `facturas_products` p ON ph.product_id = p.id 
-                                   WHERE ph.product_id = ? 
-                                   ORDER BY ph.change_date DESC");
-            $stmt->execute([$productId]);
+
+            $sql .= " ORDER BY ph.change_date DESC LIMIT 50";
+
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
             echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC));
             break;
 

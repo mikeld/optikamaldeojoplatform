@@ -272,9 +272,12 @@ export const db = {
   // HISTORIAL DE PRECIOS
   // ============================================================
 
-  async getPriceHistory(productId: string): Promise<PriceHistory[]> {
+  async getPriceHistory(productId?: string): Promise<PriceHistory[]> {
     try {
-      const response = await fetch(`${API_URL}?action=getPriceHistory&product_id=${productId}`);
+      const url = productId
+        ? `${API_URL}?action=getPriceHistory&product_id=${productId}`
+        : `${API_URL}?action=getPriceHistory`;
+      const response = await fetch(url);
       if (!response.ok) throw new Error('Network response was not ok');
       const data = await response.json();
       return data.map((h: any) => ({
