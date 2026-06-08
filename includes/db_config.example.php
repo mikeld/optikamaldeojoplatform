@@ -5,3 +5,4 @@ define('DB_NAME',    'nombre_de_tu_bbdd');
 define('DB_USER',    'usuario_bbdd');
 define('DB_PASS',    'contraseña_bbdd');
 define('DB_CHARSET', 'utf8mb4');
+define('GEMINI_API_KEY', '');

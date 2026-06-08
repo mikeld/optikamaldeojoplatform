@@ -27,7 +27,8 @@ export const db = {
       tables,
       missingTables: data.missing_tables || [],
       missingColumns: data.missing_columns || {},
-      schemaFile: data.schema_file || 'pedidos/sql/facturas_schema.sql'
+      schemaFile: data.schema_file || 'pedidos/sql/facturas_schema.sql',
+      geminiConfigured: Boolean(data.gemini_configured)
     };
   },
 

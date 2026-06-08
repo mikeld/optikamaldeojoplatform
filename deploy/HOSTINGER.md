@@ -141,7 +141,8 @@ PROD_DB_USER / PROD_DB_PASS
 
 ## Gemini
 
-Facturas Check usa Gemini para extraer facturas y para el Asistente IA.
+Facturas Check usa Gemini para extraer facturas y para el Asistente IA. La clave se escribe en
+`includes/db_config.php` durante el deploy y la usa el backend PHP; no debe ir en el frontend.
 
 Si quieres activar esas funciones en test/prod, crea este secreto de GitHub:
 

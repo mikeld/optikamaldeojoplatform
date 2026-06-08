@@ -116,14 +116,148 @@ function diagnosticarSchemaFacturas($pdo) {
         'tables' => $tables,
         'missing_tables' => $missingTables,
         'missing_columns' => $missingColumns,
-        'schema_file' => 'pedidos/sql/facturas_schema.sql'
+        'schema_file' => 'pedidos/sql/facturas_schema.sql',
+        'gemini_configured' => defined('GEMINI_API_KEY') && trim((string)GEMINI_API_KEY) !== ''
     ];
+}
+
+function geminiApiKey() {
+    $key = defined('GEMINI_API_KEY') ? trim((string)GEMINI_API_KEY) : '';
+    if ($key === '') {
+        throw new Exception('No se ha configurado la clave de API de Gemini en el servidor');
+    }
+    return $key;
+}
+
+function geminiGenerateContent($payload, $model = 'gemini-1.5-flash') {
+    if (!function_exists('curl_init')) {
+        throw new Exception('El servidor no tiene cURL habilitado para conectar con Gemini');
+    }
+
+    $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent?key=' . urlencode(geminiApiKey());
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_POSTFIELDS => json_encode($payload),
+        CURLOPT_TIMEOUT => 60,
+    ]);
+
+    $raw = curl_exec($ch);
+    $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if ($raw === false || $curlError) {
+        throw new Exception('No se ha podido conectar con Gemini: ' . $curlError);
+    }
+
+    $response = json_decode($raw, true);
+    if ($httpCode < 200 || $httpCode >= 300) {
+        $message = $response['error']['message'] ?? ('HTTP ' . $httpCode);
+        throw new Exception('Gemini ha devuelto un error: ' . $message);
+    }
+
+    return $response;
+}
+
+function geminiResponseText($response) {
+    return $response['candidates'][0]['content']['parts'][0]['text'] ?? '';
 }
 
 try {
     switch ($action) {
         case 'getSchemaStatus':
             echo json_encode(diagnosticarSchemaFacturas($pdo));
+            break;
+
+        case 'extractInvoiceData':
+            if ($method !== 'POST') {
+                throw new Exception('Método no permitido');
+            }
+
+            $data = json_decode(file_get_contents('php://input'), true);
+            $base64Image = $data['base64Image'] ?? '';
+            $mimeType = $data['mimeType'] ?? 'image/jpeg';
+            if ($base64Image === '') {
+                throw new Exception('Falta la imagen de la factura');
+            }
+
+            $payload = [
+                'contents' => [[
+                    'parts' => [
+                        [
+                            'inlineData' => [
+                                'data' => $base64Image,
+                                'mimeType' => $mimeType,
+                            ],
+                        ],
+                        [
+                            'text' => 'Extract invoice data.
+IMPORTANT Rules for Item Extraction:
+1. Clean Descriptions: Remove technical noise from product names such as internal references, graduation/powers, and other numeric codes.
+2. Grouping: If multiple lines refer to the same product with the same unit price, group them into one item summing quantities.
+3. Date Format: MUST be in YYYY-MM-DD.
+4. Return JSON only with providerName, date, invoiceNumber, items and total.',
+                        ],
+                    ],
+                ]],
+                'generationConfig' => [
+                    'responseMimeType' => 'application/json',
+                ],
+            ];
+
+            $responseText = geminiResponseText(geminiGenerateContent($payload));
+            $invoice = json_decode($responseText, true);
+            if (!is_array($invoice)) {
+                throw new Exception('Gemini no ha devuelto un JSON válido para la factura');
+            }
+            echo json_encode($invoice);
+            break;
+
+        case 'askInvoiceAssistant':
+            if ($method !== 'POST') {
+                throw new Exception('Método no permitido');
+            }
+
+            $data = json_decode(file_get_contents('php://input'), true);
+            $question = trim($data['question'] ?? '');
+            $context = $data['context'] ?? null;
+            if ($question === '' || !is_array($context)) {
+                throw new Exception('Falta la pregunta o el contexto del asistente');
+            }
+
+            $compactContext = [
+                'generatedAt' => $context['generatedAt'] ?? null,
+                'audits' => $context['audits'] ?? [],
+                'pendingAlerts' => $context['pendingAlerts'] ?? [],
+                'priceHistory' => $context['priceHistory'] ?? [],
+            ];
+
+            $prompt = 'Eres el asistente interno de Facturas Check para una óptica.
+
+Responde en castellano, de forma breve y operativa.
+Usa SOLO el contexto JSON proporcionado. Este contexto ya ha sido recuperado desde la base de datos por relevancia para la pregunta.
+No inventes importes, fechas, proveedores ni facturas.
+Cuando menciones una factura, cita proveedor, número y fecha si están disponibles.
+Si la pregunta no se puede responder con el contexto, dilo claramente y sugiere qué dato falta.
+
+Contexto JSON:
+' . json_encode($compactContext, JSON_UNESCAPED_UNICODE) . '
+
+Pregunta:
+' . $question;
+
+            $responseText = geminiResponseText(geminiGenerateContent([
+                'contents' => [[
+                    'parts' => [[
+                        'text' => $prompt,
+                    ]],
+                ]],
+            ]));
+
+            echo json_encode(['answer' => $responseText ?: 'No he podido generar una respuesta con los datos disponibles.']);
             break;
 
         // ============================================================

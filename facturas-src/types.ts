@@ -138,4 +138,5 @@ export interface SchemaStatus {
   missingTables: string[];
   missingColumns: Record<string, string[]>;
   schemaFile: string;
+  geminiConfigured: boolean;
 }

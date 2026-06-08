@@ -8,8 +8,6 @@ const SystemPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const geminiConfigured = Boolean((import.meta as any).env?.VITE_API_KEY || (process.env as any).API_KEY);
-
   useEffect(() => {
     loadStatus();
   }, []);
@@ -69,9 +67,9 @@ const SystemPage: React.FC = () => {
         />
         <StatusCard
           title="Gemini"
-          value={geminiConfigured ? 'Configurado' : 'Pendiente'}
-          detail="Extractor y asistente IA"
-          tone={geminiConfigured ? 'success' : 'warning'}
+          value={schemaStatus?.geminiConfigured ? 'Configurado' : schemaStatus ? 'Pendiente' : 'Comprobando'}
+          detail="Clave protegida en backend"
+          tone={schemaStatus?.geminiConfigured ? 'success' : 'warning'}
           icon={<KeyRound />}
         />
       </div>
