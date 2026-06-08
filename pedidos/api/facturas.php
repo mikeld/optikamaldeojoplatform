@@ -78,6 +78,55 @@ function facturasSchemaRequerido() {
     ];
 }
 
+function facturasStorageDir() {
+    return dirname(__DIR__, 2) . '/facturas_uploads';
+}
+
+function asegurarDirectorioFacturas() {
+    $dir = facturasStorageDir();
+    if (!is_dir($dir) && !mkdir($dir, 0755, true)) {
+        throw new Exception('No se ha podido crear el directorio de facturas');
+    }
+
+    $htaccess = $dir . '/.htaccess';
+    if (!file_exists($htaccess)) {
+        file_put_contents($htaccess, "Require all denied\n");
+    }
+
+    return $dir;
+}
+
+function nombreSeguroFactura($name) {
+    $name = basename((string)$name);
+    $name = preg_replace('/[^a-zA-Z0-9._-]+/', '_', $name);
+    return trim($name, '._') ?: 'factura.pdf';
+}
+
+function rutaFacturaDesdePath($relativePath) {
+    $relativePath = trim((string)$relativePath);
+    if ($relativePath === '' || strpos($relativePath, '..') !== false) {
+        return null;
+    }
+
+    $prefix = 'facturas_uploads/';
+    if (!str_starts_with($relativePath, $prefix)) {
+        return null;
+    }
+
+    $path = dirname(__DIR__, 2) . '/' . $relativePath;
+    $base = realpath(facturasStorageDir());
+    $real = realpath($path);
+    if (!$base || !$real || !str_starts_with($real, $base)) {
+        return null;
+    }
+
+    return $real;
+}
+
+function mimePermitidoFactura($mimeType) {
+    return in_array($mimeType, ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'], true);
+}
+
 function diagnosticarSchemaFacturas($pdo) {
     $database = $pdo->query('SELECT DATABASE()')->fetchColumn();
     $required = facturasSchemaRequerido();
@@ -431,7 +480,7 @@ Pregunta:
 
         case 'getAssistantContext':
             $auditsStmt = $pdo->query("SELECT `id`, `created_at`, `invoice_date`, `provider`, `invoice_number`,
-                                              `total_invoice`, `global_status`, `alert_count`, `critical_alert_count`, `lines`
+                                              `total_invoice`, `global_status`, `alert_count`, `critical_alert_count`, `pdf_path`, `lines`
                                        FROM `facturas_audits`
                                        ORDER BY `invoice_date` DESC, `created_at` DESC
                                        LIMIT 30");
@@ -482,7 +531,7 @@ Pregunta:
             ], $terms, $auditParams);
             $auditsStmt = $pdo->prepare("SELECT `id`, `created_at`, `invoice_date`, `provider`, `invoice_number`,
                                                 `total_invoice`, `global_status`, `alert_count`, `critical_alert_count`,
-                                                `reviewed_by`, `reviewed_at`, `notes`, `lines`
+                                                `reviewed_by`, `reviewed_at`, `notes`, `pdf_path`, `lines`
                                          FROM `facturas_audits`
                                          WHERE $auditWhere
                                          ORDER BY `invoice_date` DESC, `created_at` DESC
@@ -546,6 +595,115 @@ Pregunta:
             ]);
             break;
 
+        case 'uploadInvoiceFile':
+            if ($method !== 'POST') {
+                throw new Exception('Método no permitido');
+            }
+
+            if (empty($_FILES['file']) || !is_uploaded_file($_FILES['file']['tmp_name'])) {
+                throw new Exception('No se ha recibido ningún archivo');
+            }
+
+            $file = $_FILES['file'];
+            if (($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+                throw new Exception('Error subiendo la factura');
+            }
+
+            if (($file['size'] ?? 0) > 15 * 1024 * 1024) {
+                throw new Exception('La factura supera el máximo de 15 MB');
+            }
+
+            $finfo = new finfo(FILEINFO_MIME_TYPE);
+            $mimeType = $finfo->file($file['tmp_name']) ?: ($file['type'] ?? 'application/octet-stream');
+            if (!mimePermitidoFactura($mimeType)) {
+                throw new Exception('Formato no permitido. Sube PDF, JPG, PNG o WEBP');
+            }
+
+            $dir = asegurarDirectorioFacturas();
+            $originalName = nombreSeguroFactura($file['name'] ?? 'factura.pdf');
+            $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+            if ($extension === '') {
+                $extension = match ($mimeType) {
+                    'application/pdf' => 'pdf',
+                    'image/png' => 'png',
+                    'image/webp' => 'webp',
+                    default => 'jpg',
+                };
+            }
+
+            $storedName = uniqid('factura_', true) . '.' . $extension;
+            $target = $dir . '/' . $storedName;
+            if (!move_uploaded_file($file['tmp_name'], $target)) {
+                throw new Exception('No se ha podido guardar la factura');
+            }
+
+            echo json_encode([
+                'status' => 'success',
+                'path' => 'facturas_uploads/' . $storedName,
+                'filename' => $originalName,
+                'mime_type' => $mimeType,
+                'size' => filesize($target),
+            ]);
+            break;
+
+        case 'viewInvoiceFile':
+            $auditId = $_GET['audit_id'] ?? '';
+            if ($auditId === '') {
+                throw new Exception('Falta el ID de auditoría');
+            }
+
+            $stmt = $pdo->prepare("SELECT `pdf_path`, `provider`, `invoice_number` FROM `facturas_audits` WHERE `id` = ?");
+            $stmt->execute([$auditId]);
+            $audit = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$audit || empty($audit['pdf_path'])) {
+                http_response_code(404);
+                echo json_encode(['error' => 'Factura no encontrada']);
+                break;
+            }
+
+            $path = rutaFacturaDesdePath($audit['pdf_path']);
+            if (!$path || !is_file($path)) {
+                http_response_code(404);
+                echo json_encode(['error' => 'Archivo no encontrado']);
+                break;
+            }
+
+            $mimeType = mime_content_type($path) ?: 'application/octet-stream';
+            $downloadName = nombreSeguroFactura(($audit['provider'] ?: 'factura') . '_' . ($audit['invoice_number'] ?: $auditId) . '.' . pathinfo($path, PATHINFO_EXTENSION));
+            header_remove('Content-Type');
+            header('Content-Type: ' . $mimeType);
+            header('Content-Length: ' . filesize($path));
+            header('Content-Disposition: inline; filename="' . $downloadName . '"');
+            header('Cache-Control: private, max-age=300');
+            readfile($path);
+            exit();
+
+        case 'deleteInvoiceFile':
+            if ($method !== 'POST' && $method !== 'DELETE') {
+                throw new Exception('Método no permitido');
+            }
+
+            $data = json_decode(file_get_contents('php://input'), true) ?: [];
+            $auditId = $_GET['audit_id'] ?? ($data['auditId'] ?? '');
+            if ($auditId === '') {
+                throw new Exception('Falta el ID de auditoría');
+            }
+
+            $stmt = $pdo->prepare("SELECT `pdf_path` FROM `facturas_audits` WHERE `id` = ?");
+            $stmt->execute([$auditId]);
+            $relativePath = $stmt->fetchColumn();
+            if ($relativePath) {
+                $path = rutaFacturaDesdePath($relativePath);
+                if ($path && is_file($path)) {
+                    unlink($path);
+                }
+            }
+
+            $clearStmt = $pdo->prepare("UPDATE `facturas_audits` SET `pdf_path` = NULL WHERE `id` = ?");
+            $clearStmt->execute([$auditId]);
+            echo json_encode(['status' => 'success']);
+            break;
+
         case 'saveAudit':
             if ($method === 'POST') {
                 $data = json_decode(file_get_contents('php://input'), true);
@@ -558,14 +716,25 @@ Pregunta:
                     $reviewedAtSql = date('Y-m-d H:i:s');
                 }
 
+                $oldPdfPath = null;
+                if (!empty($data['provider']) && !empty($data['invoiceNumber']) && !empty($data['invoiceDate'])) {
+                    $oldPdfStmt = $pdo->prepare("SELECT `pdf_path` FROM `facturas_audits`
+                        WHERE `provider` = ? AND `invoice_number` = ? AND `invoice_date` = ?
+                        LIMIT 1");
+                    $oldPdfStmt->execute([$data['provider'], $data['invoiceNumber'], $data['invoiceDate']]);
+                    $oldPdfPath = $oldPdfStmt->fetchColumn() ?: null;
+                }
+
                 $stmt = $pdo->prepare("INSERT INTO `facturas_audits` 
                     (`id`, `invoice_date`, `provider`, `invoice_number`, `total_invoice`, `global_status`, `lines`,
-                     `pdf_path`, `alert_count`, `critical_alert_count`, `reviewed_by`, `reviewed_at`, `notes`)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     `pdf_path`, `ocr_text`, `alert_count`, `critical_alert_count`, `reviewed_by`, `reviewed_at`, `notes`)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON DUPLICATE KEY UPDATE 
                         `total_invoice`=VALUES(`total_invoice`), 
                         `global_status`=VALUES(`global_status`), 
                         `lines`=VALUES(`lines`),
+                        `pdf_path`=VALUES(`pdf_path`),
+                        `ocr_text`=VALUES(`ocr_text`),
                         `alert_count`=VALUES(`alert_count`),
                         `critical_alert_count`=VALUES(`critical_alert_count`),
                         `reviewed_by`=VALUES(`reviewed_by`),
@@ -582,6 +751,7 @@ Pregunta:
                     $globalStatus,
                     json_encode($data['lines'] ?? []),
                     $data['pdfPath'] ?? null,
+                    $data['ocrText'] ?? null,
                     $data['alertCount'] ?? 0,
                     $data['criticalAlertCount'] ?? 0,
                     $reviewedBy,
@@ -594,6 +764,14 @@ Pregunta:
                     LIMIT 1");
                 $idStmt->execute([$data['provider'], $data['invoiceNumber'], $data['invoiceDate']]);
                 $savedId = $idStmt->fetchColumn() ?: $auditId;
+
+                $newPdfPath = $data['pdfPath'] ?? null;
+                if ($oldPdfPath && $newPdfPath && $oldPdfPath !== $newPdfPath) {
+                    $oldFile = rutaFacturaDesdePath($oldPdfPath);
+                    if ($oldFile && is_file($oldFile)) {
+                        unlink($oldFile);
+                    }
+                }
 
                 echo json_encode(['status' => 'success', 'id' => $savedId]);
             }

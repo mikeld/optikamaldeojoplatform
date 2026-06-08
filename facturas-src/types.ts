@@ -127,6 +127,13 @@ export interface AssistantContext {
   };
 }
 
+export interface UploadedInvoiceFile {
+  path: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+}
+
 export interface SchemaStatus {
   ok: boolean;
   database: string;

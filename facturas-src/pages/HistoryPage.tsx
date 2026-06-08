@@ -2,11 +2,12 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../db';
 import { AuditRecord, LineStatus } from '../types';
-import { FileText, Calendar, Eye, ArrowLeft, Clock, Building2, Package, X, Download } from 'lucide-react';
+import { FileText, Eye, X, Download, Trash2, ExternalLink, Loader2 } from 'lucide-react';
 
 const HistoryPage: React.FC = () => {
   const [history, setHistory] = useState<AuditRecord[]>([]);
   const [selectedAudit, setSelectedAudit] = useState<AuditRecord | null>(null);
+  const [deletingPdfId, setDeletingPdfId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchHistory();
@@ -40,6 +41,26 @@ const HistoryPage: React.FC = () => {
     document.body.removeChild(link);
   };
 
+  const openInvoiceFile = (audit: AuditRecord) => {
+    window.open(db.getInvoiceFileUrl(audit.id), '_blank', 'noopener,noreferrer');
+  };
+
+  const deleteInvoiceFile = async (audit: AuditRecord) => {
+    if (!audit.pdfPath || !confirm(`¿Borrar el PDF guardado de la factura ${audit.invoiceNumber}?`)) return;
+
+    setDeletingPdfId(audit.id);
+    try {
+      await db.deleteInvoiceFile(audit.id);
+      const updatedHistory = history.map(item => item.id === audit.id ? { ...item, pdfPath: null } : item);
+      setHistory(updatedHistory);
+      if (selectedAudit?.id === audit.id) {
+        setSelectedAudit({ ...selectedAudit, pdfPath: null });
+      }
+    } finally {
+      setDeletingPdfId(null);
+    }
+  };
+
   const formatDate = (isoString: string) => {
     const d = new Date(isoString);
     if (isNaN(d.getTime())) return 'Fecha Inválida';
@@ -71,7 +92,7 @@ const HistoryPage: React.FC = () => {
                   <th className="px-8 py-5">Nº Factura</th>
                   <th className="px-8 py-5">Total</th>
                   <th className="px-8 py-5">Estado</th>
-                  <th className="px-8 py-5 text-right">Detalle</th>
+                  <th className="px-8 py-5 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -84,9 +105,21 @@ const HistoryPage: React.FC = () => {
                     <td className="px-8 py-6 font-black font-mono text-indigo-600">{record.totalInvoice.toFixed(2)}€</td>
                     <td className="px-8 py-6"><StatusBadge status={record.globalStatus} /></td>
                     <td className="px-8 py-6 text-right">
-                      <button onClick={() => setSelectedAudit(record)} className="p-2.5 bg-slate-100 text-slate-400 hover:bg-indigo-600 hover:text-white rounded-xl transition-all shadow-sm">
-                        <Eye className="w-5 h-5" />
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        {record.pdfPath && (
+                          <>
+                            <button onClick={() => openInvoiceFile(record)} className="p-2.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-xl transition-all shadow-sm" title="Ver factura original">
+                              <ExternalLink className="w-5 h-5" />
+                            </button>
+                            <button onClick={() => deleteInvoiceFile(record)} disabled={deletingPdfId === record.id} className="p-2.5 bg-rose-50 text-rose-500 hover:bg-rose-600 hover:text-white rounded-xl transition-all shadow-sm disabled:opacity-60" title="Borrar PDF">
+                              {deletingPdfId === record.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5" />}
+                            </button>
+                          </>
+                        )}
+                        <button onClick={() => setSelectedAudit(record)} className="p-2.5 bg-slate-100 text-slate-400 hover:bg-indigo-600 hover:text-white rounded-xl transition-all shadow-sm" title="Ver detalle">
+                          <Eye className="w-5 h-5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -109,6 +142,16 @@ const HistoryPage: React.FC = () => {
                 </div>
               </div>
               <div className="flex gap-3">
+                {selectedAudit.pdfPath && (
+                  <>
+                    <button onClick={() => openInvoiceFile(selectedAudit)} className="flex items-center gap-2 px-5 py-2.5 bg-indigo-50 text-indigo-700 font-black rounded-xl hover:bg-indigo-100 transition-all text-sm shadow-sm border border-indigo-100">
+                      <ExternalLink className="w-4 h-4" /> VER PDF
+                    </button>
+                    <button onClick={() => deleteInvoiceFile(selectedAudit)} disabled={deletingPdfId === selectedAudit.id} className="flex items-center gap-2 px-5 py-2.5 bg-rose-50 text-rose-700 font-black rounded-xl hover:bg-rose-100 transition-all text-sm shadow-sm border border-rose-100 disabled:opacity-60">
+                      {deletingPdfId === selectedAudit.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} BORRAR PDF
+                    </button>
+                  </>
+                )}
                 <button onClick={() => exportToCSV(selectedAudit)} className="flex items-center gap-2 px-5 py-2.5 bg-emerald-50 text-emerald-700 font-black rounded-xl hover:bg-emerald-100 transition-all text-sm shadow-sm border border-emerald-100">
                   <Download className="w-4 h-4" /> EXPORTAR CSV
                 </button>

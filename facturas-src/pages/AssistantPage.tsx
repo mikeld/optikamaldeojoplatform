@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { askInvoiceAssistant } from '../services/geminiService';
 import { db } from '../db';
 import { AssistantContext } from '../types';
-import { AlertTriangle, Bot, Clock, FileText, History, Loader2, Send, Sparkles, TrendingUp } from 'lucide-react';
+import { AlertTriangle, Bot, Clock, ExternalLink, FileText, History, Loader2, Send, Sparkles, TrendingUp } from 'lucide-react';
 
 const suggestedQuestions = [
   '¿Qué facturas tienen alertas críticas pendientes?',
@@ -76,6 +76,8 @@ const AssistantPage: React.FC = () => {
       setAsking(false);
     }
   };
+
+  const contextAuditsWithPdf = (context?.audits || []).filter((audit: any) => audit.pdf_path || audit.pdfPath).slice(0, 6);
 
   return (
     <div className="space-y-8 pb-20">
@@ -193,6 +195,34 @@ const AssistantPage: React.FC = () => {
               </div>
             )}
           </div>
+
+          {contextAuditsWithPdf.length > 0 && (
+            <div className="bg-white rounded-[2rem] p-6 border border-slate-100 shadow-sm">
+              <h3 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-indigo-500" />
+                Fuentes visuales
+              </h3>
+              <div className="space-y-3">
+                {contextAuditsWithPdf.map((audit: any) => (
+                  <button
+                    key={audit.id}
+                    onClick={() => window.open(db.getInvoiceFileUrl(audit.id), '_blank', 'noopener,noreferrer')}
+                    className="w-full text-left rounded-2xl border border-slate-100 bg-slate-50 hover:bg-indigo-50 hover:border-indigo-100 transition-colors p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-black text-slate-800 uppercase">{audit.provider || 'Proveedor'}</p>
+                        <p className="text-[10px] font-bold text-slate-400 mt-1">
+                          Fac. {audit.invoice_number || audit.invoiceNumber || 'S/N'} · {audit.invoice_date || audit.invoiceDate || 'Sin fecha'}
+                        </p>
+                      </div>
+                      <ExternalLink className="w-4 h-4 text-indigo-500 shrink-0" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {error && (
             <div className="rounded-[2rem] p-6 border border-rose-100 bg-rose-50 text-rose-700">

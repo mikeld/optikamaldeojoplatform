@@ -1,5 +1,5 @@
 
-import { Product, AuditRecord, ProductFamily, PriceHistory, Alert, AssistantContext, SchemaStatus } from './types';
+import { Product, AuditRecord, ProductFamily, PriceHistory, Alert, AssistantContext, SchemaStatus, UploadedInvoiceFile } from './types';
 
 const API_URL = '../pedidos/api/facturas.php';
 
@@ -211,6 +211,43 @@ export const db = {
     if (!response.ok) throw new Error('Error saving audit');
     const result = await response.json();
     return result.id;
+  },
+
+  async uploadInvoiceFile(file: File): Promise<UploadedInvoiceFile> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_URL}?action=uploadInvoiceFile`, {
+      method: 'POST',
+      body: formData
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.error || 'Error subiendo la factura');
+    }
+
+    return {
+      path: result.path,
+      filename: result.filename,
+      mimeType: result.mime_type,
+      size: Number(result.size || 0)
+    };
+  },
+
+  getInvoiceFileUrl(auditId: string): string {
+    return `${API_URL}?action=viewInvoiceFile&audit_id=${encodeURIComponent(auditId)}`;
+  },
+
+  async deleteInvoiceFile(auditId: string): Promise<void> {
+    const response = await fetch(`${API_URL}?action=deleteInvoiceFile`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ auditId })
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.error || 'Error borrando la factura');
+    }
   },
 
   // ============================================================

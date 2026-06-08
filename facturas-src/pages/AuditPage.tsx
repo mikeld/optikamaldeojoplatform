@@ -37,50 +37,57 @@ const AuditPage: React.FC = () => {
     setError(null);
 
     try {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = async () => {
-        const base64 = (reader.result as string).split(',')[1];
-        const extracted = await extractInvoiceData(base64, file.type);
-        const masterProducts = await db.getProducts();
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve((reader.result as string).split(',')[1]);
+        reader.onerror = () => reject(new Error('No se ha podido leer el archivo'));
+        reader.readAsDataURL(file);
+      });
 
-        const auditLines: AuditLine[] = extracted.items.map((item, idx) => {
-          const match = masterProducts.find(p =>
-            p.name.toLowerCase().trim() === item.description.toLowerCase().trim() ||
-            p.sku.toLowerCase().trim() === item.description.toLowerCase().trim()
-          );
+      const extracted = await extractInvoiceData(base64, file.type);
+      const [masterProducts, uploadedFile] = await Promise.all([
+        db.getProducts(),
+        db.uploadInvoiceFile(file)
+      ]);
 
-          let status = LineStatus.DISCREPANCY;
-          if (!match) status = LineStatus.NEW_PRODUCT;
-          else if (Math.abs(match.expectedPrice - item.unitPrice) < 0.01) status = LineStatus.MATCHED;
+      const auditLines: AuditLine[] = extracted.items.map((item, idx) => {
+        const match = masterProducts.find(p =>
+          p.name.toLowerCase().trim() === item.description.toLowerCase().trim() ||
+          p.sku.toLowerCase().trim() === item.description.toLowerCase().trim()
+        );
 
-          return {
-            id: `line-${idx}-${Date.now()}`,
-            invoiceDescription: item.description,
-            quantity: item.quantity,
-            invoiceUnitPrice: item.unitPrice,
-            masterProductPrice: match?.expectedPrice,
-            masterProductId: match?.id,
-            masterProductSku: match?.sku,
-            status: status,
-            difference: match ? item.unitPrice - match.expectedPrice : 0
-          };
-        });
+        let status = LineStatus.DISCREPANCY;
+        if (!match) status = LineStatus.NEW_PRODUCT;
+        else if (Math.abs(match.expectedPrice - item.unitPrice) < 0.01) status = LineStatus.MATCHED;
 
-        setAuditResult({
-          id: `temp-${Date.now()}`,
-          createdAt: new Date().toISOString(),
-          invoiceDate: extracted.date || new Date().toISOString().split('T')[0],
-          provider: extracted.providerName,
-          invoiceNumber: extracted.invoiceNumber || 'S/N',
-          lines: auditLines,
-          totalInvoice: extracted.total,
-          globalStatus: 'in_review'
-        });
-        setIsProcessing(false);
-      };
+        return {
+          id: `line-${idx}-${Date.now()}`,
+          invoiceDescription: item.description,
+          quantity: item.quantity,
+          invoiceUnitPrice: item.unitPrice,
+          masterProductPrice: match?.expectedPrice,
+          masterProductId: match?.id,
+          masterProductSku: match?.sku,
+          status: status,
+          difference: match ? item.unitPrice - match.expectedPrice : 0
+        };
+      });
+
+      setAuditResult({
+        id: `temp-${Date.now()}`,
+        createdAt: new Date().toISOString(),
+        invoiceDate: extracted.date || new Date().toISOString().split('T')[0],
+        provider: extracted.providerName,
+        invoiceNumber: extracted.invoiceNumber || 'S/N',
+        lines: auditLines,
+        totalInvoice: extracted.total,
+        globalStatus: 'in_review',
+        pdfPath: uploadedFile.path,
+        notes: `Archivo original: ${uploadedFile.filename}`
+      });
+      setIsProcessing(false);
     } catch (err) {
-      setError("Error al procesar la factura. Verifica que la imagen sea clara.");
+      setError(err instanceof Error ? err.message : "Error al procesar la factura. Verifica que la imagen sea clara.");
       setIsProcessing(false);
     }
   };
@@ -431,6 +438,12 @@ const AuditPage: React.FC = () => {
                 <span>FAC: {auditResult.invoiceNumber}</span>
                 <span>•</span>
                 <span>FECHA: {auditResult.invoiceDate}</span>
+                {auditResult.pdfPath && (
+                  <>
+                    <span>•</span>
+                    <span className="text-indigo-500">PDF guardado</span>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -545,6 +558,12 @@ const AuditPage: React.FC = () => {
       <button disabled={!file || isProcessing} onClick={processInvoice} className="w-full py-6 bg-slate-900 text-white rounded-[2rem] font-black text-xl hover:bg-indigo-600 disabled:bg-slate-100 transition-all flex items-center justify-center gap-4">
         {isProcessing ? <><Loader2 className="animate-spin w-6 h-6" /> PROCESANDO...</> : "EMPEZAR AUDITORÍA"}
       </button>
+      {error && (
+        <div className="rounded-2xl border border-rose-100 bg-rose-50 px-5 py-4 text-rose-700 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 mt-0.5" />
+          <p className="text-sm font-bold leading-relaxed">{error}</p>
+        </div>
+      )}
     </div>
   );
 };
