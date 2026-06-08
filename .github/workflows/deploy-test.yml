@@ -97,20 +97,38 @@ jobs:
           FTP_USER_CLEAN="$(printf '%s' "$FTP_USER" | tr -d '\r\n')"
           FTP_PASS_CLEAN="$(printf '%s' "$FTP_PASS" | tr -d '\r\n')"
           FTP_DIR_CLEAN="$(printf '%s' "$FTP_DIR" | tr -d '\r\n')"
+          FILE_COUNT="$(find deploy/dist/upload -type f | wc -l | tr -d ' ')"
+
           for attempt in 1 2 3; do
             echo "FTP upload attempt $attempt/3"
-            if timeout 360 lftp <<EOF
-          set cmd:fail-exit yes
-          set net:timeout 30
-          set net:max-retries 3
-          set net:reconnect-interval-base 6
-          set ftp:ssl-allow true
-          set ftp:passive-mode true
-          set ssl:verify-certificate no
-          open -p 21 -u "$FTP_USER_CLEAN","$FTP_PASS_CLEAN" "$FTP_HOST_CLEAN"
-          mirror -R --verbose --only-newer --parallel=1 deploy/dist/upload "$FTP_DIR_CLEAN"
-          bye
-          EOF
+
+            {
+              echo "set cmd:fail-exit yes"
+              echo "set net:timeout 30"
+              echo "set net:max-retries 3"
+              echo "set net:reconnect-interval-base 6"
+              echo "set ftp:ssl-allow true"
+              echo "set ftp:passive-mode true"
+              echo "set ssl:verify-certificate no"
+              echo "open -p 21 -u \"$FTP_USER_CLEAN\",\"$FTP_PASS_CLEAN\" \"$FTP_HOST_CLEAN\""
+
+              if [ "$FILE_COUNT" -le 30 ]; then
+                echo "# Using direct file upload for $FILE_COUNT files"
+                while IFS= read -r file; do
+                  rel="${file#deploy/dist/upload/}"
+                  remote_dir="$FTP_DIR_CLEAN/$(dirname "$rel")"
+                  echo "mkdir -p \"$remote_dir\""
+                  echo "put -O \"$remote_dir\" \"$file\""
+                done < <(find deploy/dist/upload -type f | sort)
+              else
+                echo "# Using mirror upload for $FILE_COUNT files"
+                echo "mirror -R --verbose --only-newer --parallel=1 deploy/dist/upload \"$FTP_DIR_CLEAN\""
+              fi
+
+              echo "bye"
+            } > deploy/dist/lftp_commands.txt
+
+            if timeout 360 lftp -f deploy/dist/lftp_commands.txt
             then
               exit 0
             fi
