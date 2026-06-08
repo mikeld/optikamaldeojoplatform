@@ -117,6 +117,9 @@ jobs:
               while IFS= read -r file; do
                 rel="${file#deploy/dist/upload/}"
                 remote_dir="$FTP_DIR_CLEAN/$(dirname "$rel")"
+                echo "set cmd:fail-exit no"
+                echo "mkdir -p \"$remote_dir\""
+                echo "set cmd:fail-exit yes"
                 echo "put -O \"$remote_dir\" \"$file\""
               done < <(find deploy/dist/upload -type f | sort)
 
