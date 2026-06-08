@@ -183,7 +183,7 @@ $quick_actions = [
     <div class="container-fluid px-lg-5">
       <nav aria-label="breadcrumb">
         <ol class="breadcrumb mb-0">
-          <li class="breadcrumb-item"><a href="listado_pedidos.php"><i class="fas fa-home"></i></a></li>
+          <li class="breadcrumb-item"><a href="<?= htmlspecialchars($pedidos_url('listado_pedidos.php')) ?>"><i class="fas fa-home"></i></a></li>
           <?php foreach ($breadcrumbs as $i => $bc): ?>
             <?php if ($i === count($breadcrumbs) - 1): ?>
               <li class="breadcrumb-item active" aria-current="page"><?= htmlspecialchars($bc['nombre']) ?></li>
