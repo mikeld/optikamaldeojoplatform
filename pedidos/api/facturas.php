@@ -375,6 +375,8 @@ IMPORTANT Rules for Item Extraction:
                 ]],
                 'generationConfig' => [
                     'responseMimeType' => 'application/json',
+                    'temperature' => 0,
+                    'maxOutputTokens' => 4096,
                 ],
             ];
 
@@ -425,6 +427,10 @@ Pregunta:
                         'text' => $prompt,
                     ]],
                 ]],
+                'generationConfig' => [
+                    'temperature' => 0.2,
+                    'maxOutputTokens' => 900,
+                ],
             ]));
 
             echo json_encode(['answer' => $responseText ?: 'No he podido generar una respuesta con los datos disponibles.']);

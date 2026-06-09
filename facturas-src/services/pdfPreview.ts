@@ -23,7 +23,17 @@ export interface RenderedPdfPage {
   height: number;
 }
 
-export const renderPdfPageImages = async (file: File, maxPages = 4): Promise<RenderedPdfPage[]> => {
+export interface PdfRenderProgress {
+  pageNumber: number;
+  pageCount: number;
+  totalPages: number;
+}
+
+export const renderPdfPageImages = async (
+  file: File,
+  maxPages = 3,
+  onProgress?: (progress: PdfRenderProgress) => void
+): Promise<RenderedPdfPage[]> => {
   const pdfjsLib = await loadPdfJs();
   const data = new Uint8Array(await file.arrayBuffer());
   const pdf = await pdfjsLib.getDocument({ data }).promise;
@@ -33,8 +43,8 @@ export const renderPdfPageImages = async (file: File, maxPages = 4): Promise<Ren
   for (let pageNumber = 1; pageNumber <= pageCount; pageNumber++) {
     const page = await pdf.getPage(pageNumber);
     const viewport = page.getViewport({ scale: 1 });
-    const targetWidth = 1500;
-    const scale = Math.min(1.8, Math.max(1.1, targetWidth / viewport.width));
+    const targetWidth = 1200;
+    const scale = Math.min(1.55, Math.max(1, targetWidth / viewport.width));
     const scaledViewport = page.getViewport({ scale });
 
     const canvas = document.createElement('canvas');
@@ -47,7 +57,7 @@ export const renderPdfPageImages = async (file: File, maxPages = 4): Promise<Ren
     }
 
     await page.render({ canvas, canvasContext: context, viewport: scaledViewport }).promise;
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.84);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.78);
     pages.push({
       pageNumber,
       base64: dataUrl.split(',')[1],
@@ -55,6 +65,7 @@ export const renderPdfPageImages = async (file: File, maxPages = 4): Promise<Ren
       width: canvas.width,
       height: canvas.height,
     });
+    onProgress?.({ pageNumber, pageCount, totalPages: pdf.numPages });
   }
 
   return pages;
@@ -88,7 +99,7 @@ export const combineRenderedPagesAsJpeg = async (renderedPages: RenderedPdfPage[
     y += page.height;
   });
 
-  const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
   return {
     base64: dataUrl.split(',')[1],
     mimeType: 'image/jpeg'

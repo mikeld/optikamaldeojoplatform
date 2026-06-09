@@ -6,6 +6,29 @@ import { combineRenderedPagesAsJpeg, renderPdfPageImages } from '../services/pdf
 import { db } from '../db';
 import { InvoiceData, AuditLine, LineStatus, Product, AuditRecord, AuditStatus, ProductFamily, InvoiceItem } from '../types';
 
+type ProcessingStepKey = 'idle' | 'reading' | 'rendering' | 'extracting' | 'loading' | 'matching' | 'done';
+
+interface ProcessingStep {
+  key: ProcessingStepKey;
+  label: string;
+  detail: string;
+  percent: number;
+  usesAi: boolean;
+}
+
+const defaultProcessingStep: ProcessingStep = {
+  key: 'idle',
+  label: 'Pendiente',
+  detail: 'Selecciona una factura para empezar.',
+  percent: 0,
+  usesAi: false,
+};
+
+const formatSeconds = (startedAt: number | null) => {
+  if (!startedAt) return '0s';
+  return `${Math.max(0, Math.round((Date.now() - startedAt) / 1000))}s`;
+};
+
 const invoiceSummary = (audit: AuditRecord) => {
   const activeLines = audit.lines.filter(line => line.status !== LineStatus.REJECTED);
   const units = activeLines.reduce((sum, line) => sum + Number(line.quantity || 0), 0);
@@ -95,6 +118,9 @@ const matchInvoiceItem = (item: InvoiceItem, products: Product[], families: Prod
 const AuditPage: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingStep, setProcessingStep] = useState<ProcessingStep>(defaultProcessingStep);
+  const [processingStartedAt, setProcessingStartedAt] = useState<number | null>(null);
+  const [processingElapsedTick, setProcessingElapsedTick] = useState(0);
   const [auditResult, setAuditResult] = useState<AuditRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -118,16 +144,60 @@ const AuditPage: React.FC = () => {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [auditResult]);
 
+  useEffect(() => {
+    if (!isProcessing) return;
+    const interval = window.setInterval(() => setProcessingElapsedTick(value => value + 1), 1000);
+    return () => window.clearInterval(interval);
+  }, [isProcessing]);
+
   const processInvoice = async () => {
     if (!file) return;
     setIsProcessing(true);
+    const startedAt = Date.now();
+    setProcessingStartedAt(startedAt);
+    setProcessingElapsedTick(0);
+    setProcessingStep({
+      key: 'reading',
+      label: 'Preparando factura',
+      detail: 'Leyendo el archivo en el navegador. Esta fase no consume IA.',
+      percent: 8,
+      usesAi: false,
+    });
     setError(null);
 
     try {
-      const renderedPages = file.type === 'application/pdf' ? await renderPdfPageImages(file, 4) : [];
+      const renderedPages = file.type === 'application/pdf'
+        ? await renderPdfPageImages(file, 3, ({ pageNumber, pageCount, totalPages }) => {
+          setProcessingStep({
+            key: 'rendering',
+            label: `Renderizando página ${pageNumber}/${pageCount}`,
+            detail: totalPages > pageCount
+              ? `Se usarán las primeras ${pageCount} de ${totalPages} páginas para controlar coste y tiempo.`
+              : 'Generando imágenes legibles del PDF. Esta fase no consume IA.',
+            percent: 12 + Math.round((pageNumber / pageCount) * 23),
+            usesAi: false,
+          });
+        })
+        : [];
+      setProcessingStep({
+        key: 'extracting',
+        label: 'Extrayendo datos con Gemini',
+        detail: file.type === 'application/pdf'
+          ? `Enviando ${Math.min(renderedPages.length, 3)} página(s) optimizadas. Esta es la única fase que consume IA.`
+          : 'Enviando la imagen a Gemini. Esta es la única fase que consume IA.',
+        percent: 42,
+        usesAi: true,
+      });
       const extracted = file.type === 'application/pdf'
         ? await combineRenderedPagesAsJpeg(renderedPages.slice(0, 3)).then(({ base64, mimeType }) => extractInvoiceData(base64, mimeType))
         : await extractInvoiceFile(file);
+      setProcessingStep({
+        key: 'loading',
+        label: 'Guardando y cargando catálogo',
+        detail: 'Subiendo el PDF y recuperando productos/familias. Esta fase no consume IA.',
+        percent: 72,
+        usesAi: false,
+      });
       const [masterProducts, families, uploadedFile, uploadedPages] = await Promise.all([
         db.getProducts(),
         db.getFamilies(),
@@ -135,6 +205,13 @@ const AuditPage: React.FC = () => {
         db.uploadInvoicePages(renderedPages)
       ]);
 
+      setProcessingStep({
+        key: 'matching',
+        label: 'Comparando con catálogo',
+        detail: 'Detectando productos conocidos, familias de lentillas y diferencias de precio.',
+        percent: 88,
+        usesAi: false,
+      });
       const auditLines: AuditLine[] = extracted.items.map((item, idx) => {
         const match = matchInvoiceItem(item, masterProducts, families);
 
@@ -171,10 +248,18 @@ const AuditPage: React.FC = () => {
         pages: uploadedPages,
         notes: `Archivo original: ${uploadedFile.filename}`
       });
+      setProcessingStep({
+        key: 'done',
+        label: 'Auditoría preparada',
+        detail: 'Revisa líneas, diferencias y productos nuevos antes de guardar.',
+        percent: 100,
+        usesAi: false,
+      });
       setIsProcessing(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al procesar la factura. Verifica que la imagen sea clara.");
       setIsProcessing(false);
+      setProcessingStartedAt(null);
     }
   };
 
@@ -664,13 +749,51 @@ const AuditPage: React.FC = () => {
         <p className="text-slate-500 text-lg">Inicia una auditoría subiendo una foto o PDF.</p>
       </div>
       <div onClick={() => fileInputRef.current?.click()} className="group border-3 border-dashed rounded-[3rem] p-20 text-center cursor-pointer transition-all border-slate-200 hover:border-indigo-400 hover:bg-white">
-        <input type="file" ref={fileInputRef} onChange={(e) => e.target.files && setFile(e.target.files[0])} hidden accept="image/*,application/pdf" />
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={(e) => {
+            if (!e.target.files) return;
+            setFile(e.target.files[0]);
+            setError(null);
+            setProcessingStep(defaultProcessingStep);
+            setProcessingStartedAt(null);
+          }}
+          hidden
+          accept="image/*,application/pdf"
+        />
         <PlusCircle className="w-12 h-12 text-slate-300 mx-auto mb-4 group-hover:text-indigo-500 transition-colors" />
         <p className="text-slate-500 font-bold">{file ? file.name : 'Haz clic para seleccionar archivo'}</p>
       </div>
       <button disabled={!file || isProcessing} onClick={processInvoice} className="w-full py-6 bg-slate-900 text-white rounded-[2rem] font-black text-xl hover:bg-indigo-600 disabled:bg-slate-100 transition-all flex items-center justify-center gap-4">
         {isProcessing ? <><Loader2 className="animate-spin w-6 h-6" /> PROCESANDO...</> : "EMPEZAR AUDITORÍA"}
       </button>
+      {isProcessing && (
+        <div className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-sm space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-black uppercase tracking-widest text-slate-400">Estado del procesado</p>
+              <h3 className="mt-1 text-lg font-black text-slate-800">{processingStep.label}</h3>
+              <p className="mt-1 text-sm font-semibold leading-relaxed text-slate-500">{processingStep.detail}</p>
+            </div>
+            <div className={`shrink-0 rounded-2xl px-3 py-2 text-xs font-black ${processingStep.usesAi ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>
+              {processingStep.usesAi ? 'Usando IA' : 'Sin IA'}
+            </div>
+          </div>
+
+          <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${processingStep.usesAi ? 'bg-amber-500' : 'bg-indigo-600'}`}
+              style={{ width: `${Math.max(4, Math.min(100, processingStep.percent))}%` }}
+            />
+          </div>
+
+          <div className="flex items-center justify-between text-xs font-black text-slate-400">
+            <span>{processingStep.percent}%</span>
+            <span>{formatSeconds(processingStartedAt)} transcurridos</span>
+          </div>
+        </div>
+      )}
       {error && (
         <div className="rounded-2xl border border-rose-100 bg-rose-50 px-5 py-4 text-rose-700 flex items-start gap-3">
           <AlertCircle className="w-5 h-5 mt-0.5" />
