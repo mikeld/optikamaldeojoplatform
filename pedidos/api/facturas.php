@@ -308,6 +308,37 @@ function geminiResponseText($response) {
     return $response['candidates'][0]['content']['parts'][0]['text'] ?? '';
 }
 
+function decodificarJsonGemini($responseText) {
+    $text = trim((string)$responseText);
+    if ($text === '') {
+        return null;
+    }
+
+    $decoded = json_decode($text, true);
+    if (is_array($decoded)) {
+        return $decoded;
+    }
+
+    $text = preg_replace('/^```(?:json)?\s*/i', '', $text);
+    $text = preg_replace('/\s*```$/', '', trim($text));
+    $decoded = json_decode($text, true);
+    if (is_array($decoded)) {
+        return $decoded;
+    }
+
+    $start = strpos($text, '{');
+    $end = strrpos($text, '}');
+    if ($start !== false && $end !== false && $end > $start) {
+        $candidate = substr($text, $start, $end - $start + 1);
+        $decoded = json_decode($candidate, true);
+        if (is_array($decoded)) {
+            return $decoded;
+        }
+    }
+
+    return null;
+}
+
 try {
     switch ($action) {
         case 'getSchemaStatus':
@@ -375,15 +406,46 @@ IMPORTANT Rules for Item Extraction:
                 ]],
                 'generationConfig' => [
                     'responseMimeType' => 'application/json',
+                    'responseSchema' => [
+                        'type' => 'OBJECT',
+                        'properties' => [
+                            'providerName' => ['type' => 'STRING'],
+                            'date' => ['type' => 'STRING'],
+                            'invoiceNumber' => ['type' => 'STRING'],
+                            'total' => ['type' => 'NUMBER'],
+                            'items' => [
+                                'type' => 'ARRAY',
+                                'items' => [
+                                    'type' => 'OBJECT',
+                                    'properties' => [
+                                        'id' => ['type' => 'STRING'],
+                                        'description' => ['type' => 'STRING'],
+                                        'baseProductName' => ['type' => 'STRING'],
+                                        'graduation' => ['type' => 'STRING'],
+                                        'quantity' => ['type' => 'NUMBER'],
+                                        'unitPrice' => ['type' => 'NUMBER'],
+                                        'total' => ['type' => 'NUMBER'],
+                                    ],
+                                    'required' => ['description', 'baseProductName', 'quantity', 'unitPrice', 'total'],
+                                ],
+                            ],
+                        ],
+                        'required' => ['providerName', 'date', 'invoiceNumber', 'items', 'total'],
+                    ],
                     'temperature' => 0,
-                    'maxOutputTokens' => 4096,
+                    'maxOutputTokens' => 8192,
                 ],
             ];
 
             $responseText = geminiResponseText(geminiGenerateContent($payload));
-            $invoice = json_decode($responseText, true);
+            $invoice = decodificarJsonGemini($responseText);
             if (!is_array($invoice)) {
-                throw new Exception('Gemini no ha devuelto un JSON válido para la factura');
+                $preview = trim(preg_replace('/\s+/', ' ', strip_tags((string)$responseText)));
+                $preview = $preview !== '' ? ' Inicio de respuesta: ' . mb_substr($preview, 0, 220) : '';
+                throw new Exception('Gemini no ha devuelto un JSON válido para la factura.' . $preview);
+            }
+            if (!isset($invoice['items']) || !is_array($invoice['items'])) {
+                throw new Exception('Gemini ha devuelto JSON, pero no incluye líneas de factura válidas');
             }
             echo json_encode($invoice);
             break;
