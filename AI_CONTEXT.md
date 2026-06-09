@@ -137,7 +137,9 @@ Secretos GitHub Actions relevantes:
    - subir/guardar
    - comparar con catalogo
 5. Solo la fase Gemini consume IA.
-6. Backend recibe texto de pagina o imagen optimizada y pide JSON estricto a Gemini.
+6. Backend recibe texto de pagina o imagen optimizada.
+   - Si el texto trae lineas tabulares reconocibles, intenta extraerlas por reglas sin IA.
+   - Si no hay texto suficiente o no se reconocen lineas, pide JSON estricto a Gemini.
 7. Frontend compara lineas extraidas con productos/familias.
 8. Se guarda auditoria con PDF original y paginas visuales opcionales.
 9. Asistente IA usa contexto de auditorias, alertas y precios.
@@ -180,6 +182,7 @@ Reglas actuales:
 - Render PDF, subida, comparacion con catalogo y guardado no gastan tokens.
 - PDF se convierte a imagen optimizada para evitar mandar archivos enormes.
 - Cuando el PDF tiene texto seleccionable, se envia texto por pagina antes que imagen. Es mas barato, rapido y estable.
+- En proveedores con texto tabular tipo Visionis, intentar parseo por reglas antes de Gemini. Coste IA: 0 para la extraccion de lineas.
 - Se usan primeras paginas para controlar coste y tiempo.
 - `generationConfig.temperature = 0` en extraccion.
 - `maxOutputTokens` limitado para extraccion/asistente.
@@ -289,7 +292,8 @@ Problema:
 Decision:
 
 - Intentar primero extraccion de texto del PDF por pagina con PDF.js.
-- Mandar a Gemini texto por pagina, no imagen, siempre que haya texto suficiente.
+- Intentar parsear lineas tabulares del texto sin IA.
+- Mandar a Gemini texto por pagina, no imagen, solo cuando el parser no encuentre lineas.
 - Usar imagen solo como fallback cuando el PDF no tenga capa de texto.
 - Plantear Pinecone/embeddings despues de estabilizar ingesta y guardado.
 

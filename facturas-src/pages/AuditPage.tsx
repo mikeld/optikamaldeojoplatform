@@ -198,8 +198,9 @@ const AuditPage: React.FC = () => {
 
     try {
       const selectedExtractionMode = extractionModes[extractionMode];
+      const textPageLimit = 60;
       const textPages = file.type === 'application/pdf'
-        ? await extractPdfTextPages(file, selectedExtractionMode.aiPages, ({ pageNumber, pageCount, totalPages }) => {
+        ? await extractPdfTextPages(file, textPageLimit, ({ pageNumber, pageCount, totalPages }) => {
           setProcessingStep({
             key: 'reading',
             label: `Leyendo texto página ${pageNumber}/${pageCount}`,
@@ -226,30 +227,61 @@ const AuditPage: React.FC = () => {
           });
         })
         : [];
-      setProcessingStep({
-        key: 'extracting',
-        label: 'Extrayendo datos con Gemini',
-        detail: file.type === 'application/pdf'
-          ? shouldUseTextExtraction
-            ? `Modelo ${modelLabel(selectedModel)}. Usando texto del PDF por página, más barato y estable que imagen.`
-            : `Modelo ${modelLabel(selectedModel)}. Procesando ${pagesForAiRender.length} imagen(es), una por una.`
-          : `Modelo ${modelLabel(selectedModel)}. Enviando la imagen a Gemini. Esta es la única fase que consume IA.`,
-        percent: 42,
-        usesAi: true,
-      });
-      const extracted = file.type === 'application/pdf'
-        ? shouldUseTextExtraction
-          ? await Promise.all(usableTextPages.map(async (page, index) => {
+      let extracted: InvoiceData;
+      let extractionMethod: 'texto_pdf_sin_ia' | 'texto_pdf_gemini' | 'imagen_pdf' | 'imagen' = file.type === 'application/pdf' ? 'imagen_pdf' : 'imagen';
+
+      if (file.type === 'application/pdf' && shouldUseTextExtraction) {
+        setProcessingStep({
+          key: 'matching',
+          label: 'Analizando texto del PDF',
+          detail: 'Detectando líneas tabulares sin usar IA. Si no basta, se usará Gemini como respaldo.',
+          percent: 42,
+          usesAi: false,
+        });
+
+        const parsedFromText = await Promise.all(usableTextPages.map(async (page, index) => {
+          setProcessingStep({
+            key: 'matching',
+            label: `Analizando texto página ${index + 1}/${usableTextPages.length}`,
+            detail: 'Extracción por reglas de factura. Esta fase no consume IA.',
+            percent: 38 + Math.round(((index + 1) / usableTextPages.length) * 28),
+            usesAi: false,
+          });
+          return extractInvoiceText(page.text, { model: selectedModel, pageNumber: page.pageNumber, parserOnly: true });
+        })).then(mergeInvoicePages);
+
+        if (parsedFromText.items.length > 0) {
+          extracted = parsedFromText;
+          extractionMethod = 'texto_pdf_sin_ia';
+        } else {
+          setProcessingStep({
+            key: 'extracting',
+            label: 'Extrayendo datos con Gemini',
+            detail: `Modelo ${modelLabel(selectedModel)}. No se detectaron líneas por reglas; se usa texto del PDF por página.`,
+            percent: 42,
+            usesAi: true,
+          });
+          extracted = await Promise.all(usableTextPages.slice(0, selectedExtractionMode.aiPages).map(async (page, index) => {
             setProcessingStep({
               key: 'extracting',
-              label: `Extrayendo texto página ${index + 1}/${usableTextPages.length}`,
+              label: `Extrayendo texto página ${index + 1}/${Math.min(usableTextPages.length, selectedExtractionMode.aiPages)}`,
               detail: `Modelo ${modelLabel(selectedModel)}. Llamada IA sobre texto, no imagen.`,
-              percent: 38 + Math.round(((index + 1) / usableTextPages.length) * 28),
+              percent: 38 + Math.round(((index + 1) / Math.min(usableTextPages.length, selectedExtractionMode.aiPages)) * 28),
               usesAi: true,
             });
             return extractInvoiceText(page.text, { model: selectedModel, pageNumber: page.pageNumber });
-          })).then(mergeInvoicePages)
-          : await Promise.all(pagesForAiRender.map(async (page, index) => {
+          })).then(mergeInvoicePages);
+          extractionMethod = 'texto_pdf_gemini';
+        }
+      } else if (file.type === 'application/pdf') {
+        setProcessingStep({
+          key: 'extracting',
+          label: 'Extrayendo datos con Gemini',
+          detail: `Modelo ${modelLabel(selectedModel)}. Procesando ${pagesForAiRender.length} imagen(es), una por una.`,
+          percent: 42,
+          usesAi: true,
+        });
+        extracted = await Promise.all(pagesForAiRender.map(async (page, index) => {
           setProcessingStep({
             key: 'extracting',
             label: `Extrayendo página ${index + 1}/${pagesForAiRender.length}`,
@@ -260,8 +292,17 @@ const AuditPage: React.FC = () => {
           const { base64, mimeType } = await combineRenderedPagesAsJpeg([page]);
           const optimizedFile = await dataUrlToFile(base64, mimeType, `factura-pagina-${page.pageNumber}.jpg`);
           return extractInvoiceFile(optimizedFile, { model: selectedModel });
-        })).then(mergeInvoicePages)
-        : await extractInvoiceFile(file, { model: selectedModel });
+        })).then(mergeInvoicePages);
+      } else {
+        setProcessingStep({
+          key: 'extracting',
+          label: 'Extrayendo datos con Gemini',
+          detail: `Modelo ${modelLabel(selectedModel)}. Enviando la imagen a Gemini. Esta es la única fase que consume IA.`,
+          percent: 42,
+          usesAi: true,
+        });
+        extracted = await extractInvoiceFile(file, { model: selectedModel });
+      }
       setProcessingStep({
         key: 'loading',
         label: 'Guardando y cargando catálogo',
@@ -322,7 +363,7 @@ const AuditPage: React.FC = () => {
         globalStatus: 'in_review',
         pdfPath: uploadedFile.path,
         pages: uploadedPages,
-        notes: `Archivo original: ${uploadedFile.filename}. Modelo: ${selectedModel}. Extracción: ${shouldUseTextExtraction ? 'texto_pdf' : 'imagen_pdf'}. Páginas IA: ${shouldUseTextExtraction ? usableTextPages.length : pagesForAiRender.length}. Fuentes visuales: ${saveVisualSources ? uploadedPages.length : 0}.`
+        notes: `Archivo original: ${uploadedFile.filename}. Modelo: ${selectedModel}. Extracción: ${extractionMethod}. Páginas IA: ${extractionMethod === 'texto_pdf_gemini' ? Math.min(usableTextPages.length, selectedExtractionMode.aiPages) : extractionMethod === 'imagen_pdf' ? pagesForAiRender.length : extractionMethod === 'imagen' ? 1 : 0}. Páginas texto: ${usableTextPages.length}. Fuentes visuales: ${saveVisualSources ? uploadedPages.length : 0}.`
       });
       setProcessingStep({
         key: 'done',

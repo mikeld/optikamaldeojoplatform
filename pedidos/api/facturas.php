@@ -381,6 +381,113 @@ function normalizarFacturaExtraida($invoice) {
     return $invoice;
 }
 
+function numeroFacturaTexto($value) {
+    $value = trim((string)$value);
+    $value = str_replace(["\xc2\xa0", ' '], '', $value);
+    $value = str_replace('.', '', $value);
+    $value = str_replace(',', '.', $value);
+    if ($value === '' || $value === '-') {
+        return 0.0;
+    }
+    return (float)$value;
+}
+
+function fechaFacturaTexto($value) {
+    $value = trim((string)$value);
+    if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $value, $matches)) {
+        return $matches[3] . '-' . $matches[2] . '-' . $matches[1];
+    }
+    return $value;
+}
+
+function baseProductoFacturaTexto($description) {
+    $base = trim((string)$description);
+    $base = preg_replace('/^\[[^\]]+\]\s*/', '', $base);
+    $base = preg_replace('/\|.*$/', '', $base);
+    $base = preg_replace('/\s+Pedido\s+BOD.*$/i', '', $base);
+    $base = preg_replace('/\s+Paciente:.*$/i', '', $base);
+    $base = preg_replace('/\s+\[[A-Z]{2}\].*$/u', '', $base);
+    $base = preg_replace('/\s+\((?:[+-]?\d+[,.]\d+|ADD|LOW|HIGH|MED|,\s*|-|\+|\d+)+\).*$/iu', '', $base);
+    $base = preg_replace('/\s+[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ\s.-]+-\d{8}$/u', '', $base);
+    $base = preg_replace('/\s+OTHER\s+-\s+[A-Z0-9]+\s+-.*$/i', '', $base);
+    $base = preg_replace('/\s+OTHER\s+Edging.*$/i', '', $base);
+    $base = preg_replace('/\s+PRECAL.*$/i', '', $base);
+    $base = trim(preg_replace('/\s+/', ' ', $base));
+    return $base !== '' ? $base : trim((string)$description);
+}
+
+function graduacionFacturaTexto($description) {
+    $description = (string)$description;
+    if (preg_match('/\(([^)]*(?:[+-]\d+[,.]\d+|ADD|LOW|HIGH|MED)[^)]*)\)/iu', $description, $matches)) {
+        return trim($matches[1]);
+    }
+    if (preg_match('/OJO\s+(?:DERECHO|IZQUIERDO)\s+-\s+([^|]+?)(?:\s+ANTIREFLEX|\s+OTHER|\s+PCS|$)/iu', $description, $matches)) {
+        return trim($matches[1]);
+    }
+    return '';
+}
+
+function limpiarDescripcionFacturaTexto($description) {
+    $description = trim((string)$description);
+    $description = preg_replace('/^(?:DESCRIPCI[ÓO]N\s+CANTIDAD\s+PRECIO\s+DESC\.\s+\(%\)\s+IMPUESTOS\s+IMPORTE\s*)+/iu', '', $description);
+    $description = preg_replace('/^Subtotal:\s*[-\d,.]+\s*€?\s*/iu', '', $description);
+    $description = preg_replace('/^Albarán:\s*\d{2}\/\d{2}\/\d{4}\s+[A-Z]\/OUT\/\d+\s+Pedido:\s*\[[^\]]+\]\s+Cliente:\s*\d+\s*/iu', '', $description);
+    $description = preg_replace('/^\(MALDEOJO.*$/iu', '', $description);
+    return trim(preg_replace('/\s+/', ' ', $description));
+}
+
+function extraerFacturaDesdeTextoPlano($textContent, $pageNumber = null) {
+    $text = trim(preg_replace('/\s+/', ' ', (string)$textContent));
+    $invoice = [
+        'providerName' => '',
+        'date' => '',
+        'invoiceNumber' => '',
+        'items' => [],
+        'total' => 0.0,
+    ];
+
+    if (stripos($text, 'VISIONIS') !== false) {
+        $invoice['providerName'] = 'VISIONIS DISTRIBUCIÓN S.L';
+    } elseif (preg_match('/([A-ZÁÉÍÓÚÑ0-9][A-ZÁÉÍÓÚÑ0-9 .,&-]{4,}(?:S\.L\.|S\.A\.|SL|SA))/u', $text, $matches)) {
+        $invoice['providerName'] = trim($matches[1]);
+    }
+
+    if (preg_match('/Factura\s+([A-Z0-9\/.-]+)/iu', $text, $matches)) {
+        $invoice['invoiceNumber'] = trim($matches[1]);
+    }
+    if (preg_match('/Fecha\s+de\s+factura:\s*(\d{2}\/\d{2}\/\d{4})/iu', $text, $matches)) {
+        $invoice['date'] = fechaFacturaTexto($matches[1]);
+    }
+    if (preg_match('/Total:\s*([-\d., ]+)\s*€/iu', $text, $matches)) {
+        $invoice['total'] = numeroFacturaTexto($matches[1]);
+    }
+
+    $pattern = '/(.{2,420}?)\s+(\d+(?:[,.]\d+)?)\s+Ud\(s\)\s+(-?\s?\d+(?:[,.]\d{2})|-)\s+(-?\s?\d+(?:[,.]\d{2}))\s+IVA\s+\d+%\s+(-?\s?\d+(?:[,.]\d{2}))\s*€/iu';
+    if (preg_match_all($pattern, $text, $matches, PREG_SET_ORDER)) {
+        foreach ($matches as $idx => $match) {
+            $description = limpiarDescripcionFacturaTexto($match[1]);
+            if ($description === '' || stripos($description, 'VISIONIS DISTRIBUCIÓN') !== false) {
+                continue;
+            }
+            $quantity = numeroFacturaTexto($match[2]);
+            $unitPrice = numeroFacturaTexto($match[3]);
+            $lineTotal = numeroFacturaTexto($match[5]);
+
+            $invoice['items'][] = [
+                'id' => 'text-' . ($pageNumber ?: 'p') . '-' . ($idx + 1),
+                'description' => $description,
+                'baseProductName' => baseProductoFacturaTexto($description),
+                'graduation' => graduacionFacturaTexto($description),
+                'quantity' => $quantity,
+                'unitPrice' => $unitPrice,
+                'total' => $lineTotal,
+            ];
+        }
+    }
+
+    return $invoice;
+}
+
 try {
     switch ($action) {
         case 'getSchemaStatus':
@@ -397,6 +504,7 @@ try {
             $mimeType = 'image/jpeg';
             $textContent = '';
             $pageNumber = null;
+            $parserOnly = false;
             $preferredModel = null;
 
             if (!empty($_FILES['file']) && is_uploaded_file($_FILES['file']['tmp_name'])) {
@@ -424,11 +532,20 @@ try {
                 $mimeType = $data['mimeType'] ?? 'image/jpeg';
                 $textContent = trim((string)($data['text'] ?? ''));
                 $pageNumber = isset($data['pageNumber']) ? (int)$data['pageNumber'] : null;
+                $parserOnly = !empty($data['parserOnly']);
                 $preferredModel = modeloGeminiPermitido($data['model'] ?? null);
             }
 
             if ($base64Image === '' && $textContent === '') {
                 throw new Exception('Falta texto o imagen de la factura');
+            }
+
+            if ($textContent !== '') {
+                $parsedInvoice = extraerFacturaDesdeTextoPlano($textContent, $pageNumber);
+                if ($parserOnly || !empty($parsedInvoice['items'])) {
+                    echo json_encode($parsedInvoice);
+                    break;
+                }
             }
 
             $parts = [];

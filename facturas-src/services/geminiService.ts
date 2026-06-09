@@ -29,11 +29,11 @@ export const extractInvoiceData = async (base64Image: string, mimeType: string, 
   return data;
 };
 
-export const extractInvoiceText = async (text: string, options?: InvoiceExtractionOptions & { pageNumber?: number }): Promise<InvoiceData> => {
+export const extractInvoiceText = async (text: string, options?: InvoiceExtractionOptions & { pageNumber?: number; parserOnly?: boolean }): Promise<InvoiceData> => {
   const response = await fetch(`${API_URL}?action=extractInvoiceData`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, model: options?.model, pageNumber: options?.pageNumber })
+    body: JSON.stringify({ text, model: options?.model, pageNumber: options?.pageNumber, parserOnly: options?.parserOnly })
   });
 
   const data = await readJsonResponse(response, 'No se ha podido extraer la factura con Gemini');
