@@ -1,5 +1,7 @@
 # Despliegue en Hostinger
 
+Antes de cambiar deploy o entornos, leer tambien `../AI_CONTEXT.md`.
+
 ## Flujo recomendado
 
 Usar dos ramas:

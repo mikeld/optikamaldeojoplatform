@@ -1,20 +1,57 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Facturas Check
 
-# Run and deploy your AI Studio app
+Frontend React/Vite del modulo de auditoria de facturas de Optikamaldeojo.
 
-This contains everything you need to run your app locally.
+Antes de tocar este modulo, leer:
 
-View your app in AI Studio: https://ai.studio/apps/drive/1xXQBIum7yg3GHVjDs3OMfo0DKXCNzfxI
+- `../AI_CONTEXT.md`
+- `../deploy/HOSTINGER.md`
+- `../pedidos/sql/facturas_schema.sql`
+- `../pedidos/api/facturas.php`
 
-## Run Locally
+## Arquitectura
 
-**Prerequisites:**  Node.js
+- React + Vite en `facturas-src/`.
+- El build se copia a `facturas/` durante el deploy.
+- La API vive en `../pedidos/api/facturas.php`.
+- Gemini se llama desde PHP, no desde el frontend.
+- PDF.js se carga bajo demanda para renderizar PDFs.
 
+## Scripts
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+```bash
+npm install
+npm run build
+```
+
+## Reglas Importantes
+
+- No usar `VITE_API_KEY` para Gemini en produccion.
+- No meter claves IA en el bundle frontend.
+- No enviar PDF pesado directamente a Gemini si puede renderizarse a imagen optimizada.
+- Mantener el worker PDF servido como `.js`, no `.mjs`, porque Hostinger puede servir `.mjs` como `text/plain`.
+- Mantener `pdfjs-dist` con import dinamico para evitar bundles grandes y problemas FTP.
+
+## Flujo De Auditoria
+
+1. Usuario sube PDF o imagen.
+2. PDF se renderiza en navegador a JPEG optimizado.
+3. Solo la imagen optimizada se manda a Gemini para extraer JSON.
+4. El PDF original y paginas renderizadas se guardan en servidor.
+5. El frontend compara lineas con catalogo/familias.
+6. El usuario revisa y guarda auditoria.
+
+## Coste IA
+
+Solo consume IA:
+
+- Extraccion inicial con Gemini.
+- Preguntas del asistente IA.
+
+No consume IA:
+
+- Render PDF.
+- Subida del archivo.
+- Guardado de paginas.
+- Comparacion con catalogo.
+- Validacion local de precios/familias.
