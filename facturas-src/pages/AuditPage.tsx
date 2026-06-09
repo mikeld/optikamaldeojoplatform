@@ -64,6 +64,8 @@ const invoiceSummary = (audit: AuditRecord) => {
     const lineTotal = line.invoiceLineTotal;
     return sum + (typeof lineTotal === 'number' ? lineTotal : Number(line.quantity || 0) * Number(line.invoiceUnitPrice || 0));
   }, 0);
+  const invoiceSubtotal = Number(audit.invoiceSubtotal ?? 0);
+  const compareTotal = invoiceSubtotal > 0 ? invoiceSubtotal : Number(audit.totalInvoice || 0);
   const unknown = activeLines.filter(line => line.status === LineStatus.NEW_PRODUCT).length;
   const discrepancies = activeLines.filter(line => line.status === LineStatus.DISCREPANCY).length;
   const matched = activeLines.filter(line => line.status === LineStatus.MATCHED || line.status === LineStatus.ACCEPTED).length;
@@ -72,6 +74,8 @@ const invoiceSummary = (audit: AuditRecord) => {
     lines: activeLines.length,
     units,
     detectedTotal,
+    invoiceSubtotal,
+    compareTotal,
     unknown,
     discrepancies,
     matched,
@@ -364,6 +368,7 @@ const AuditPage: React.FC = () => {
         invoiceNumber: extracted.invoiceNumber || 'S/N',
         lines: auditLines,
         totalInvoice: extracted.total,
+        invoiceSubtotal: extracted.items.reduce((sum, item) => sum + Number(item.total || 0), 0),
         globalStatus: 'in_review',
         pdfPath: uploadedFile.path,
         pages: uploadedPages,
@@ -771,21 +776,22 @@ const AuditPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-7 gap-4">
           <SummaryCard label="Total factura" value={`${summary.invoiceTotal.toFixed(2)}€`} tone="indigo" />
-          <SummaryCard label="Total líneas" value={`${summary.detectedTotal.toFixed(2)}€`} tone={Math.abs(summary.detectedTotal - summary.invoiceTotal) > 0.05 ? 'amber' : 'slate'} />
+          <SummaryCard label="Subtotal líneas" value={`${summary.compareTotal.toFixed(2)}€`} tone="slate" />
+          <SummaryCard label="Total líneas" value={`${summary.detectedTotal.toFixed(2)}€`} tone={Math.abs(summary.detectedTotal - summary.compareTotal) > 0.05 ? 'amber' : 'slate'} />
           <SummaryCard label="Líneas" value={summary.lines.toString()} tone="slate" />
           <SummaryCard label="Unidades" value={summary.units.toString()} tone="slate" />
           <SummaryCard label="Sin catálogo" value={summary.unknown.toString()} tone={summary.unknown > 0 ? 'amber' : 'emerald'} />
           <SummaryCard label="Diferencias" value={summary.discrepancies.toString()} tone={summary.discrepancies > 0 ? 'rose' : 'emerald'} />
         </div>
 
-        {(summary.unknown > 0 || summary.discrepancies > 0 || Math.abs(summary.detectedTotal - summary.invoiceTotal) > 0.05) && (
+        {(summary.unknown > 0 || summary.discrepancies > 0 || Math.abs(summary.detectedTotal - summary.compareTotal) > 0.05) && (
           <div className="rounded-2xl border border-amber-100 bg-amber-50 px-5 py-4 text-amber-800 flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
             <p className="text-sm font-bold leading-relaxed">
               Revisa la factura antes de guardarla: hay {summary.unknown} productos sin catálogo, {summary.discrepancies} diferencias de precio
-              {Math.abs(summary.detectedTotal - summary.invoiceTotal) > 0.05 ? ` y el total de líneas detectado no coincide con el total de factura (${summary.detectedTotal.toFixed(2)}€ vs ${summary.invoiceTotal.toFixed(2)}€).` : '.'}
+              {Math.abs(summary.detectedTotal - summary.compareTotal) > 0.05 ? ` y el total de líneas detectado no coincide con el subtotal de factura (${summary.detectedTotal.toFixed(2)}€ vs ${summary.compareTotal.toFixed(2)}€).` : '.'}
             </p>
           </div>
         )}

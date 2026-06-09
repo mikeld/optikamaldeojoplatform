@@ -117,6 +117,7 @@ export interface AuditRecord {
   invoiceNumber: string;
   lines: AuditLine[];
   totalInvoice: number;
+  invoiceSubtotal?: number;
   globalStatus: AuditStatus;
   pdfPath?: string | null;
   ocrText?: string | null;

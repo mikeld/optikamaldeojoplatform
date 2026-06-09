@@ -459,7 +459,7 @@ function extraerFacturaDesdeTextoPlano($textContent, $pageNumber = null) {
     if (preg_match('/Fecha\s+de\s+factura:\s*(\d{2}\/\d{2}\/\d{4})/iu', $text, $matches)) {
         $invoice['date'] = fechaFacturaTexto($matches[1]);
     }
-    if (preg_match('/Total:\s*([-\d., ]+)\s*€/iu', $text, $matches)) {
+    if (preg_match('/\bTotal\s*:?\s*([-\d., ]+)\s*€/iu', $text, $matches)) {
         $invoice['total'] = numeroFacturaTexto($matches[1]);
     }
 
