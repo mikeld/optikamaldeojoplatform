@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Upload, FileText, Loader2, CheckCircle2, XCircle, AlertCircle, RefreshCw, Save, ArrowLeft, PlusCircle, Database, Trash2, X, CheckSquare, Edit3, AlertTriangle, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
-import { extractInvoiceData, extractInvoiceFile } from '../services/geminiService';
-import { combineRenderedPagesAsJpeg, dataUrlToFile, renderPdfPageImages } from '../services/pdfPreview';
+import { extractInvoiceFile, extractInvoiceText } from '../services/geminiService';
+import { combineRenderedPagesAsJpeg, dataUrlToFile, extractPdfTextPages, renderPdfPageImages } from '../services/pdfPreview';
 import { db } from '../db';
 import { InvoiceData, AuditLine, LineStatus, Product, AuditRecord, AuditStatus, ProductFamily, InvoiceItem, InvoiceAiModel } from '../types';
 
@@ -198,14 +198,29 @@ const AuditPage: React.FC = () => {
 
     try {
       const selectedExtractionMode = extractionModes[extractionMode];
-      const pagesForAiRender = file.type === 'application/pdf'
+      const textPages = file.type === 'application/pdf'
+        ? await extractPdfTextPages(file, selectedExtractionMode.aiPages, ({ pageNumber, pageCount, totalPages }) => {
+          setProcessingStep({
+            key: 'reading',
+            label: `Leyendo texto página ${pageNumber}/${pageCount}`,
+            detail: totalPages > pageCount
+              ? `Se lee texto de ${pageCount} de ${totalPages} páginas. Esta fase no consume IA.`
+              : 'Extrayendo texto seleccionable del PDF. Esta fase no consume IA.',
+            percent: 10 + Math.round((pageNumber / pageCount) * 25),
+            usesAi: false,
+          });
+        })
+        : [];
+      const usableTextPages = textPages.filter(page => page.text.length > 80);
+      const shouldUseTextExtraction = usableTextPages.length > 0;
+      const pagesForAiRender = !shouldUseTextExtraction && file.type === 'application/pdf'
         ? await renderPdfPageImages(file, selectedExtractionMode.aiPages, ({ pageNumber, pageCount, totalPages }) => {
           setProcessingStep({
             key: 'rendering',
             label: `Renderizando página ${pageNumber}/${pageCount}`,
             detail: totalPages > pageCount
-              ? `Se preparan ${pageCount} de ${totalPages} páginas para IA. Renderizar no consume IA.`
-              : 'Generando imágenes legibles del PDF. Esta fase no consume IA.',
+              ? `No se detectó texto suficiente. Se preparan ${pageCount} de ${totalPages} páginas como imagen.`
+              : 'No se detectó texto suficiente. Generando imágenes legibles del PDF.',
             percent: 10 + Math.round((pageNumber / pageCount) * 25),
             usesAi: false,
           });
@@ -215,13 +230,26 @@ const AuditPage: React.FC = () => {
         key: 'extracting',
         label: 'Extrayendo datos con Gemini',
         detail: file.type === 'application/pdf'
-          ? `Modelo ${modelLabel(selectedModel)}. Procesando ${pagesForAiRender.length} página(s), una por una, para evitar JSON cortado.`
+          ? shouldUseTextExtraction
+            ? `Modelo ${modelLabel(selectedModel)}. Usando texto del PDF por página, más barato y estable que imagen.`
+            : `Modelo ${modelLabel(selectedModel)}. Procesando ${pagesForAiRender.length} imagen(es), una por una.`
           : `Modelo ${modelLabel(selectedModel)}. Enviando la imagen a Gemini. Esta es la única fase que consume IA.`,
         percent: 42,
         usesAi: true,
       });
       const extracted = file.type === 'application/pdf'
-        ? await Promise.all(pagesForAiRender.map(async (page, index) => {
+        ? shouldUseTextExtraction
+          ? await Promise.all(usableTextPages.map(async (page, index) => {
+            setProcessingStep({
+              key: 'extracting',
+              label: `Extrayendo texto página ${index + 1}/${usableTextPages.length}`,
+              detail: `Modelo ${modelLabel(selectedModel)}. Llamada IA sobre texto, no imagen.`,
+              percent: 38 + Math.round(((index + 1) / usableTextPages.length) * 28),
+              usesAi: true,
+            });
+            return extractInvoiceText(page.text, { model: selectedModel, pageNumber: page.pageNumber });
+          })).then(mergeInvoicePages)
+          : await Promise.all(pagesForAiRender.map(async (page, index) => {
           setProcessingStep({
             key: 'extracting',
             label: `Extrayendo página ${index + 1}/${pagesForAiRender.length}`,
@@ -294,7 +322,7 @@ const AuditPage: React.FC = () => {
         globalStatus: 'in_review',
         pdfPath: uploadedFile.path,
         pages: uploadedPages,
-        notes: `Archivo original: ${uploadedFile.filename}. Modelo: ${selectedModel}. Páginas IA: ${pagesForAiRender.length}. Fuentes visuales: ${saveVisualSources ? uploadedPages.length : 0}.`
+        notes: `Archivo original: ${uploadedFile.filename}. Modelo: ${selectedModel}. Extracción: ${shouldUseTextExtraction ? 'texto_pdf' : 'imagen_pdf'}. Páginas IA: ${shouldUseTextExtraction ? usableTextPages.length : pagesForAiRender.length}. Fuentes visuales: ${saveVisualSources ? uploadedPages.length : 0}.`
       });
       setProcessingStep({
         key: 'done',

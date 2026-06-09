@@ -29,6 +29,38 @@ export interface PdfRenderProgress {
   totalPages: number;
 }
 
+export interface PdfTextPage {
+  pageNumber: number;
+  text: string;
+}
+
+export const extractPdfTextPages = async (
+  file: File,
+  maxPages = 3,
+  onProgress?: (progress: PdfRenderProgress) => void
+): Promise<PdfTextPage[]> => {
+  const pdfjsLib = await loadPdfJs();
+  const data = new Uint8Array(await file.arrayBuffer());
+  const pdf = await pdfjsLib.getDocument({ data }).promise;
+  const pageCount = Math.min(pdf.numPages, maxPages);
+  const pages: PdfTextPage[] = [];
+
+  for (let pageNumber = 1; pageNumber <= pageCount; pageNumber++) {
+    const page = await pdf.getPage(pageNumber);
+    const content = await page.getTextContent();
+    const text = content.items
+      .map((item) => ('str' in item ? item.str : ''))
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    pages.push({ pageNumber, text });
+    onProgress?.({ pageNumber, pageCount, totalPages: pdf.numPages });
+  }
+
+  return pages;
+};
+
 export const renderPdfPageImages = async (
   file: File,
   maxPages = 3,

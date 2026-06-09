@@ -128,18 +128,19 @@ Secretos GitHub Actions relevantes:
 ## Facturas Check - Flujo Actual
 
 1. Usuario sube PDF/imagen.
-2. Si es PDF, frontend renderiza primeras paginas con PDF.js.
-3. Frontend muestra progreso por fases:
+2. Si es PDF, frontend intenta leer texto seleccionable por pagina con PDF.js.
+3. Si no hay texto suficiente, renderiza las primeras paginas como imagen JPEG optimizada.
+4. Frontend muestra progreso por fases:
    - preparar archivo
-   - renderizar paginas
+   - leer texto de PDF o renderizar paginas
    - extraer con Gemini
    - subir/guardar
    - comparar con catalogo
-4. Solo la fase Gemini consume IA.
-5. Backend recibe imagen optimizada y pide JSON estricto a Gemini.
-6. Frontend compara lineas extraidas con productos/familias.
-7. Se guarda auditoria con PDF original y paginas visuales.
-8. Asistente IA usa contexto de auditorias, alertas y precios.
+5. Solo la fase Gemini consume IA.
+6. Backend recibe texto de pagina o imagen optimizada y pide JSON estricto a Gemini.
+7. Frontend compara lineas extraidas con productos/familias.
+8. Se guarda auditoria con PDF original y paginas visuales opcionales.
+9. Asistente IA usa contexto de auditorias, alertas y precios.
 
 Para lentillas:
 
@@ -178,6 +179,7 @@ Reglas actuales:
 - Gemini solo se usa para extraccion inicial y asistente.
 - Render PDF, subida, comparacion con catalogo y guardado no gastan tokens.
 - PDF se convierte a imagen optimizada para evitar mandar archivos enormes.
+- Cuando el PDF tiene texto seleccionable, se envia texto por pagina antes que imagen. Es mas barato, rapido y estable.
 - Se usan primeras paginas para controlar coste y tiempo.
 - `generationConfig.temperature = 0` en extraccion.
 - `maxOutputTokens` limitado para extraccion/asistente.
@@ -276,6 +278,20 @@ Decision:
   - Test: `curl -sS https://.../test/facturas/index.html`
   - Prod: `curl -sS https://.../facturas/index.html`
 - Confirmar que el asset `index-*.js` es el nuevo.
+
+### Extraccion de facturas con imagen puede cortar JSON
+
+Problema:
+
+- En facturas como Visionis, Gemini podia devolver JSON truncado incluso con modelo correcto y salida compacta.
+- Pinecone/RAG no soluciona la primera extraccion; sirve despues, cuando ya hay texto/lineas guardadas.
+
+Decision:
+
+- Intentar primero extraccion de texto del PDF por pagina con PDF.js.
+- Mandar a Gemini texto por pagina, no imagen, siempre que haya texto suficiente.
+- Usar imagen solo como fallback cuando el PDF no tenga capa de texto.
+- Plantear Pinecone/embeddings despues de estabilizar ingesta y guardado.
 
 ### `db_config.php`
 

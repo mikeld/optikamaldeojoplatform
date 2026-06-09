@@ -395,6 +395,8 @@ try {
 
             $base64Image = '';
             $mimeType = 'image/jpeg';
+            $textContent = '';
+            $pageNumber = null;
             $preferredModel = null;
 
             if (!empty($_FILES['file']) && is_uploaded_file($_FILES['file']['tmp_name'])) {
@@ -420,24 +422,30 @@ try {
                 }
                 $base64Image = $data['base64Image'] ?? '';
                 $mimeType = $data['mimeType'] ?? 'image/jpeg';
+                $textContent = trim((string)($data['text'] ?? ''));
+                $pageNumber = isset($data['pageNumber']) ? (int)$data['pageNumber'] : null;
                 $preferredModel = modeloGeminiPermitido($data['model'] ?? null);
             }
 
-            if ($base64Image === '') {
-                throw new Exception('Falta la imagen de la factura');
+            if ($base64Image === '' && $textContent === '') {
+                throw new Exception('Falta texto o imagen de la factura');
             }
 
-            $payload = [
-                'contents' => [[
-                    'parts' => [
-                        [
-                            'inlineData' => [
-                                'data' => $base64Image,
-                                'mimeType' => $mimeType,
-                            ],
-                        ],
-                        [
-                            'text' => 'Extract invoice data for an optical store invoice.
+            $parts = [];
+            if ($textContent !== '') {
+                $pagePrefix = $pageNumber ? 'Page ' . $pageNumber . ' text:' : 'Invoice text:';
+                $textForGemini = function_exists('mb_substr') ? mb_substr($textContent, 0, 45000) : substr($textContent, 0, 45000);
+                $parts[] = ['text' => $pagePrefix . "\n" . $textForGemini];
+            } else {
+                $parts[] = [
+                    'inlineData' => [
+                        'data' => $base64Image,
+                        'mimeType' => $mimeType,
+                    ],
+                ];
+            }
+            $parts[] = [
+                'text' => 'Extract invoice data for an optical store invoice.
 IMPORTANT Rules for Item Extraction:
 1. Contact lenses are critical. Read lens powers/graduations exactly when present (examples: -1.50, +2.25, -03.00, ADD LOW, BC/DIA values), but do not treat different powers as different base products.
 2. Return compact JSON with these exact keys only:
@@ -446,10 +454,13 @@ IMPORTANT Rules for Item Extraction:
 3. Keep product identity separate from graduation. b must be the same for the same lens family regardless of graduation/power. Remove powers, sphere/cylinder, BC, DIA and eye-specific numeric noise from b.
 4. unitPrice is the price per unit/box from the invoice line. Preserve decimals exactly.
 5. Group only when b, g and u are the same. Do not merge different graduations, but keep b equal.
-6. Date Format: MUST be in YYYY-MM-DD.
+6. Date Format: MUST be in YYYY-MM-DD. If this page has no header/date/total, use empty strings and 0 for missing header values.
 7. Return JSON only. No markdown. Keep descriptions concise but identifiable.',
-                        ],
-                    ],
+            ];
+
+            $payload = [
+                'contents' => [[
+                    'parts' => $parts,
                 ]],
                 'generationConfig' => [
                     'responseMimeType' => 'application/json',
