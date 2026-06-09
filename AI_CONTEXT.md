@@ -157,6 +157,7 @@ Estado actual:
 - RAG ligero por contexto MySQL y busqueda por terminos.
 - Se guardan paginas renderizadas (`facturas_pages`) para fuentes visuales.
 - El asistente puede mostrar fuentes visuales asociadas a facturas.
+- El backend permite guardar hasta 20 paginas visuales por factura. Si el frontend guarda menos, debe ser por decision de coste/espacio, no por limite API oculto.
 
 Siguiente salto recomendado:
 

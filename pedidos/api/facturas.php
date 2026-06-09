@@ -1024,8 +1024,9 @@ Pregunta:
                 throw new Exception('Formato de páginas no válido');
             }
 
-            if (count($pages) > 6) {
-                throw new Exception('Solo se pueden guardar hasta 6 páginas por factura');
+            $maxSavedPages = 20;
+            if (count($pages) > $maxSavedPages) {
+                throw new Exception('Solo se pueden guardar hasta ' . $maxSavedPages . ' páginas por factura');
             }
 
             asegurarTablaFacturasPages($pdo);
