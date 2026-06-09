@@ -1,5 +1,5 @@
 
-import { AssistantContext, InvoiceData } from "../types";
+import { AssistantContext, InvoiceData, InvoiceExtractionOptions } from "../types";
 
 const API_URL = '../pedidos/api/facturas.php';
 
@@ -14,11 +14,11 @@ const readJsonResponse = async (response: Response, fallbackMessage: string) => 
   }
 };
 
-export const extractInvoiceData = async (base64Image: string, mimeType: string): Promise<InvoiceData> => {
+export const extractInvoiceData = async (base64Image: string, mimeType: string, options?: InvoiceExtractionOptions): Promise<InvoiceData> => {
   const response = await fetch(`${API_URL}?action=extractInvoiceData`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ base64Image, mimeType })
+    body: JSON.stringify({ base64Image, mimeType, model: options?.model })
   });
 
   const data = await readJsonResponse(response, 'No se ha podido extraer la factura con Gemini');
@@ -29,9 +29,12 @@ export const extractInvoiceData = async (base64Image: string, mimeType: string):
   return data;
 };
 
-export const extractInvoiceFile = async (file: File): Promise<InvoiceData> => {
+export const extractInvoiceFile = async (file: File, options?: InvoiceExtractionOptions): Promise<InvoiceData> => {
   const formData = new FormData();
   formData.append('file', file);
+  if (options?.model) {
+    formData.append('model', options.model);
+  }
 
   const response = await fetch(`${API_URL}?action=extractInvoiceData`, {
     method: 'POST',

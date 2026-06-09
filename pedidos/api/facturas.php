@@ -252,6 +252,12 @@ function geminiModelosCandidatos($preferredModel = null) {
     return array_values(array_unique(array_filter($candidates)));
 }
 
+function modeloGeminiPermitido($model) {
+    $model = trim((string)$model);
+    $allowed = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+    return in_array($model, $allowed, true) ? $model : null;
+}
+
 function geminiGenerateContentWithModel($payload, $model) {
     if (!function_exists('curl_init')) {
         throw new Exception('El servidor no tiene cURL habilitado para conectar con Gemini');
@@ -353,9 +359,11 @@ try {
 
             $base64Image = '';
             $mimeType = 'image/jpeg';
+            $preferredModel = null;
 
             if (!empty($_FILES['file']) && is_uploaded_file($_FILES['file']['tmp_name'])) {
                 $file = $_FILES['file'];
+                $preferredModel = modeloGeminiPermitido($_POST['model'] ?? null);
                 if (($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
                     throw new Exception('Error recibiendo la factura para extraer datos');
                 }
@@ -376,6 +384,7 @@ try {
                 }
                 $base64Image = $data['base64Image'] ?? '';
                 $mimeType = $data['mimeType'] ?? 'image/jpeg';
+                $preferredModel = modeloGeminiPermitido($data['model'] ?? null);
             }
 
             if ($base64Image === '') {
@@ -437,7 +446,7 @@ IMPORTANT Rules for Item Extraction:
                 ],
             ];
 
-            $responseText = geminiResponseText(geminiGenerateContent($payload));
+            $responseText = geminiResponseText(geminiGenerateContent($payload, $preferredModel));
             $invoice = decodificarJsonGemini($responseText);
             if (!is_array($invoice)) {
                 $preview = trim(preg_replace('/\s+/', ' ', strip_tags((string)$responseText)));

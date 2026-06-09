@@ -4,7 +4,7 @@ import { Upload, FileText, Loader2, CheckCircle2, XCircle, AlertCircle, RefreshC
 import { extractInvoiceData, extractInvoiceFile } from '../services/geminiService';
 import { combineRenderedPagesAsJpeg, renderPdfPageImages } from '../services/pdfPreview';
 import { db } from '../db';
-import { InvoiceData, AuditLine, LineStatus, Product, AuditRecord, AuditStatus, ProductFamily, InvoiceItem } from '../types';
+import { InvoiceData, AuditLine, LineStatus, Product, AuditRecord, AuditStatus, ProductFamily, InvoiceItem, InvoiceAiModel } from '../types';
 
 type ProcessingStepKey = 'idle' | 'reading' | 'rendering' | 'extracting' | 'loading' | 'matching' | 'done';
 
@@ -22,6 +22,19 @@ const defaultProcessingStep: ProcessingStep = {
   detail: 'Selecciona una factura para empezar.',
   percent: 0,
   usesAi: false,
+};
+
+const extractionModes = {
+  economy: {
+    label: 'Primeras 3 páginas',
+    description: 'Menos coste y más rápido. Suficiente para facturas cortas.',
+    aiPages: 3,
+  },
+  complete: {
+    label: 'Todas hasta 8 páginas',
+    description: 'Más coste. Útil si la factura tiene líneas repartidas en varias páginas.',
+    aiPages: 8,
+  },
 };
 
 const formatSeconds = (startedAt: number | null) => {
@@ -121,6 +134,9 @@ const AuditPage: React.FC = () => {
   const [processingStep, setProcessingStep] = useState<ProcessingStep>(defaultProcessingStep);
   const [processingStartedAt, setProcessingStartedAt] = useState<number | null>(null);
   const [processingElapsedTick, setProcessingElapsedTick] = useState(0);
+  const [selectedModel, setSelectedModel] = useState<InvoiceAiModel>('gemini-2.5-flash');
+  const [extractionMode, setExtractionMode] = useState<'economy' | 'complete'>('economy');
+  const [saveVisualSources, setSaveVisualSources] = useState(true);
   const [auditResult, setAuditResult] = useState<AuditRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -166,35 +182,43 @@ const AuditPage: React.FC = () => {
     setError(null);
 
     try {
+      const selectedExtractionMode = extractionModes[extractionMode];
+      const pagesToRender = file.type === 'application/pdf'
+        ? Math.max(selectedExtractionMode.aiPages, saveVisualSources ? 8 : 0)
+        : 0;
       const renderedPages = file.type === 'application/pdf'
-        ? await renderPdfPageImages(file, 3, ({ pageNumber, pageCount, totalPages }) => {
+        ? await renderPdfPageImages(file, pagesToRender, ({ pageNumber, pageCount, totalPages }) => {
           setProcessingStep({
             key: 'rendering',
             label: `Renderizando página ${pageNumber}/${pageCount}`,
             detail: totalPages > pageCount
-              ? `Se usarán las primeras ${pageCount} de ${totalPages} páginas para controlar coste y tiempo.`
+              ? `Se preparan ${pageCount} de ${totalPages} páginas. Renderizar no consume IA.`
               : 'Generando imágenes legibles del PDF. Esta fase no consume IA.',
-            percent: 12 + Math.round((pageNumber / pageCount) * 23),
+            percent: 10 + Math.round((pageNumber / pageCount) * 25),
             usesAi: false,
           });
         })
         : [];
+      const pagesForAi = renderedPages.slice(0, selectedExtractionMode.aiPages);
+      const pagesForVisualSources = saveVisualSources ? renderedPages : [];
       setProcessingStep({
         key: 'extracting',
         label: 'Extrayendo datos con Gemini',
         detail: file.type === 'application/pdf'
-          ? `Enviando ${Math.min(renderedPages.length, 3)} página(s) optimizadas. Esta es la única fase que consume IA.`
-          : 'Enviando la imagen a Gemini. Esta es la única fase que consume IA.',
+          ? `Modelo ${selectedModel.replace('gemini-2.5-', '')}. Enviando ${pagesForAi.length} página(s) optimizadas. Esta es la única fase que consume IA.`
+          : `Modelo ${selectedModel.replace('gemini-2.5-', '')}. Enviando la imagen a Gemini. Esta es la única fase que consume IA.`,
         percent: 42,
         usesAi: true,
       });
       const extracted = file.type === 'application/pdf'
-        ? await combineRenderedPagesAsJpeg(renderedPages.slice(0, 3)).then(({ base64, mimeType }) => extractInvoiceData(base64, mimeType))
-        : await extractInvoiceFile(file);
+        ? await combineRenderedPagesAsJpeg(pagesForAi).then(({ base64, mimeType }) => extractInvoiceData(base64, mimeType, { model: selectedModel }))
+        : await extractInvoiceFile(file, { model: selectedModel });
       setProcessingStep({
         key: 'loading',
         label: 'Guardando y cargando catálogo',
-        detail: 'Subiendo el PDF y recuperando productos/familias. Esta fase no consume IA.',
+        detail: saveVisualSources
+          ? 'Subiendo el PDF, guardando fuentes visuales y recuperando productos/familias. Esta fase no consume IA.'
+          : 'Subiendo el PDF y recuperando productos/familias. No se guardarán imágenes de página.',
         percent: 72,
         usesAi: false,
       });
@@ -202,7 +226,7 @@ const AuditPage: React.FC = () => {
         db.getProducts(),
         db.getFamilies(),
         db.uploadInvoiceFile(file),
-        db.uploadInvoicePages(renderedPages)
+        db.uploadInvoicePages(pagesForVisualSources)
       ]);
 
       setProcessingStep({
@@ -246,7 +270,7 @@ const AuditPage: React.FC = () => {
         globalStatus: 'in_review',
         pdfPath: uploadedFile.path,
         pages: uploadedPages,
-        notes: `Archivo original: ${uploadedFile.filename}`
+        notes: `Archivo original: ${uploadedFile.filename}. Modelo: ${selectedModel}. Páginas IA: ${pagesForAi.length}. Fuentes visuales: ${saveVisualSources ? uploadedPages.length : 0}.`
       });
       setProcessingStep({
         key: 'done',
@@ -764,6 +788,61 @@ const AuditPage: React.FC = () => {
         />
         <PlusCircle className="w-12 h-12 text-slate-300 mx-auto mb-4 group-hover:text-indigo-500 transition-colors" />
         <p className="text-slate-500 font-bold">{file ? file.name : 'Haz clic para seleccionar archivo'}</p>
+      </div>
+      <div className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-sm space-y-5">
+        <div>
+          <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Modo de procesado</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setSelectedModel('gemini-2.5-flash')}
+              disabled={isProcessing}
+              className={`rounded-2xl border p-4 text-left transition-all ${selectedModel === 'gemini-2.5-flash' ? 'border-indigo-200 bg-indigo-50 text-indigo-800' : 'border-slate-100 bg-slate-50 text-slate-600 hover:bg-white'}`}
+            >
+              <span className="block text-sm font-black">Normal</span>
+              <span className="mt-1 block text-xs font-semibold opacity-75">Más calidad para OCR y facturas difíciles.</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedModel('gemini-2.5-flash-lite')}
+              disabled={isProcessing}
+              className={`rounded-2xl border p-4 text-left transition-all ${selectedModel === 'gemini-2.5-flash-lite' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-100 bg-slate-50 text-slate-600 hover:bg-white'}`}
+            >
+              <span className="block text-sm font-black">Flash-Lite</span>
+              <span className="mt-1 block text-xs font-semibold opacity-75">Más barato y rápido. Útil para facturas claras.</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+            <span className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Páginas con IA</span>
+            <select
+              value={extractionMode}
+              onChange={(event) => setExtractionMode(event.target.value as 'economy' | 'complete')}
+              disabled={isProcessing}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-black text-slate-700 outline-none focus:border-indigo-300"
+            >
+              <option value="economy">{extractionModes.economy.label}</option>
+              <option value="complete">{extractionModes.complete.label}</option>
+            </select>
+            <span className="mt-2 block text-xs font-semibold text-slate-500">{extractionModes[extractionMode].description}</span>
+          </label>
+
+          <label className={`flex items-start gap-3 rounded-2xl border p-4 transition-all ${saveVisualSources ? 'border-indigo-100 bg-indigo-50' : 'border-slate-100 bg-slate-50'}`}>
+            <input
+              type="checkbox"
+              checked={saveVisualSources}
+              onChange={(event) => setSaveVisualSources(event.target.checked)}
+              disabled={isProcessing}
+              className="mt-1 h-5 w-5 rounded border-slate-300 text-indigo-600"
+            />
+            <span>
+              <span className="block text-sm font-black text-slate-800">Guardar imágenes/fuentes visuales</span>
+              <span className="mt-1 block text-xs font-semibold text-slate-500">No gasta IA. Guarda páginas renderizadas para ver evidencia en el asistente.</span>
+            </span>
+          </label>
+        </div>
       </div>
       <button disabled={!file || isProcessing} onClick={processInvoice} className="w-full py-6 bg-slate-900 text-white rounded-[2rem] font-black text-xl hover:bg-indigo-600 disabled:bg-slate-100 transition-all flex items-center justify-center gap-4">
         {isProcessing ? <><Loader2 className="animate-spin w-6 h-6" /> PROCESANDO...</> : "EMPEZAR AUDITORÍA"}

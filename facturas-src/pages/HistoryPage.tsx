@@ -1,14 +1,22 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { db } from '../db';
 import { AuditRecord } from '../types';
-import { FileText, Eye, X, Download, Trash2, ExternalLink, Loader2 } from 'lucide-react';
+import { FileText, Eye, X, Download, Trash2, ExternalLink, Loader2, Search, SlidersHorizontal } from 'lucide-react';
+
+type SortMode = 'invoice_desc' | 'invoice_asc' | 'created_desc' | 'created_asc' | 'provider_asc';
 
 const HistoryPage: React.FC = () => {
   const [history, setHistory] = useState<AuditRecord[]>([]);
   const [selectedAudit, setSelectedAudit] = useState<AuditRecord | null>(null);
   const [deletingPdfId, setDeletingPdfId] = useState<string | null>(null);
   const [deletingAuditId, setDeletingAuditId] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [providerFilter, setProviderFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [sortMode, setSortMode] = useState<SortMode>('invoice_desc');
 
   useEffect(() => {
     fetchHistory();
@@ -84,6 +92,50 @@ const HistoryPage: React.FC = () => {
     return d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
+  const providers = useMemo(() => {
+    return Array.from(new Set(history.map(record => record.provider).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  }, [history]);
+
+  const filteredHistory = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    const filtered = history.filter(record => {
+      if (providerFilter !== 'all' && record.provider !== providerFilter) return false;
+      if (statusFilter !== 'all' && record.globalStatus !== statusFilter) return false;
+      if (dateFrom && record.invoiceDate < dateFrom) return false;
+      if (dateTo && record.invoiceDate > dateTo) return false;
+
+      if (normalizedQuery) {
+        const searchable = [
+          record.provider,
+          record.invoiceNumber,
+          record.invoiceDate,
+          record.totalInvoice?.toString(),
+          ...record.lines.map(line => line.invoiceDescription)
+        ].join(' ').toLowerCase();
+        if (!searchable.includes(normalizedQuery)) return false;
+      }
+
+      return true;
+    });
+
+    return [...filtered].sort((a, b) => {
+      if (sortMode === 'invoice_asc') return a.invoiceDate.localeCompare(b.invoiceDate);
+      if (sortMode === 'created_desc') return b.createdAt.localeCompare(a.createdAt);
+      if (sortMode === 'created_asc') return a.createdAt.localeCompare(b.createdAt);
+      if (sortMode === 'provider_asc') return a.provider.localeCompare(b.provider) || b.invoiceDate.localeCompare(a.invoiceDate);
+      return b.invoiceDate.localeCompare(a.invoiceDate);
+    });
+  }, [dateFrom, dateTo, history, providerFilter, query, sortMode, statusFilter]);
+
+  const resetFilters = () => {
+    setQuery('');
+    setProviderFilter('all');
+    setStatusFilter('all');
+    setDateFrom('');
+    setDateTo('');
+    setSortMode('invoice_desc');
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -93,10 +145,63 @@ const HistoryPage: React.FC = () => {
         </div>
       </div>
 
+      <div className="bg-white rounded-[2rem] border border-slate-100 p-5 shadow-sm space-y-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2 text-slate-700">
+            <SlidersHorizontal className="w-5 h-5 text-indigo-500" />
+            <h3 className="font-black">Filtros por fecha y proveedor</h3>
+          </div>
+          <button onClick={resetFilters} className="text-xs font-black text-slate-400 hover:text-indigo-600 transition-colors">
+            Limpiar filtros
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.4fr)_repeat(5,minmax(0,1fr))] gap-3">
+          <label className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Buscar factura, producto, proveedor..."
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-3 text-sm font-bold text-slate-700 outline-none focus:border-indigo-300 focus:bg-white"
+            />
+          </label>
+
+          <select value={providerFilter} onChange={(event) => setProviderFilter(event.target.value)} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-bold text-slate-700 outline-none focus:border-indigo-300">
+            <option value="all">Todos proveedores</option>
+            {providers.map(provider => <option key={provider} value={provider}>{provider}</option>)}
+          </select>
+
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-bold text-slate-700 outline-none focus:border-indigo-300">
+            <option value="all">Todos estados</option>
+            <option value="approved">Correcta</option>
+            <option value="in_review">En revisión</option>
+            <option value="pending">Pendiente</option>
+            <option value="rejected">Rechazada</option>
+          </select>
+
+          <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-bold text-slate-700 outline-none focus:border-indigo-300" />
+          <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-bold text-slate-700 outline-none focus:border-indigo-300" />
+
+          <select value={sortMode} onChange={(event) => setSortMode(event.target.value as SortMode)} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-bold text-slate-700 outline-none focus:border-indigo-300">
+            <option value="invoice_desc">Factura reciente</option>
+            <option value="invoice_asc">Factura antigua</option>
+            <option value="created_desc">Subida reciente</option>
+            <option value="created_asc">Subida antigua</option>
+            <option value="provider_asc">Proveedor A-Z</option>
+          </select>
+        </div>
+
+        <div className="flex items-center justify-between text-xs font-black text-slate-400">
+          <span>{filteredHistory.length} de {history.length} facturas</span>
+          <span>Orden principal por fecha real de factura</span>
+        </div>
+      </div>
+
       <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
-        {history.length === 0 ? (
+        {filteredHistory.length === 0 ? (
           <div className="p-20 text-center text-slate-300 font-black uppercase tracking-widest text-xs italic">
-            Sin registros históricos
+            Sin facturas para los filtros actuales
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -113,7 +218,7 @@ const HistoryPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {history.map(record => (
+                {filteredHistory.map(record => (
                   <tr key={record.id} className="hover:bg-slate-50/50 transition-colors group">
                     <td className="px-8 py-6 text-sm text-slate-700 font-bold">{formatDate(record.createdAt)}</td>
                     <td className="px-8 py-6 text-sm text-slate-500 font-medium italic">{record.invoiceDate}</td>
