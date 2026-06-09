@@ -345,6 +345,42 @@ function decodificarJsonGemini($responseText) {
     return null;
 }
 
+function normalizarFacturaExtraida($invoice) {
+    if (!is_array($invoice)) {
+        return null;
+    }
+
+    if (isset($invoice['p']) || isset($invoice['l'])) {
+        $items = [];
+        foreach (($invoice['l'] ?? []) as $idx => $line) {
+            if (!is_array($line)) {
+                continue;
+            }
+            $description = (string)($line['de'] ?? $line['description'] ?? '');
+            $baseProductName = (string)($line['b'] ?? $line['baseProductName'] ?? $description);
+            $items[] = [
+                'id' => (string)($line['id'] ?? ('line-' . ($idx + 1))),
+                'description' => $description,
+                'baseProductName' => $baseProductName,
+                'graduation' => $line['g'] ?? $line['graduation'] ?? null,
+                'quantity' => (float)($line['q'] ?? $line['quantity'] ?? 0),
+                'unitPrice' => (float)($line['u'] ?? $line['unitPrice'] ?? 0),
+                'total' => (float)($line['lt'] ?? $line['total'] ?? 0),
+            ];
+        }
+
+        return [
+            'providerName' => (string)($invoice['p'] ?? ''),
+            'date' => (string)($invoice['d'] ?? ''),
+            'invoiceNumber' => (string)($invoice['n'] ?? ''),
+            'items' => $items,
+            'total' => (float)($invoice['t'] ?? 0),
+        ];
+    }
+
+    return $invoice;
+}
+
 try {
     switch ($action) {
         case 'getSchemaStatus':
@@ -404,12 +440,14 @@ try {
                             'text' => 'Extract invoice data for an optical store invoice.
 IMPORTANT Rules for Item Extraction:
 1. Contact lenses are critical. Read lens powers/graduations exactly when present (examples: -1.50, +2.25, -03.00, ADD LOW, BC/DIA values), but do not treat different powers as different base products.
-2. Keep product identity separate from graduation: each item must include description, baseProductName, graduation, quantity, unitPrice and total.
-3. baseProductName must be the same for the same lens family regardless of graduation/power. Remove powers, sphere/cylinder, BC, DIA and eye-specific numeric noise from baseProductName.
+2. Return compact JSON with these exact keys only:
+   p=providerName, d=date, n=invoiceNumber, t=invoice total, l=line array.
+   Each line: de=description, b=baseProductName, g=graduation, q=quantity, u=unitPrice, lt=line total.
+3. Keep product identity separate from graduation. b must be the same for the same lens family regardless of graduation/power. Remove powers, sphere/cylinder, BC, DIA and eye-specific numeric noise from b.
 4. unitPrice is the price per unit/box from the invoice line. Preserve decimals exactly.
-5. Group only when baseProductName, graduation and unitPrice are the same. Do not merge different graduations, but keep baseProductName equal.
+5. Group only when b, g and u are the same. Do not merge different graduations, but keep b equal.
 6. Date Format: MUST be in YYYY-MM-DD.
-7. Return JSON only with providerName, date, invoiceNumber, items and total.',
+7. Return JSON only. No markdown. Keep descriptions concise but identifiable.',
                         ],
                     ],
                 ]],
@@ -418,28 +456,27 @@ IMPORTANT Rules for Item Extraction:
                     'responseSchema' => [
                         'type' => 'OBJECT',
                         'properties' => [
-                            'providerName' => ['type' => 'STRING'],
-                            'date' => ['type' => 'STRING'],
-                            'invoiceNumber' => ['type' => 'STRING'],
-                            'total' => ['type' => 'NUMBER'],
-                            'items' => [
+                            'p' => ['type' => 'STRING'],
+                            'd' => ['type' => 'STRING'],
+                            'n' => ['type' => 'STRING'],
+                            't' => ['type' => 'NUMBER'],
+                            'l' => [
                                 'type' => 'ARRAY',
                                 'items' => [
                                     'type' => 'OBJECT',
                                     'properties' => [
-                                        'id' => ['type' => 'STRING'],
-                                        'description' => ['type' => 'STRING'],
-                                        'baseProductName' => ['type' => 'STRING'],
-                                        'graduation' => ['type' => 'STRING'],
-                                        'quantity' => ['type' => 'NUMBER'],
-                                        'unitPrice' => ['type' => 'NUMBER'],
-                                        'total' => ['type' => 'NUMBER'],
+                                        'de' => ['type' => 'STRING'],
+                                        'b' => ['type' => 'STRING'],
+                                        'g' => ['type' => 'STRING'],
+                                        'q' => ['type' => 'NUMBER'],
+                                        'u' => ['type' => 'NUMBER'],
+                                        'lt' => ['type' => 'NUMBER'],
                                     ],
-                                    'required' => ['description', 'baseProductName', 'quantity', 'unitPrice', 'total'],
+                                    'required' => ['de', 'b', 'q', 'u', 'lt'],
                                 ],
                             ],
                         ],
-                        'required' => ['providerName', 'date', 'invoiceNumber', 'items', 'total'],
+                        'required' => ['p', 'd', 'n', 'l', 't'],
                     ],
                     'temperature' => 0,
                     'maxOutputTokens' => 8192,
@@ -453,6 +490,7 @@ IMPORTANT Rules for Item Extraction:
                 $preview = $preview !== '' ? ' Inicio de respuesta: ' . mb_substr($preview, 0, 220) : '';
                 throw new Exception('Gemini no ha devuelto un JSON válido para la factura.' . $preview);
             }
+            $invoice = normalizarFacturaExtraida($invoice);
             if (!isset($invoice['items']) || !is_array($invoice['items'])) {
                 throw new Exception('Gemini ha devuelto JSON, pero no incluye líneas de factura válidas');
             }
