@@ -1,7 +1,19 @@
-import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+type PdfJsLib = typeof import('pdfjs-dist');
+
+let pdfJsPromise: Promise<PdfJsLib> | null = null;
+
+const loadPdfJs = async () => {
+  if (!pdfJsPromise) {
+    pdfJsPromise = import('pdfjs-dist').then((pdfjsLib) => {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+      return pdfjsLib;
+    });
+  }
+
+  return pdfJsPromise;
+};
 
 export interface RenderedPdfPage {
   pageNumber: number;
@@ -12,6 +24,7 @@ export interface RenderedPdfPage {
 }
 
 export const renderPdfPageImages = async (file: File, maxPages = 4): Promise<RenderedPdfPage[]> => {
+  const pdfjsLib = await loadPdfJs();
   const data = new Uint8Array(await file.arrayBuffer());
   const pdf = await pdfjsLib.getDocument({ data }).promise;
   const pageCount = Math.min(pdf.numPages, maxPages);
