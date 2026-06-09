@@ -42,6 +42,21 @@ const formatSeconds = (startedAt: number | null) => {
   return `${Math.max(0, Math.round((Date.now() - startedAt) / 1000))}s`;
 };
 
+const modelLabel = (model: InvoiceAiModel) => model === 'gemini-2.5-flash-lite' ? 'Flash-Lite' : 'Normal';
+
+const mergeInvoicePages = (pages: InvoiceData[]): InvoiceData => {
+  const firstWithHeader = pages.find(page => page.providerName || page.invoiceNumber || page.date) || pages[0];
+  const totalFromLastPage = [...pages].reverse().find(page => Number(page.total || 0) > 0)?.total || 0;
+
+  return {
+    providerName: firstWithHeader?.providerName || 'Proveedor sin detectar',
+    date: firstWithHeader?.date || new Date().toISOString().split('T')[0],
+    invoiceNumber: firstWithHeader?.invoiceNumber || 'S/N',
+    total: totalFromLastPage,
+    items: pages.flatMap(page => page.items || []),
+  };
+};
+
 const invoiceSummary = (audit: AuditRecord) => {
   const activeLines = audit.lines.filter(line => line.status !== LineStatus.REJECTED);
   const units = activeLines.reduce((sum, line) => sum + Number(line.quantity || 0), 0);
@@ -200,15 +215,24 @@ const AuditPage: React.FC = () => {
         key: 'extracting',
         label: 'Extrayendo datos con Gemini',
         detail: file.type === 'application/pdf'
-          ? `Modelo ${selectedModel.replace('gemini-2.5-', '')}. Enviando ${pagesForAiRender.length} página(s) optimizadas. Esta es la única fase que consume IA.`
-          : `Modelo ${selectedModel.replace('gemini-2.5-', '')}. Enviando la imagen a Gemini. Esta es la única fase que consume IA.`,
+          ? `Modelo ${modelLabel(selectedModel)}. Procesando ${pagesForAiRender.length} página(s), una por una, para evitar JSON cortado.`
+          : `Modelo ${modelLabel(selectedModel)}. Enviando la imagen a Gemini. Esta es la única fase que consume IA.`,
         percent: 42,
         usesAi: true,
       });
       const extracted = file.type === 'application/pdf'
-        ? await combineRenderedPagesAsJpeg(pagesForAiRender)
-          .then(({ base64, mimeType }) => dataUrlToFile(base64, mimeType, 'factura-optimizada.jpg'))
-          .then((optimizedFile) => extractInvoiceFile(optimizedFile, { model: selectedModel }))
+        ? await Promise.all(pagesForAiRender.map(async (page, index) => {
+          setProcessingStep({
+            key: 'extracting',
+            label: `Extrayendo página ${index + 1}/${pagesForAiRender.length}`,
+            detail: `Modelo ${modelLabel(selectedModel)}. Esta llamada consume IA, pero devuelve un JSON pequeño.`,
+            percent: 38 + Math.round(((index + 1) / pagesForAiRender.length) * 28),
+            usesAi: true,
+          });
+          const { base64, mimeType } = await combineRenderedPagesAsJpeg([page]);
+          const optimizedFile = await dataUrlToFile(base64, mimeType, `factura-pagina-${page.pageNumber}.jpg`);
+          return extractInvoiceFile(optimizedFile, { model: selectedModel });
+        })).then(mergeInvoicePages)
         : await extractInvoiceFile(file, { model: selectedModel });
       setProcessingStep({
         key: 'loading',
