@@ -96,6 +96,7 @@ export interface AuditLine {
   invoiceDescription: string;
   quantity: number;
   invoiceUnitPrice: number;
+  invoiceLineTotal?: number;
   masterProductPrice?: number;
   masterProductId?: string;
   masterProductSku?: string;

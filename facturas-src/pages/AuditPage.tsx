@@ -60,7 +60,10 @@ const mergeInvoicePages = (pages: InvoiceData[]): InvoiceData => {
 const invoiceSummary = (audit: AuditRecord) => {
   const activeLines = audit.lines.filter(line => line.status !== LineStatus.REJECTED);
   const units = activeLines.reduce((sum, line) => sum + Number(line.quantity || 0), 0);
-  const detectedTotal = activeLines.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.invoiceUnitPrice || 0), 0);
+  const detectedTotal = activeLines.reduce((sum, line) => {
+    const lineTotal = line.invoiceLineTotal;
+    return sum + (typeof lineTotal === 'number' ? lineTotal : Number(line.quantity || 0) * Number(line.invoiceUnitPrice || 0));
+  }, 0);
   const unknown = activeLines.filter(line => line.status === LineStatus.NEW_PRODUCT).length;
   const discrepancies = activeLines.filter(line => line.status === LineStatus.DISCREPANCY).length;
   const matched = activeLines.filter(line => line.status === LineStatus.MATCHED || line.status === LineStatus.ACCEPTED).length;
@@ -341,6 +344,7 @@ const AuditPage: React.FC = () => {
           invoiceDescription: item.description,
           quantity: item.quantity,
           invoiceUnitPrice: item.unitPrice,
+          invoiceLineTotal: item.total,
           masterProductPrice: match?.price,
           masterProductId: match?.productId,
           masterProductSku: match?.sku,
@@ -471,7 +475,14 @@ const AuditPage: React.FC = () => {
       newStatus = Math.abs(diff) < 0.01 ? LineStatus.MATCHED : LineStatus.DISCREPANCY;
     }
 
-    lines[activeLineIdx] = { ...editLineData, difference: diff, status: newStatus };
+    lines[activeLineIdx] = {
+      ...editLineData,
+      invoiceLineTotal: typeof editLineData.invoiceLineTotal === 'number'
+        ? editLineData.invoiceLineTotal
+        : editLineData.invoiceUnitPrice * editLineData.quantity,
+      difference: diff,
+      status: newStatus
+    };
     setAuditResult({ ...auditResult, lines });
     setModalMode('NONE');
     setEditLineData(null);
@@ -712,6 +723,16 @@ const AuditPage: React.FC = () => {
                     />
                   </div>
                 </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Importe línea (€)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editLineData.invoiceLineTotal ?? editLineData.invoiceUnitPrice * editLineData.quantity}
+                    onChange={(e) => setEditLineData({ ...editLineData, invoiceLineTotal: parseFloat(e.target.value) })}
+                    className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 font-bold font-mono outline-none focus:border-indigo-500"
+                  />
+                </div>
               </div>
               <div className="flex gap-3 pt-8">
                 <button onClick={() => setModalMode('NONE')} className="flex-1 py-4 font-black text-slate-400 hover:bg-slate-50 rounded-2xl transition-colors">CANCELAR</button>
@@ -776,6 +797,7 @@ const AuditPage: React.FC = () => {
                 <th className="px-6 py-4">Descripción en Factura</th>
                 <th className="px-6 py-4 text-center">Precio Catálogo</th>
                 <th className="px-6 py-4 text-center">Precio Factura</th>
+                <th className="px-6 py-4 text-center">Importe</th>
                 <th className="px-6 py-4">Estado</th>
                 <th className="px-6 py-4 text-right">Acciones</th>
               </tr>
@@ -801,6 +823,11 @@ const AuditPage: React.FC = () => {
                         <span className={`text-lg font-black font-mono ${isDiscrepancy ? 'text-rose-600' : 'text-slate-800'}`}>
                           {line.invoiceUnitPrice.toFixed(2)}€
                         </span>
+                        {typeof line.invoiceLineTotal === 'number' && Math.abs(line.invoiceLineTotal - (line.invoiceUnitPrice * line.quantity)) > 0.01 && (
+                          <span className="text-[9px] font-black text-slate-400 uppercase mt-0.5">
+                            antes dto.
+                          </span>
+                        )}
                         {isDiscrepancy && (
                           <span className="flex items-center gap-1 text-[9px] font-black text-rose-500 uppercase mt-0.5">
                             {line.difference > 0 ? <ArrowUpCircle className="w-2.5 h-2.5" /> : <ArrowDownCircle className="w-2.5 h-2.5" />}
@@ -808,6 +835,11 @@ const AuditPage: React.FC = () => {
                           </span>
                         )}
                       </div>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <span className="font-black font-mono text-slate-700">
+                        {(typeof line.invoiceLineTotal === 'number' ? line.invoiceLineTotal : line.invoiceUnitPrice * line.quantity).toFixed(2)}€
+                      </span>
                     </td>
                     <td className="px-6 py-4">
                       <StatusBadge status={line.status} diff={line.difference} />

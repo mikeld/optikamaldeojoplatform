@@ -429,6 +429,7 @@ function graduacionFacturaTexto($description) {
 
 function limpiarDescripcionFacturaTexto($description) {
     $description = trim((string)$description);
+    $description = preg_replace('/^Factura\s+[A-Z0-9\/.-]+\s+/iu', '', $description);
     $description = preg_replace('/^(?:DESCRIPCI[ÓO]N\s+CANTIDAD\s+PRECIO\s+DESC\.\s+\(%\)\s+IMPUESTOS\s+IMPORTE\s*)+/iu', '', $description);
     $description = preg_replace('/^Subtotal:\s*[-\d,.]+\s*€?\s*/iu', '', $description);
     $description = preg_replace('/^Albarán:\s*\d{2}\/\d{2}\/\d{4}\s+[A-Z]\/OUT\/\d+\s+Pedido:\s*\[[^\]]+\]\s+Cliente:\s*\d+\s*/iu', '', $description);

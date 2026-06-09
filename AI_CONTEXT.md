@@ -184,6 +184,7 @@ Reglas actuales:
 - PDF se convierte a imagen optimizada para evitar mandar archivos enormes.
 - Cuando el PDF tiene texto seleccionable, se envia texto por pagina antes que imagen. Es mas barato, rapido y estable.
 - En proveedores con texto tabular tipo Visionis, intentar parseo por reglas antes de Gemini. Coste IA: 0 para la extraccion de lineas.
+- En facturas con columnas `PRECIO`, `DESC. (%)` e `IMPORTE`, el total de factura debe cuadrarse con `IMPORTE`, no con `PRECIO`. `PRECIO` sirve para comparar tarifa/catalogo; `IMPORTE` es lo realmente facturado tras descuentos y bonos.
 - Se usan primeras paginas para controlar coste y tiempo.
 - `generationConfig.temperature = 0` en extraccion.
 - `maxOutputTokens` limitado para extraccion/asistente.

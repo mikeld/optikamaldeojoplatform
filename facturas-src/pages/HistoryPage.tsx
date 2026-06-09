@@ -28,11 +28,12 @@ const HistoryPage: React.FC = () => {
   };
 
   const exportToCSV = (audit: AuditRecord) => {
-    const headers = ["Descripcion", "Cantidad", "Precio Factura", "Precio Maestro", "Diferencia"];
+    const headers = ["Descripcion", "Cantidad", "Precio Factura", "Importe Linea", "Precio Maestro", "Diferencia"];
     const rows = audit.lines.map(l => [
       l.invoiceDescription,
       l.quantity,
       l.invoiceUnitPrice,
+      l.invoiceLineTotal ?? l.invoiceUnitPrice * l.quantity,
       l.masterProductPrice || 0,
       l.difference
     ]);
@@ -304,7 +305,12 @@ const HistoryPage: React.FC = () => {
                       <tr key={idx}>
                         <td className="px-6 py-4 font-bold text-slate-800">{line.invoiceDescription}</td>
                         <td className="px-6 py-4 text-center font-bold text-slate-400">{line.quantity}</td>
-                        <td className="px-6 py-4 text-center font-black font-mono">{line.invoiceUnitPrice.toFixed(2)}€</td>
+                        <td className="px-6 py-4 text-center font-black font-mono">
+                          {(typeof line.invoiceLineTotal === 'number' ? line.invoiceLineTotal : line.invoiceUnitPrice * line.quantity).toFixed(2)}€
+                          {typeof line.invoiceLineTotal === 'number' && Math.abs(line.invoiceLineTotal - (line.invoiceUnitPrice * line.quantity)) > 0.01 && (
+                            <span className="block text-[9px] text-slate-400 font-black uppercase">precio {line.invoiceUnitPrice.toFixed(2)}€</span>
+                          )}
+                        </td>
                         <td className="px-6 py-4 text-center font-bold text-indigo-500">{line.masterProductPrice ? `${line.masterProductPrice.toFixed(2)}€` : '-'}</td>
                         <td className="px-6 py-4 text-right">
                            <span className={`px-2 py-1 rounded-lg text-[10px] font-black ${line.difference > 0 ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>
