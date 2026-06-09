@@ -53,7 +53,7 @@ jobs:
 
           git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA" > deploy/dist/changed_files.txt
 
-          if grep -Eq '^(facturas-src/|package.json|package-lock.json|vite.config|tsconfig)' deploy/dist/changed_files.txt; then
+          if grep -Eq '^(facturas-src/|package.json|package-lock.json|vite.config|tsconfig|\.github/workflows/deploy-prod\.yml)' deploy/dist/changed_files.txt; then
             mkdir -p deploy/dist/upload/facturas
             cp -a deploy/dist/release/facturas/. deploy/dist/upload/facturas/
           fi
@@ -80,9 +80,6 @@ jobs:
             cp -a deploy/dist/release/. deploy/dist/upload/
           fi
 
-      - name: Install FTP client
-        run: sudo apt-get update && sudo apt-get install -y lftp
-
       - name: Upload to Hostinger production
         env:
           FTP_HOST: ${{ secrets.HOSTINGER_FTP_HOST }}
@@ -99,38 +96,15 @@ jobs:
           FTP_PASS_CLEAN="$(printf '%s' "$FTP_PASS" | tr -d '\r\n')"
           FTP_DIR_CLEAN="$(printf '%s' "$FTP_DIR" | tr -d '\r\n')"
           FILE_COUNT="$(find deploy/dist/upload -type f | wc -l | tr -d ' ')"
+          echo "Uploading $FILE_COUNT file(s) to Hostinger production"
 
-          for attempt in 1 2 3; do
-            echo "FTP upload attempt $attempt/3"
-
-            {
-              echo "set cmd:fail-exit yes"
-              echo "set net:timeout 120"
-              echo "set net:max-retries 2"
-              echo "set net:reconnect-interval-base 6"
-              echo "set ftp:ssl-allow true"
-              echo "set ftp:passive-mode true"
-              echo "set ssl:verify-certificate no"
-              echo "open -p 21 -u \"$FTP_USER_CLEAN\",\"$FTP_PASS_CLEAN\" \"$FTP_HOST_CLEAN\""
-
-              echo "# Using direct file upload for $FILE_COUNT files"
-              while IFS= read -r file; do
-                rel="${file#deploy/dist/upload/}"
-                remote_dir="$FTP_DIR_CLEAN/$(dirname "$rel")"
-                echo "put -O \"$remote_dir\" \"$file\""
-              done < <(find deploy/dist/upload -type f | sort)
-
-              echo "bye"
-            } > deploy/dist/lftp_commands.txt
-
-            if timeout 360 lftp -f deploy/dist/lftp_commands.txt
-            then
-              exit 0
-            fi
-
-            if [ "$attempt" -eq 3 ]; then
+          while IFS= read -r file; do
+            rel="${file#deploy/dist/upload/}"
+            remote_path="$FTP_DIR_CLEAN/$rel"
+            remote_url="ftp://$FTP_HOST_CLEAN/$remote_path"
+            echo "Uploading $rel"
+            if ! curl --fail --silent --show-error --ftp-create-dirs --retry 4 --retry-delay 8 --connect-timeout 60 --max-time 600 --user "$FTP_USER_CLEAN:$FTP_PASS_CLEAN" -T "$file" "$remote_url"; then
+              echo "Failed uploading $rel"
               exit 1
             fi
-
-            sleep 20
-          done
+          done < <(find deploy/dist/upload -type f | sort)
