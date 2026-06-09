@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Upload, FileText, Loader2, CheckCircle2, XCircle, AlertCircle, RefreshCw, Save, ArrowLeft, PlusCircle, Database, Trash2, X, CheckSquare, Edit3, AlertTriangle, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 import { extractInvoiceData, extractInvoiceFile } from '../services/geminiService';
-import { combineRenderedPagesAsJpeg, renderPdfPageImages } from '../services/pdfPreview';
+import { combineRenderedPagesAsJpeg, dataUrlToFile, renderPdfPageImages } from '../services/pdfPreview';
 import { db } from '../db';
 import { InvoiceData, AuditLine, LineStatus, Product, AuditRecord, AuditStatus, ProductFamily, InvoiceItem, InvoiceAiModel } from '../types';
 
@@ -26,9 +26,9 @@ const defaultProcessingStep: ProcessingStep = {
 
 const extractionModes = {
   economy: {
-    label: 'Primeras 3 páginas',
+    label: 'Primeras 2 páginas',
     description: 'Menos coste y más rápido. Suficiente para facturas cortas.',
-    aiPages: 3,
+    aiPages: 2,
   },
   complete: {
     label: 'Todas hasta 8 páginas',
@@ -183,45 +183,45 @@ const AuditPage: React.FC = () => {
 
     try {
       const selectedExtractionMode = extractionModes[extractionMode];
-      const pagesToRender = file.type === 'application/pdf'
-        ? Math.max(selectedExtractionMode.aiPages, saveVisualSources ? 8 : 0)
-        : 0;
-      const renderedPages = file.type === 'application/pdf'
-        ? await renderPdfPageImages(file, pagesToRender, ({ pageNumber, pageCount, totalPages }) => {
+      const pagesForAiRender = file.type === 'application/pdf'
+        ? await renderPdfPageImages(file, selectedExtractionMode.aiPages, ({ pageNumber, pageCount, totalPages }) => {
           setProcessingStep({
             key: 'rendering',
             label: `Renderizando página ${pageNumber}/${pageCount}`,
             detail: totalPages > pageCount
-              ? `Se preparan ${pageCount} de ${totalPages} páginas. Renderizar no consume IA.`
+              ? `Se preparan ${pageCount} de ${totalPages} páginas para IA. Renderizar no consume IA.`
               : 'Generando imágenes legibles del PDF. Esta fase no consume IA.',
             percent: 10 + Math.round((pageNumber / pageCount) * 25),
             usesAi: false,
           });
         })
         : [];
-      const pagesForAi = renderedPages.slice(0, selectedExtractionMode.aiPages);
-      const pagesForVisualSources = saveVisualSources ? renderedPages : [];
       setProcessingStep({
         key: 'extracting',
         label: 'Extrayendo datos con Gemini',
         detail: file.type === 'application/pdf'
-          ? `Modelo ${selectedModel.replace('gemini-2.5-', '')}. Enviando ${pagesForAi.length} página(s) optimizadas. Esta es la única fase que consume IA.`
+          ? `Modelo ${selectedModel.replace('gemini-2.5-', '')}. Enviando ${pagesForAiRender.length} página(s) optimizadas. Esta es la única fase que consume IA.`
           : `Modelo ${selectedModel.replace('gemini-2.5-', '')}. Enviando la imagen a Gemini. Esta es la única fase que consume IA.`,
         percent: 42,
         usesAi: true,
       });
       const extracted = file.type === 'application/pdf'
-        ? await combineRenderedPagesAsJpeg(pagesForAi).then(({ base64, mimeType }) => extractInvoiceData(base64, mimeType, { model: selectedModel }))
+        ? await combineRenderedPagesAsJpeg(pagesForAiRender)
+          .then(({ base64, mimeType }) => dataUrlToFile(base64, mimeType, 'factura-optimizada.jpg'))
+          .then((optimizedFile) => extractInvoiceFile(optimizedFile, { model: selectedModel }))
         : await extractInvoiceFile(file, { model: selectedModel });
       setProcessingStep({
         key: 'loading',
         label: 'Guardando y cargando catálogo',
         detail: saveVisualSources
-          ? 'Subiendo el PDF, guardando fuentes visuales y recuperando productos/familias. Esta fase no consume IA.'
+          ? 'Subiendo el PDF, preparando fuentes visuales y recuperando productos/familias. Esta fase no consume IA.'
           : 'Subiendo el PDF y recuperando productos/familias. No se guardarán imágenes de página.',
         percent: 72,
         usesAi: false,
       });
+      const pagesForVisualSources = saveVisualSources && file.type === 'application/pdf'
+        ? await renderPdfPageImages(file, 8)
+        : [];
       const [masterProducts, families, uploadedFile, uploadedPages] = await Promise.all([
         db.getProducts(),
         db.getFamilies(),
@@ -270,7 +270,7 @@ const AuditPage: React.FC = () => {
         globalStatus: 'in_review',
         pdfPath: uploadedFile.path,
         pages: uploadedPages,
-        notes: `Archivo original: ${uploadedFile.filename}. Modelo: ${selectedModel}. Páginas IA: ${pagesForAi.length}. Fuentes visuales: ${saveVisualSources ? uploadedPages.length : 0}.`
+        notes: `Archivo original: ${uploadedFile.filename}. Modelo: ${selectedModel}. Páginas IA: ${pagesForAiRender.length}. Fuentes visuales: ${saveVisualSources ? uploadedPages.length : 0}.`
       });
       setProcessingStep({
         key: 'done',

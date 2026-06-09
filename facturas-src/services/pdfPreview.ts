@@ -106,6 +106,12 @@ export const combineRenderedPagesAsJpeg = async (renderedPages: RenderedPdfPage[
   };
 };
 
+export const dataUrlToFile = async (base64: string, mimeType: string, filename: string): Promise<File> => {
+  const response = await fetch(`data:${mimeType};base64,${base64}`);
+  const blob = await response.blob();
+  return new File([blob], filename, { type: mimeType });
+};
+
 export const renderPdfPagesAsJpeg = async (file: File, maxPages = 3): Promise<{ base64: string; mimeType: string }> => {
   const renderedPages = await renderPdfPageImages(file, maxPages);
   return combineRenderedPagesAsJpeg(renderedPages);
