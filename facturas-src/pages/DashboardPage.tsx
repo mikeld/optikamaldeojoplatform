@@ -7,12 +7,15 @@ import { AlertTriangle, CheckCircle, Clock, Euro, FileText, Loader2, PackageSear
 
 const currency = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' });
 const shortDate = new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short' });
+type PeriodFilter = '30' | '90' | '365' | 'all';
 
 const DashboardPage: React.FC = () => {
   const [audits, setAudits] = useState<AuditRecord[]>([]);
   const [pendingAlerts, setPendingAlerts] = useState<Alert[]>([]);
   const [priceHistory, setPriceHistory] = useState<PriceHistory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('90');
+  const [providerFilter, setProviderFilter] = useState('all');
 
   useEffect(() => {
     const loadDashboard = async () => {
@@ -30,13 +33,44 @@ const DashboardPage: React.FC = () => {
     loadDashboard();
   }, []);
 
+  const providers = useMemo(() => (
+    Array.from(new Set(audits.map(audit => audit.provider).filter(Boolean))).sort((a, b) => a.localeCompare(b))
+  ), [audits]);
+
+  const filteredData = useMemo(() => {
+    const cutoff = periodFilter === 'all'
+      ? null
+      : new Date(Date.now() - Number(periodFilter) * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    const filteredAudits = audits.filter(audit => {
+      if (providerFilter !== 'all' && audit.provider !== providerFilter) return false;
+      if (cutoff && audit.invoiceDate < cutoff) return false;
+      return true;
+    });
+    const auditIds = new Set(filteredAudits.map(audit => audit.id));
+
+    const filteredAlerts = pendingAlerts.filter(alert => {
+      if (alert.auditId && auditIds.has(alert.auditId)) return true;
+      if (cutoff && alert.createdAt && alert.createdAt.slice(0, 10) < cutoff) return false;
+      return providerFilter === 'all';
+    });
+
+    const filteredPriceHistory = priceHistory.filter(change => {
+      if (cutoff && change.changeDate.slice(0, 10) < cutoff) return false;
+      if (providerFilter === 'all') return true;
+      return !change.invoiceId || auditIds.has(change.invoiceId);
+    });
+
+    return { audits: filteredAudits, pendingAlerts: filteredAlerts, priceHistory: filteredPriceHistory };
+  }, [audits, pendingAlerts, periodFilter, priceHistory, providerFilter]);
+
   const actionableData = useMemo(() => {
-    const pendingReviews = audits.filter(a => a.globalStatus === 'pending' || a.globalStatus === 'in_review');
-    const criticalAlerts = pendingAlerts.filter(a => a.severity === 'critical');
-    const unknownProducts = pendingAlerts.filter(a => a.alertType === 'unknown_product');
+    const pendingReviews = filteredData.audits.filter(a => a.globalStatus === 'pending' || a.globalStatus === 'in_review');
+    const criticalAlerts = filteredData.pendingAlerts.filter(a => a.severity === 'critical');
+    const unknownProducts = filteredData.pendingAlerts.filter(a => a.alertType === 'unknown_product');
 
     const providerImpact = new Map<string, { provider: string; amount: number; alerts: number }>();
-    audits.forEach(audit => {
+    filteredData.audits.forEach(audit => {
       audit.lines.forEach(line => {
         if (line.difference <= 0) return;
         const current = providerImpact.get(audit.provider) || { provider: audit.provider, amount: 0, alerts: 0 };
@@ -46,9 +80,9 @@ const DashboardPage: React.FC = () => {
       });
     });
 
-    pendingAlerts.forEach(alert => {
+    filteredData.pendingAlerts.forEach(alert => {
       if (!alert.difference || alert.difference <= 0) return;
-      const audit = audits.find(a => a.id === alert.auditId);
+      const audit = filteredData.audits.find(a => a.id === alert.auditId);
       const provider = audit?.provider || 'Proveedor sin identificar';
       const current = providerImpact.get(provider) || { provider, amount: 0, alerts: 0 };
       current.amount += alert.difference;
@@ -78,16 +112,16 @@ const DashboardPage: React.FC = () => {
       unknownProducts,
       providers,
       topAlerts,
-      recentChanges: priceHistory.slice(0, 5)
+      recentChanges: filteredData.priceHistory.slice(0, 5)
     };
-  }, [audits, pendingAlerts, priceHistory]);
+  }, [filteredData]);
 
   const stats = {
-    total: audits.length,
-    correct: audits.filter(a => a.globalStatus === 'approved').length,
-    rejected: audits.filter(a => a.globalStatus === 'rejected').length,
+    total: filteredData.audits.length,
+    correct: filteredData.audits.filter(a => a.globalStatus === 'approved').length,
+    rejected: filteredData.audits.filter(a => a.globalStatus === 'rejected').length,
     pending: actionableData.pendingReviews.length,
-    totalVolume: audits.reduce((acc, a) => acc + a.totalInvoice, 0)
+    totalVolume: filteredData.audits.reduce((acc, a) => acc + a.totalInvoice, 0)
   };
 
   const chartData = [
@@ -106,6 +140,33 @@ const DashboardPage: React.FC = () => {
         <div className="bg-white px-6 py-3 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3">
           {isLoading ? <Loader2 className="text-indigo-600 w-5 h-5 animate-spin" /> : <Activity className="text-indigo-600 w-5 h-5" />}
           <span className="font-black text-slate-800 text-sm">{isLoading ? 'CARGANDO' : 'SISTEMA ONLINE'}</span>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-[2rem] border border-slate-100 p-5 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Vista de análisis</p>
+          <p className="font-black text-slate-800">{stats.total} factura(s) · {actionableData.criticalAlerts.length} alerta(s) críticas</p>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <select
+            value={periodFilter}
+            onChange={(event) => setPeriodFilter(event.target.value as PeriodFilter)}
+            className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700 outline-none focus:border-indigo-300"
+          >
+            <option value="30">Últimos 30 días</option>
+            <option value="90">Últimos 90 días</option>
+            <option value="365">Últimos 12 meses</option>
+            <option value="all">Todo el histórico</option>
+          </select>
+          <select
+            value={providerFilter}
+            onChange={(event) => setProviderFilter(event.target.value)}
+            className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700 outline-none focus:border-indigo-300"
+          >
+            <option value="all">Todos los proveedores</option>
+            {providers.map(provider => <option key={provider} value={provider}>{provider}</option>)}
+          </select>
         </div>
       </div>
 
