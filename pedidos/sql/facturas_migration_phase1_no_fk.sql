@@ -32,49 +32,49 @@ CREATE TABLE IF NOT EXISTS `facturas_product_families` (
 -- ============================================================================
 
 -- Check and add family_id column
-SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
     WHERE TABLE_SCHEMA = @database_name AND TABLE_NAME = 'facturas_products' AND COLUMN_NAME = 'family_id');
-SET @sql = IF(@col_exists = 0, 
-    'ALTER TABLE `facturas_products` ADD COLUMN `family_id` VARCHAR(100) AFTER `name`', 
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE `facturas_products` ADD COLUMN `family_id` VARCHAR(100) AFTER `name`',
     'SELECT ''Column family_id already exists'' AS Info');
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
 -- Check and add graduation column
-SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
     WHERE TABLE_SCHEMA = @database_name AND TABLE_NAME = 'facturas_products' AND COLUMN_NAME = 'graduation');
-SET @sql = IF(@col_exists = 0, 
-    'ALTER TABLE `facturas_products` ADD COLUMN `graduation` VARCHAR(50) AFTER `family_id`', 
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE `facturas_products` ADD COLUMN `graduation` VARCHAR(50) AFTER `family_id`',
     'SELECT ''Column graduation already exists'' AS Info');
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
 -- Check and add provider column
-SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
     WHERE TABLE_SCHEMA = @database_name AND TABLE_NAME = 'facturas_products' AND COLUMN_NAME = 'provider');
-SET @sql = IF(@col_exists = 0, 
-    'ALTER TABLE `facturas_products` ADD COLUMN `provider` VARCHAR(255) AFTER `vat`', 
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE `facturas_products` ADD COLUMN `provider` VARCHAR(255) AFTER `vat`',
     'SELECT ''Column provider already exists'' AS Info');
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
 -- Add indexes
-SET @idx_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS 
+SET @idx_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
     WHERE TABLE_SCHEMA = @database_name AND TABLE_NAME = 'facturas_products' AND INDEX_NAME = 'idx_family_id');
-SET @sql = IF(@idx_exists = 0, 
-    'ALTER TABLE `facturas_products` ADD INDEX `idx_family_id` (`family_id`)', 
+SET @sql = IF(@idx_exists = 0,
+    'ALTER TABLE `facturas_products` ADD INDEX `idx_family_id` (`family_id`)',
     'SELECT ''Index idx_family_id already exists'' AS Info');
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
-SET @idx_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS 
+SET @idx_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
     WHERE TABLE_SCHEMA = @database_name AND TABLE_NAME = 'facturas_products' AND INDEX_NAME = 'idx_provider');
-SET @sql = IF(@idx_exists = 0, 
-    'ALTER TABLE `facturas_products` ADD INDEX `idx_provider` (`provider`)', 
+SET @sql = IF(@idx_exists = 0,
+    'ALTER TABLE `facturas_products` ADD INDEX `idx_provider` (`provider`)',
     'SELECT ''Index idx_provider already exists'' AS Info');
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
@@ -86,84 +86,104 @@ DEALLOCATE PREPARE stmt;
 
 -- Modify global_status enum
 ALTER TABLE `facturas_audits`
-    MODIFY COLUMN `global_status` ENUM('pending', 'approved', 'rejected', 'in_review') 
+    MODIFY COLUMN `global_status` ENUM('pending', 'approved', 'rejected', 'in_review')
         DEFAULT 'pending';
 
+-- Add invoice_subtotal
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = @database_name AND TABLE_NAME = 'facturas_audits' AND COLUMN_NAME = 'invoice_subtotal');
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE `facturas_audits` ADD COLUMN `invoice_subtotal` DECIMAL(10, 2) DEFAULT 0.00 AFTER `invoice_number`',
+    'SELECT ''Column invoice_subtotal already exists'' AS Info');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Add tax_total
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = @database_name AND TABLE_NAME = 'facturas_audits' AND COLUMN_NAME = 'tax_total');
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE `facturas_audits` ADD COLUMN `tax_total` DECIMAL(10, 2) DEFAULT 0.00 AFTER `invoice_subtotal`',
+    'SELECT ''Column tax_total already exists'' AS Info');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
 -- Add pdf_path
-SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
     WHERE TABLE_SCHEMA = @database_name AND TABLE_NAME = 'facturas_audits' AND COLUMN_NAME = 'pdf_path');
-SET @sql = IF(@col_exists = 0, 
-    'ALTER TABLE `facturas_audits` ADD COLUMN `pdf_path` VARCHAR(500) AFTER `lines`', 
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE `facturas_audits` ADD COLUMN `pdf_path` VARCHAR(500) AFTER `lines`',
     'SELECT ''Column pdf_path already exists'' AS Info');
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
 -- Add ocr_text
-SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
     WHERE TABLE_SCHEMA = @database_name AND TABLE_NAME = 'facturas_audits' AND COLUMN_NAME = 'ocr_text');
-SET @sql = IF(@col_exists = 0, 
-    'ALTER TABLE `facturas_audits` ADD COLUMN `ocr_text` TEXT AFTER `pdf_path`', 
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE `facturas_audits` ADD COLUMN `ocr_text` TEXT AFTER `pdf_path`',
     'SELECT ''Column ocr_text already exists'' AS Info');
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
 -- Add alert_count
-SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
     WHERE TABLE_SCHEMA = @database_name AND TABLE_NAME = 'facturas_audits' AND COLUMN_NAME = 'alert_count');
-SET @sql = IF(@col_exists = 0, 
-    'ALTER TABLE `facturas_audits` ADD COLUMN `alert_count` INT DEFAULT 0 AFTER `ocr_text`', 
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE `facturas_audits` ADD COLUMN `alert_count` INT DEFAULT 0 AFTER `ocr_text`',
     'SELECT ''Column alert_count already exists'' AS Info');
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
 -- Add critical_alert_count
-SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
     WHERE TABLE_SCHEMA = @database_name AND TABLE_NAME = 'facturas_audits' AND COLUMN_NAME = 'critical_alert_count');
-SET @sql = IF(@col_exists = 0, 
-    'ALTER TABLE `facturas_audits` ADD COLUMN `critical_alert_count` INT DEFAULT 0 AFTER `alert_count`', 
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE `facturas_audits` ADD COLUMN `critical_alert_count` INT DEFAULT 0 AFTER `alert_count`',
     'SELECT ''Column critical_alert_count already exists'' AS Info');
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
 -- Add reviewed_by
-SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
     WHERE TABLE_SCHEMA = @database_name AND TABLE_NAME = 'facturas_audits' AND COLUMN_NAME = 'reviewed_by');
-SET @sql = IF(@col_exists = 0, 
-    'ALTER TABLE `facturas_audits` ADD COLUMN `reviewed_by` VARCHAR(100) AFTER `critical_alert_count`', 
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE `facturas_audits` ADD COLUMN `reviewed_by` VARCHAR(100) AFTER `critical_alert_count`',
     'SELECT ''Column reviewed_by already exists'' AS Info');
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
 -- Add reviewed_at
-SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
     WHERE TABLE_SCHEMA = @database_name AND TABLE_NAME = 'facturas_audits' AND COLUMN_NAME = 'reviewed_at');
-SET @sql = IF(@col_exists = 0, 
-    'ALTER TABLE `facturas_audits` ADD COLUMN `reviewed_at` TIMESTAMP NULL AFTER `reviewed_by`', 
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE `facturas_audits` ADD COLUMN `reviewed_at` TIMESTAMP NULL AFTER `reviewed_by`',
     'SELECT ''Column reviewed_at already exists'' AS Info');
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
 -- Add notes
-SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
     WHERE TABLE_SCHEMA = @database_name AND TABLE_NAME = 'facturas_audits' AND COLUMN_NAME = 'notes');
-SET @sql = IF(@col_exists = 0, 
-    'ALTER TABLE `facturas_audits` ADD COLUMN `notes` TEXT AFTER `reviewed_at`', 
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE `facturas_audits` ADD COLUMN `notes` TEXT AFTER `reviewed_at`',
     'SELECT ''Column notes already exists'' AS Info');
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
 -- Add index
-SET @idx_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS 
+SET @idx_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
     WHERE TABLE_SCHEMA = @database_name AND TABLE_NAME = 'facturas_audits' AND INDEX_NAME = 'idx_global_status');
-SET @sql = IF(@idx_exists = 0, 
-    'ALTER TABLE `facturas_audits` ADD INDEX `idx_global_status` (`global_status`)', 
+SET @sql = IF(@idx_exists = 0,
+    'ALTER TABLE `facturas_audits` ADD INDEX `idx_global_status` (`global_status`)',
     'SELECT ''Index idx_global_status already exists'' AS Info');
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
@@ -218,16 +238,16 @@ CREATE TABLE IF NOT EXISTS `facturas_alerts` (
 -- 6. INSERT SAMPLE DATA
 -- ============================================================================
 
-INSERT IGNORE INTO `facturas_product_families` 
-(`id`, `family_name`, `base_price`, `product_type`, `provider`, `notes`) 
-VALUES 
-('fam_dailies_total_1', 'DAILIES TOTAL 1 90P 850 141', 76.95, 'lens', 'Alcon', 
+INSERT IGNORE INTO `facturas_product_families`
+(`id`, `family_name`, `base_price`, `product_type`, `provider`, `notes`)
+VALUES
+('fam_dailies_total_1', 'DAILIES TOTAL 1 90P 850 141', 76.95, 'lens', 'Alcon',
  'Lentillas diarias de silicona hidrogel. Precio único independiente de graduación.');
 
-INSERT IGNORE INTO `facturas_product_families` 
-(`id`, `family_name`, `base_price`, `product_type`, `provider`, `notes`) 
-VALUES 
-('fam_acuvue_oasys', 'ACUVUE OASYS 1-DAY 90P', 68.50, 'lens', 'Johnson & Johnson', 
+INSERT IGNORE INTO `facturas_product_families`
+(`id`, `family_name`, `base_price`, `product_type`, `provider`, `notes`)
+VALUES
+('fam_acuvue_oasys', 'ACUVUE OASYS 1-DAY 90P', 68.50, 'lens', 'Johnson & Johnson',
  'Lentillas desechables diarias. Precio estándar para todas las graduaciones.');
 
 -- ============================================================================
