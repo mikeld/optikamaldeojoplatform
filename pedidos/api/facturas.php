@@ -1303,22 +1303,118 @@ Pregunta:
         case 'resolveAlert':
             if ($method === 'POST') {
                 $data = json_decode(file_get_contents('php://input'), true);
+                $alertId = $data['alertId'] ?? '';
                 $actionTaken = $data['action'] ?? 'approved';
                 $newStatus = $actionTaken === 'ignored' ? 'ignored' : 'resolved';
 
-                $stmt = $pdo->prepare("UPDATE `facturas_alerts` 
-                    SET `status` = ?,
-                        `resolution_action` = ?, 
-                        `resolved_at` = NOW() 
-                    WHERE `id` = ?");
-                
-                $stmt->execute([
-                    $newStatus,
-                    $actionTaken,
-                    $data['alertId']
-                ]);
-                
-                echo json_encode(['status' => 'success']);
+                $pdo->beginTransaction();
+                try {
+                    // 1. Cargar la alerta actual
+                    $getAlertStmt = $pdo->prepare("SELECT * FROM `facturas_alerts` WHERE `id` = ?");
+                    $getAlertStmt->execute([$alertId]);
+                    $alert = $getAlertStmt->fetch(PDO::FETCH_ASSOC);
+
+                    if (!$alert) {
+                        throw new Exception('Alerta no encontrada');
+                    }
+
+                    // 2. Si es producto desconocido y es aprobado, registrar en el catálogo automáticamente
+                    if ($alert['alert_type'] === 'unknown_product' && in_array($actionTaken, ['approved', 'price_updated'], true) && !empty($alert['product_sku'])) {
+                        
+                        // Cargar proveedor desde la auditoría
+                        $auditStmt = $pdo->prepare("SELECT `provider` FROM `facturas_audits` WHERE `id` = ?");
+                        $auditStmt->execute([$alert['audit_id']]);
+                        $provider = $auditStmt->fetchColumn() ?: null;
+
+                        // Limpiar el nombre de paciente/pedido para guardar el producto base
+                        $cleanedName = function_exists('invoiceTextBaseProduct') 
+                            ? invoiceTextBaseProduct($alert['product_name']) 
+                            : $alert['product_name'];
+
+                        // Verificar si ya existe el producto con ese SKU para no duplicar
+                        $checkProd = $pdo->prepare("SELECT `id` FROM `facturas_products` WHERE `sku` = ?");
+                        $checkProd->execute([$alert['product_sku']]);
+                        $exists = $checkProd->fetchColumn();
+
+                        if (!$exists) {
+                            $insertProd = $pdo->prepare("INSERT INTO `facturas_products` 
+                                (`id`, `sku`, `name`, `expected_price`, `vat`, `provider`) 
+                                VALUES (?, ?, ?, ?, ?, ?)");
+                            $insertProd->execute([
+                                uniqid('prod_'),
+                                $alert['product_sku'],
+                                $cleanedName,
+                                $alert['actual_value'] ?? 0,
+                                21.00,
+                                $provider
+                            ]);
+                        }
+                    }
+
+                    // 3. Buscar todas las alertas pendientes idénticas (mismo SKU, o mismo nombre limpio si no tiene SKU)
+                    if (!empty($alert['product_sku'])) {
+                        $selectStmt = $pdo->prepare("SELECT `id`, `audit_id` FROM `facturas_alerts` 
+                            WHERE `status` = 'pending' AND `product_sku` = ?");
+                        $selectStmt->execute([$alert['product_sku']]);
+                    } else {
+                        $selectStmt = $pdo->prepare("SELECT `id`, `audit_id` FROM `facturas_alerts` 
+                            WHERE `status` = 'pending' AND `product_name` = ? AND `alert_type` = ?");
+                        $selectStmt->execute([$alert['product_name'], $alert['alert_type']]);
+                    }
+                    
+                    $matchingAlerts = $selectStmt->fetchAll(PDO::FETCH_ASSOC);
+                    $alertIds = array_column($matchingAlerts, 'id');
+                    $auditIds = array_unique(array_column($matchingAlerts, 'audit_id'));
+                    
+                    // Asegurar que incluimos el ID de la alerta actual y su auditoría
+                    if (!in_array($alertId, $alertIds, true)) {
+                        $alertIds[] = $alertId;
+                    }
+                    if (!in_array($alert['audit_id'], $auditIds, true)) {
+                        $auditIds[] = $alert['audit_id'];
+                    }
+
+                    if (!empty($alertIds)) {
+                        // Actualizar todas las alertas coincidentes en lote
+                        $inPlaceholders = implode(',', array_fill(0, count($alertIds), '?'));
+                        $updateAlerts = $pdo->prepare("UPDATE `facturas_alerts` 
+                            SET `status` = ?,
+                                `resolution_action` = ?, 
+                                `resolved_at` = NOW() 
+                            WHERE `id` IN ($inPlaceholders)");
+                        
+                        $updateParams = array_merge([$newStatus, $actionTaken], $alertIds);
+                        $updateAlerts->execute($updateParams);
+                        
+                        // 4. Recalcular contadores para cada auditoría afectada
+                        foreach ($auditIds as $affectedAuditId) {
+                            $countStmt = $pdo->prepare("SELECT 
+                                COUNT(*) as total_alerts,
+                                SUM(CASE WHEN `severity` = 'critical' THEN 1 ELSE 0 END) as critical_alerts
+                                FROM `facturas_alerts` 
+                                WHERE `audit_id` = ? AND `status` = 'pending'");
+                            $countStmt->execute([$affectedAuditId]);
+                            $counts = $countStmt->fetch(PDO::FETCH_ASSOC);
+                            
+                            $alertCount = (int)($counts['total_alerts'] ?? 0);
+                            $criticalCount = (int)($counts['critical_alerts'] ?? 0);
+                            
+                            // Si ya no quedan alertas críticas, pasa a pending/approved
+                            $newAuditStatus = $criticalCount > 0 ? 'in_review' : ($alertCount > 0 ? 'pending' : 'approved');
+                            
+                            $updateAudit = $pdo->prepare("UPDATE `facturas_audits` 
+                                SET `alert_count` = ?, `critical_alert_count` = ?, `global_status` = ? 
+                                WHERE `id` = ?");
+                            $updateAudit->execute([$alertCount, $criticalCount, $newAuditStatus, $affectedAuditId]);
+                        }
+                    }
+
+                    $pdo->commit();
+                    echo json_encode(['status' => 'success']);
+                } catch (Exception $e) {
+                    $pdo->rollBack();
+                    throw $e;
+                }
             }
             break;
 
@@ -1391,6 +1487,24 @@ Pregunta:
                         ? floatval($line['expectedPrice'])
                         : null;
 
+                    $rawName = $line['name'] ?? '';
+
+                    // === EXTRACT SKU & CLEAN DESCRIPTION FOR ALERTS ===
+                    // Nota: Diferentes proveedores formatean los SKUs y descripciones de maneras distintas.
+                    // Si en el futuro añadimos más proveedores, aquí podemos adaptar el patrón de extracción
+                    // basándonos en el proveedor de la factura ($data['provider'] / $auditResult.provider).
+                    if (!$sku) {
+                        // Por ejemplo, para Visionis/BOD, los SKUs vienen entre corchetes, ej: [MBR001]
+                        if (preg_match('/^\[([^\]]+)\]/', trim($rawName), $matches)) {
+                            $sku = trim($matches[1]);
+                        }
+                    }
+
+                    // Limpiamos el nombre usando la función del parser para quitar datos dinámicos de paciente/pedido
+                    $cleanedName = function_exists('invoiceTextBaseProduct') 
+                        ? invoiceTextBaseProduct($rawName) 
+                        : $rawName;
+
                     if (!$sku && $expectedPriceFromFamily === null) {
                         $alerts[] = [
                             'id' => uniqid('alert_'),
@@ -1399,7 +1513,7 @@ Pregunta:
                             'alert_type' => 'unknown_product',
                             'severity' => 'critical',
                             'product_sku' => null,
-                            'product_name' => $line['name'] ?? 'Producto no identificado',
+                            'product_name' => $cleanedName ?: 'Producto no identificado',
                             'actual_value' => $invoicePrice
                         ];
                         $criticalCount++;
@@ -1419,7 +1533,7 @@ Pregunta:
                                 'alert_type' => abs($diffPercent) > 5 ? 'price_error' : 'price_change',
                                 'severity' => $severity,
                                 'product_sku' => null,
-                                'product_name' => $line['familyName'] ?? ($line['name'] ?? 'Familia detectada'),
+                                'product_name' => $line['familyName'] ?? $cleanedName,
                                 'expected_value' => $expectedPriceFromFamily,
                                 'actual_value' => $invoicePrice,
                                 'difference' => $diff,
@@ -1450,7 +1564,7 @@ Pregunta:
                             'alert_type' => 'unknown_product',
                             'severity' => 'critical',
                             'product_sku' => $sku,
-                            'product_name' => $line['name'] ?? 'Unknown',
+                            'product_name' => $cleanedName,
                             'actual_value' => $invoicePrice
                         ];
                         $alerts[] = $alert;
