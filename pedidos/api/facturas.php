@@ -1351,15 +1351,15 @@ Pregunta:
                         }
                     }
 
-                    // 3. Buscar todas las alertas pendientes idénticas (mismo SKU, o mismo nombre limpio si no tiene SKU)
+                    // 3. Buscar todas las alertas pendientes idénticas (mismo SKU y precio, o mismo nombre limpio, tipo de alerta y precio si no tiene SKU)
                     if (!empty($alert['product_sku'])) {
                         $selectStmt = $pdo->prepare("SELECT `id`, `audit_id` FROM `facturas_alerts` 
-                            WHERE `status` = 'pending' AND `product_sku` = ?");
-                        $selectStmt->execute([$alert['product_sku']]);
+                            WHERE `status` = 'pending' AND `product_sku` = ? AND `actual_value` = ?");
+                        $selectStmt->execute([$alert['product_sku'], $alert['actual_value']]);
                     } else {
                         $selectStmt = $pdo->prepare("SELECT `id`, `audit_id` FROM `facturas_alerts` 
-                            WHERE `status` = 'pending' AND `product_name` = ? AND `alert_type` = ?");
-                        $selectStmt->execute([$alert['product_name'], $alert['alert_type']]);
+                            WHERE `status` = 'pending' AND `product_name` = ? AND `alert_type` = ? AND `actual_value` = ?");
+                        $selectStmt->execute([$alert['product_name'], $alert['alert_type'], $alert['actual_value']]);
                     }
                     
                     $matchingAlerts = $selectStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -1488,6 +1488,21 @@ Pregunta:
                         : null;
 
                     $rawName = $line['name'] ?? '';
+                    $lowerName = mb_strtolower($rawName, 'UTF-8');
+
+                    // === OMITIR ALERTAS PARA AJUSTES Y SERVICIOS ===
+                    // Bonos, descuentos, envíos o líneas con coste <= 0 no son productos del catálogo
+                    // y no deben levantar alertas de producto desconocido.
+                    $isAdjustment = str_contains($lowerName, 'bono') || 
+                                    str_contains($lowerName, 'descuento') || 
+                                    str_contains($lowerName, 'desc.') || 
+                                    str_contains($lowerName, 'envio') || 
+                                    str_contains($lowerName, 'envío') ||
+                                    $invoicePrice <= 0;
+
+                    if ($isAdjustment) {
+                        continue;
+                    }
 
                     // === EXTRACT SKU & CLEAN DESCRIPTION FOR ALERTS ===
                     // Nota: Diferentes proveedores formatean los SKUs y descripciones de maneras distintas.
