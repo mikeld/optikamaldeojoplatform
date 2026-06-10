@@ -180,10 +180,55 @@ $n_parciales = count(array_filter(
     array_merge($pedidos_atrasados, $pedidos_sin_fecha, $pedidos_pendientes),
     fn($p) => (int)($p['recibido'] ?? 0) === 2
 ));
-$n_clientes_por_avisar = count(array_filter(
-    $pedidos_recibidos,
-    fn($p) => empty($p['avisado_cliente'])
-));
+$n_clientes_por_avisar = (int)$pdo->query("
+    SELECT COUNT(*)
+    FROM pedidos
+    WHERE recibido = 1
+      AND avisado_cliente = 0
+      AND deleted_at IS NULL
+")->fetchColumn();
+
+$pedido_mas_atrasado_stmt = $pdo->prepare("
+    SELECT p.id, p.referencia_cliente, p.lc_gafa_recambio, p.fecha_llegada,
+           DATEDIFF(:hoy, p.fecha_llegada) as dias_atraso
+    FROM pedidos p
+    WHERE p.recibido IN (0, 2)
+      AND p.fecha_llegada IS NOT NULL
+      AND p.fecha_llegada <= :hoy2
+      AND p.deleted_at IS NULL
+    ORDER BY p.fecha_llegada ASC, p.id ASC
+    LIMIT 1
+");
+$pedido_mas_atrasado_stmt->execute([':hoy' => $fecha_hoy, ':hoy2' => $fecha_hoy]);
+$pedido_mas_atrasado = $pedido_mas_atrasado_stmt->fetch(PDO::FETCH_ASSOC);
+
+$sin_fecha_antiguo = $pdo->query("
+    SELECT p.id, p.referencia_cliente, p.lc_gafa_recambio, p.fecha_pedido
+    FROM pedidos p
+    WHERE p.recibido IN (0, 2)
+      AND p.fecha_pedido IS NOT NULL
+      AND p.fecha_llegada IS NULL
+      AND p.deleted_at IS NULL
+    ORDER BY p.fecha_pedido ASC, p.id ASC
+    LIMIT 1
+")->fetch(PDO::FETCH_ASSOC);
+
+$proveedor_mas_atrasos_stmt = $pdo->prepare("
+    SELECT COALESCE(pr.nombre, 'Sin proveedor') as proveedor,
+           COUNT(*) as total,
+           MAX(DATEDIFF(:hoy, p.fecha_llegada)) as max_dias
+    FROM pedidos p
+    LEFT JOIN proveedores pr ON p.proveedor_id = pr.id
+    WHERE p.recibido IN (0, 2)
+      AND p.fecha_llegada IS NOT NULL
+      AND p.fecha_llegada <= :hoy2
+      AND p.deleted_at IS NULL
+    GROUP BY pr.id, pr.nombre
+    ORDER BY total DESC, max_dias DESC
+    LIMIT 1
+");
+$proveedor_mas_atrasos_stmt->execute([':hoy' => $fecha_hoy, ':hoy2' => $fecha_hoy]);
+$proveedor_mas_atrasos = $proveedor_mas_atrasos_stmt->fetch(PDO::FETCH_ASSOC);
 ?>
 
 <div class="container-fluid py-4">
@@ -252,6 +297,47 @@ $n_clientes_por_avisar = count(array_filter(
                 </div>
             </a>
         </div>
+    </div>
+
+    <div class="work-focus-grid mb-4">
+        <a href="#card-atrasados" class="work-focus-card work-focus-danger">
+            <span class="work-focus-icon"><i class="fas fa-exclamation-triangle"></i></span>
+            <span class="work-focus-body">
+                <span class="work-focus-label">Prioridad</span>
+                <?php if ($pedido_mas_atrasado): ?>
+                    <strong><?= (int)$pedido_mas_atrasado['dias_atraso'] ?>d de atraso</strong>
+                    <small><?= htmlspecialchars($pedido_mas_atrasado['referencia_cliente']) ?> · <?= htmlspecialchars($pedido_mas_atrasado['lc_gafa_recambio']) ?></small>
+                <?php else: ?>
+                    <strong>Sin atrasos</strong>
+                    <small>Todo lo previsto está al día</small>
+                <?php endif; ?>
+            </span>
+        </a>
+        <a href="#card-sin-fecha" class="work-focus-card work-focus-warning">
+            <span class="work-focus-icon"><i class="fas fa-calendar-xmark"></i></span>
+            <span class="work-focus-body">
+                <span class="work-focus-label">Pendiente de fecha</span>
+                <?php if ($sin_fecha_antiguo): ?>
+                    <strong><?= htmlspecialchars($sin_fecha_antiguo['fecha_pedido'] ?? '-') ?></strong>
+                    <small><?= htmlspecialchars($sin_fecha_antiguo['referencia_cliente']) ?> · <?= htmlspecialchars($sin_fecha_antiguo['lc_gafa_recambio']) ?></small>
+                <?php else: ?>
+                    <strong>Sin huecos</strong>
+                    <small>No hay pedidos al proveedor sin fecha prevista</small>
+                <?php endif; ?>
+            </span>
+        </a>
+        <a href="#card-finalizados" class="work-focus-card work-focus-success">
+            <span class="work-focus-icon"><i class="fas fa-phone-volume"></i></span>
+            <span class="work-focus-body">
+                <span class="work-focus-label">Avisos cliente</span>
+                <strong><?= $n_clientes_por_avisar ?> por avisar</strong>
+                <?php if ($proveedor_mas_atrasos): ?>
+                    <small><?= htmlspecialchars($proveedor_mas_atrasos['proveedor']) ?> acumula <?= (int)$proveedor_mas_atrasos['total'] ?> atraso(s)</small>
+                <?php else: ?>
+                    <small>Sin proveedor con atrasos activos</small>
+                <?php endif; ?>
+            </span>
+        </a>
     </div>
 
     <!-- Filtros rápidos -->
