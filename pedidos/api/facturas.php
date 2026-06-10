@@ -76,7 +76,8 @@ function facturasSchemaRequerido() {
         'facturas_audits' => ['id', 'created_at', 'invoice_date', 'provider', 'invoice_number', 'invoice_subtotal', 'tax_total', 'total_invoice', 'global_status', 'lines', 'pdf_path', 'ocr_text', 'alert_count', 'critical_alert_count', 'reviewed_by', 'reviewed_at', 'notes'],
         'facturas_pages' => ['id', 'audit_id', 'page_number', 'image_path', 'mime_type', 'width', 'height', 'created_at'],
         'facturas_price_history' => ['id', 'product_id', 'old_price', 'new_price', 'change_date', 'reason', 'changed_by', 'invoice_id'],
-        'facturas_alerts' => ['id', 'audit_id', 'line_number', 'alert_type', 'severity', 'product_sku', 'product_name', 'expected_value', 'actual_value', 'difference', 'difference_percent', 'status', 'resolution_action', 'resolved_at', 'created_at']
+        'facturas_alerts' => ['id', 'audit_id', 'line_number', 'alert_type', 'severity', 'product_sku', 'product_name', 'expected_value', 'actual_value', 'difference', 'difference_percent', 'status', 'resolution_action', 'resolved_at', 'created_at'],
+        'facturas_providers' => ['id', 'name', 'system_description', 'extraction_rules', 'created_at', 'updated_at']
     ];
 }
 
@@ -120,6 +121,18 @@ function asegurarTablaFacturasPages($pdo) {
         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY `unique_audit_page` (`audit_id`, `page_number`),
         INDEX `idx_audit_id` (`audit_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+}
+
+function asegurarTablaFacturasProviders($pdo) {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS `facturas_providers` (
+        `id` VARCHAR(100) PRIMARY KEY,
+        `name` VARCHAR(255) UNIQUE NOT NULL,
+        `system_description` TEXT,
+        `extraction_rules` TEXT,
+        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX `idx_provider_name` (`name`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 }
 
@@ -402,6 +415,7 @@ try {
     switch ($action) {
         case 'getSchemaStatus':
             asegurarTablaFacturasPages($pdo);
+            asegurarTablaFacturasProviders($pdo);
             asegurarColumnasResumenFacturas($pdo);
             echo json_encode(diagnosticarSchemaFacturas($pdo));
             break;
@@ -472,9 +486,19 @@ try {
                     ],
                 ];
             }
-            $parts[] = [
-                'text' => 'Extract invoice data for an optical store invoice.
-IMPORTANT Rules for Item Extraction:
+            // Cargar reglas específicas de proveedores conocidos
+            asegurarTablaFacturasProviders($pdo);
+            $providersRulesStmt = $pdo->query("SELECT `name`, `extraction_rules` FROM `facturas_providers` WHERE `extraction_rules` IS NOT NULL AND `extraction_rules` != ''");
+            $providerRulesInjected = '';
+            foreach ($providersRulesStmt->fetchAll(PDO::FETCH_ASSOC) as $prov) {
+                $providerRulesInjected .= "\n* For provider '{$prov['name']}': {$prov['extraction_rules']}";
+            }
+
+            $promptText = "Extract invoice data for an optical store invoice.\n";
+            if ($providerRulesInjected !== '') {
+                $promptText .= "Specific rules for known providers:\n" . $providerRulesInjected . "\n\n";
+            }
+            $promptText .= "IMPORTANT Rules for Item Extraction:
 1. Contact lenses are critical. Read lens powers/graduations exactly when present (examples: -1.50, +2.25, -03.00, ADD LOW, BC/DIA values), but do not treat different powers as different base products.
 2. Return compact JSON with these exact keys only:
    p=providerName, d=date, n=invoiceNumber, t=invoice total, l=line array.
@@ -483,7 +507,10 @@ IMPORTANT Rules for Item Extraction:
 4. unitPrice is the price per unit/box from the invoice line. Preserve decimals exactly.
 5. Group only when b, g and u are the same. Do not merge different graduations, but keep b equal.
 6. Date Format: MUST be in YYYY-MM-DD. If this page has no header/date/total, use empty strings and 0 for missing header values.
-7. Return JSON only. No markdown. Keep descriptions concise but identifiable.',
+7. Return JSON only. No markdown. Keep descriptions concise but identifiable.";
+
+            $parts[] = [
+                'text' => $promptText,
             ];
 
             $payload = [
@@ -1659,6 +1686,191 @@ Pregunta:
                     'alerts' => $alerts
                 ]);
             }
+            break;
+
+        case 'getProviders':
+            asegurarTablaFacturasProviders($pdo);
+            // 1. Obtener proveedores con facturas
+            $auditsStmt = $pdo->query("SELECT DISTINCT `provider` FROM `facturas_audits` WHERE `provider` IS NOT NULL AND `provider` != ''");
+            $uploadedProviders = $auditsStmt->fetchAll(PDO::FETCH_COLUMN);
+
+            // 2. Obtener proveedores de la tabla config
+            $providersStmt = $pdo->query("SELECT * FROM `facturas_providers`");
+            $savedProviders = $providersStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            $savedMap = [];
+            foreach ($savedProviders as $p) {
+                $savedMap[$p['name']] = $p;
+            }
+
+            $list = [];
+            $allUniqueNames = array_unique(array_merge($uploadedProviders, array_keys($savedMap)));
+            sort($allUniqueNames);
+
+            // 3. Contar facturas por proveedor
+            $countsStmt = $pdo->query("SELECT `provider`, COUNT(*) as count FROM `facturas_audits` GROUP BY `provider`");
+            $counts = $countsStmt->fetchAll(PDO::FETCH_KEY_PAIR);
+
+            foreach ($allUniqueNames as $name) {
+                $saved = $savedMap[$name] ?? null;
+                $list[] = [
+                    'id' => $saved ? $saved['id'] : null,
+                    'name' => $name,
+                    'systemDescription' => $saved ? $saved['system_description'] : null,
+                    'extractionRules' => $saved ? $saved['extraction_rules'] : null,
+                    'createdAt' => $saved ? $saved['created_at'] : null,
+                    'updatedAt' => $saved ? $saved['updated_at'] : null,
+                    'invoiceCount' => (int)($counts[$name] ?? 0)
+                ];
+            }
+
+            echo json_encode($list);
+            break;
+
+        case 'studyProviderLayout':
+            if ($method !== 'POST') {
+                throw new Exception('Método no permitido');
+            }
+
+            $data = json_decode(file_get_contents('php://input'), true);
+            $auditId = $data['auditId'] ?? '';
+            if ($auditId === '') {
+                throw new Exception('Falta el ID de auditoría de referencia');
+            }
+
+            $stmt = $pdo->prepare("SELECT `ocr_text`, `provider` FROM `facturas_audits` WHERE `id` = ?");
+            $stmt->execute([$auditId]);
+            $audit = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$audit) {
+                throw new Exception('Auditoría de referencia no encontrada');
+            }
+
+            $providerName = trim($audit['provider']);
+            if ($providerName === '') {
+                throw new Exception('La factura de referencia no tiene asignado un nombre de proveedor');
+            }
+
+            $textContext = trim($audit['ocr_text']);
+            $parts = [];
+
+            if ($textContext !== '') {
+                // Limitar tamaño de texto para Gemini
+                $textForGemini = function_exists('mb_substr') ? mb_substr($textContext, 0, 40000) : substr($textContext, 0, 40000);
+                $parts[] = ['text' => "OCR text of the invoice:\n" . $textForGemini];
+            } else {
+                // Intentar buscar la primera página en imagen
+                asegurarTablaFacturasPages($pdo);
+                $pageStmt = $pdo->prepare("SELECT `image_path` FROM `facturas_pages` WHERE `audit_id` = ? AND `page_number` = 1");
+                $pageStmt->execute([$auditId]);
+                $imageRelPath = $pageStmt->fetchColumn();
+
+                if ($imageRelPath) {
+                    $imagePath = rutaFacturaDesdePath($imageRelPath);
+                    if ($imagePath && is_file($imagePath)) {
+                        $mimeType = mime_content_type($imagePath) ?: 'image/jpeg';
+                        $base64 = base64_encode(file_get_contents($imagePath));
+                        $parts[] = [
+                            'inlineData' => [
+                                'data' => $base64,
+                                'mimeType' => $mimeType,
+                            ],
+                        ];
+                    }
+                }
+            }
+
+            if (empty($parts)) {
+                throw new Exception('No hay texto OCR ni imagen de página disponible para esta factura');
+            }
+
+            $prompt = "Analyze the layout and format of this invoice from the provider '{$providerName}'.
+Your goal is to study how this document is structured so that we can accurately extract data from it in the future.
+Analyze:
+1. The overall structure of the document (header, lines table, footer).
+2. The format of the line items. Do they have a code/SKU? Is it in brackets like [MBR001] or somewhere else? Where are quantities and prices?
+3. How patient names, order IDs, or delivery note numbers (albaranes) are embedded inside or near the line descriptions, so we know how to isolate the actual product description.
+4. The number and date formats used.
+
+Based on this, return a JSON object with:
+1. 'system_description': A clear summary in Spanish (max 150 words) explaining the invoice format, how lines are structured, how SKUs are represented, and what patterns are used for dynamic customer or patient information.
+2. 'extraction_rules': A concise set of extraction instructions in English (2-3 sentences) detailing how to identify items, extract SKUs, clean descriptions, and locate unit prices specifically for this provider.
+
+Return ONLY the raw JSON object conforming to this schema (no markdown formatting):
+{
+  \"system_description\": \"...\",
+  \"extraction_rules\": \"...\"
+}";
+            $parts[] = ['text' => $prompt];
+
+            $payload = [
+                'contents' => [[
+                    'parts' => $parts,
+                ]],
+                'generationConfig' => [
+                    'responseMimeType' => 'application/json',
+                    'responseSchema' => [
+                        'type' => 'OBJECT',
+                        'properties' => [
+                            'system_description' => ['type' => 'STRING'],
+                            'extraction_rules' => ['type' => 'STRING']
+                        ],
+                        'required' => ['system_description', 'extraction_rules']
+                    ],
+                    'temperature' => 0.1,
+                    'maxOutputTokens' => 2048,
+                ],
+            ];
+
+            $responseText = geminiResponseText(geminiGenerateContent($payload));
+            $result = decodificarJsonGemini($responseText);
+
+            if (!is_array($result) || empty($result['system_description'])) {
+                throw new Exception('Gemini no ha devuelto un análisis válido para el proveedor');
+            }
+
+            asegurarTablaFacturasProviders($pdo);
+            $id = uniqid('prov_');
+            $saveStmt = $pdo->prepare("INSERT INTO `facturas_providers` (`id`, `name`, `system_description`, `extraction_rules`)
+                VALUES (?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    `system_description` = VALUES(`system_description`),
+                    `extraction_rules` = VALUES(`extraction_rules`)");
+            $saveStmt->execute([$id, $providerName, $result['system_description'], $result['extraction_rules']]);
+
+            echo json_encode([
+                'status' => 'success',
+                'id' => $id,
+                'name' => $providerName,
+                'systemDescription' => $result['system_description'],
+                'extractionRules' => $result['extraction_rules']
+            ]);
+            break;
+
+        case 'saveProviderConfig':
+            if ($method !== 'POST') {
+                throw new Exception('Método no permitido');
+            }
+
+            $data = json_decode(file_get_contents('php://input'), true);
+            $name = trim($data['name'] ?? '');
+            $systemDescription = trim($data['systemDescription'] ?? '');
+            $extractionRules = trim($data['extractionRules'] ?? '');
+
+            if ($name === '') {
+                throw new Exception('Falta el nombre del proveedor');
+            }
+
+            asegurarTablaFacturasProviders($pdo);
+            $id = !empty($data['id']) ? $data['id'] : uniqid('prov_');
+            $stmt = $pdo->prepare("INSERT INTO `facturas_providers` (`id`, `name`, `system_description`, `extraction_rules`)
+                VALUES (?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    `system_description` = VALUES(`system_description`),
+                    `extraction_rules` = VALUES(`extraction_rules`)");
+            $stmt->execute([$id, $name, $systemDescription, $extractionRules]);
+
+            echo json_encode(['status' => 'success']);
             break;
 
         default:

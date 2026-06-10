@@ -179,3 +179,13 @@ export interface SchemaStatus {
   schemaFile: string;
   geminiConfigured: boolean;
 }
+
+export interface Provider {
+  id: string | null;
+  name: string;
+  systemDescription: string | null;
+  extractionRules: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  invoiceCount: number;
+}

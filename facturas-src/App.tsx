@@ -1,7 +1,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { HashRouter, Routes, Route, NavLink } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, ShieldCheck, History, Cloud, HardDrive, Package, AlertTriangle, Bot, ServerCog } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, ShieldCheck, History, Cloud, HardDrive, Package, AlertTriangle, Bot, ServerCog, Building2 } from 'lucide-react';
 import DashboardPage from './pages/DashboardPage';
 import InventoryPage from './pages/InventoryPage';
 import AuditPage from './pages/AuditPage';
@@ -10,6 +10,7 @@ import FamiliesPage from './pages/FamiliesPage';
 import AlertsPage from './pages/AlertsPage';
 import AssistantPage from './pages/AssistantPage';
 import SystemPage from './pages/SystemPage';
+import ProvidersPage from './pages/ProvidersPage';
 import { db } from './db';
 import { SchemaStatus } from './types';
 
@@ -108,6 +109,13 @@ const App: React.FC = () => {
               <ServerCog className="w-5 h-5" />
               Sistema
             </NavLink>
+            <NavLink
+              to="/providers"
+              className={({ isActive }) => `flex items-center gap-3 p-3 rounded-lg transition-colors ${isActive ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-50'}`}
+            >
+              <Building2 className="w-5 h-5" />
+              Proveedores
+            </NavLink>
           </nav>
 
           {/* Database Status */}
@@ -157,6 +165,7 @@ const App: React.FC = () => {
             <Route path="/alerts" element={<AlertsPage />} />
             <Route path="/assistant" element={<AssistantPage />} />
             <Route path="/system" element={<SystemPage />} />
+            <Route path="/providers" element={<ProvidersPage />} />
           </Routes>
         </main>
       </div>

@@ -1,5 +1,5 @@
 
-import { Product, AuditRecord, ProductFamily, PriceHistory, Alert, AssistantContext, SchemaStatus, UploadedInvoiceFile, UploadedInvoicePage } from './types';
+import { Product, AuditRecord, ProductFamily, PriceHistory, Alert, AssistantContext, SchemaStatus, UploadedInvoiceFile, UploadedInvoicePage, Provider } from './types';
 
 const API_URL = '../pedidos/api/facturas.php';
 
@@ -463,5 +463,38 @@ export const db = {
       priceHistory: data.price_history || [],
       retrieval: data.retrieval
     };
+  },
+
+  async getProviders(): Promise<Provider[]> {
+    try {
+      const response = await fetch(`${API_URL}?action=getProviders`);
+      if (!response.ok) throw new Error('Error loading providers');
+      return await response.json();
+    } catch (error) {
+      console.error("Error fetching providers:", error);
+      return [];
+    }
+  },
+
+  async studyProviderLayout(auditId: string): Promise<any> {
+    const response = await fetch(`${API_URL}?action=studyProviderLayout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ auditId })
+    });
+    const result = await parseApiJson(response, 'Error estudiando el formato de factura');
+    if (!response.ok) {
+      throw new Error(result.error || 'Error estudiando el formato de factura');
+    }
+    return result;
+  },
+
+  async saveProviderConfig(provider: Partial<Provider>): Promise<void> {
+    const response = await fetch(`${API_URL}?action=saveProviderConfig`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(provider)
+    });
+    if (!response.ok) throw new Error('Error saving provider configuration');
   }
 };
