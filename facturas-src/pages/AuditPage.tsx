@@ -25,14 +25,19 @@ const defaultProcessingStep: ProcessingStep = {
 };
 
 const extractionModes = {
+  disabled: {
+    label: '0 páginas · Sin IA',
+    description: 'Recomendado. Usa texto y reglas locales. No consume créditos de Gemini.',
+    aiPages: 0,
+  },
   economy: {
-    label: 'Primeras 2 páginas',
-    description: 'Menos coste y más rápido. Suficiente para facturas cortas.',
+    label: '2 páginas · Respaldo IA',
+    description: 'Solo se usa si el parser local no reconoce la factura.',
     aiPages: 2,
   },
   complete: {
-    label: 'Todas hasta 8 páginas',
-    description: 'Más coste. Útil si la factura tiene líneas repartidas en varias páginas.',
+    label: 'Hasta 8 páginas · Respaldo IA',
+    description: 'Mayor coste. Solo para PDFs escaneados o facturas difíciles.',
     aiPages: 8,
   },
 };
@@ -46,13 +51,18 @@ const modelLabel = (model: InvoiceAiModel) => model === 'gemini-2.5-flash-lite' 
 
 const mergeInvoicePages = (pages: InvoiceData[]): InvoiceData => {
   const firstWithHeader = pages.find(page => page.providerName || page.invoiceNumber || page.date) || pages[0];
-  const totalFromLastPage = [...pages].reverse().find(page => Number(page.total || 0) > 0)?.total || 0;
+  const fiscalSummary = [...pages].reverse().find(page => page.hasFiscalSummary)
+    || [...pages].reverse().find(page => Number(page.total || 0) > 0);
 
   return {
     providerName: firstWithHeader?.providerName || 'Proveedor sin detectar',
     date: firstWithHeader?.date || new Date().toISOString().split('T')[0],
     invoiceNumber: firstWithHeader?.invoiceNumber || 'S/N',
-    total: totalFromLastPage,
+    subtotal: fiscalSummary?.subtotal || 0,
+    taxTotal: fiscalSummary?.taxTotal || 0,
+    taxes: fiscalSummary?.taxes || [],
+    hasFiscalSummary: Boolean(fiscalSummary?.hasFiscalSummary),
+    total: fiscalSummary?.total || 0,
     items: pages.flatMap(page => page.items || []),
   };
 };
@@ -157,7 +167,7 @@ const AuditPage: React.FC = () => {
   const [processingStartedAt, setProcessingStartedAt] = useState<number | null>(null);
   const [processingElapsedTick, setProcessingElapsedTick] = useState(0);
   const [selectedModel, setSelectedModel] = useState<InvoiceAiModel>('gemini-2.5-flash');
-  const [extractionMode, setExtractionMode] = useState<'economy' | 'complete'>('economy');
+  const [extractionMode, setExtractionMode] = useState<'disabled' | 'economy' | 'complete'>('disabled');
   const [saveVisualSources, setSaveVisualSources] = useState(true);
   const [auditResult, setAuditResult] = useState<AuditRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -221,6 +231,12 @@ const AuditPage: React.FC = () => {
         : [];
       const usableTextPages = textPages.filter(page => page.text.length > 80);
       const shouldUseTextExtraction = usableTextPages.length > 0;
+      if (file.type !== 'application/pdf' && selectedExtractionMode.aiPages === 0) {
+        throw new Error('Las imágenes necesitan visión IA para poder leerlas. Selecciona “2 páginas · Respaldo IA” o sube un PDF con texto.');
+      }
+      if (file.type === 'application/pdf' && !shouldUseTextExtraction && selectedExtractionMode.aiPages === 0) {
+        throw new Error('Este PDF no contiene texto seleccionable. Activa el respaldo IA para leerlo como imagen.');
+      }
       const pagesForAiRender = !shouldUseTextExtraction && file.type === 'application/pdf'
         ? await renderPdfPageImages(file, selectedExtractionMode.aiPages, ({ pageNumber, pageCount, totalPages }) => {
           setProcessingStep({
@@ -261,6 +277,9 @@ const AuditPage: React.FC = () => {
           extracted = parsedFromText;
           extractionMethod = 'texto_pdf_sin_ia';
         } else {
+          if (selectedExtractionMode.aiPages === 0) {
+            throw new Error('No se han reconocido líneas con el parser local. Activa el respaldo IA para esta factura o revisa el PDF.');
+          }
           setProcessingStep({
             key: 'extracting',
             label: 'Extrayendo datos con Gemini',
@@ -368,7 +387,8 @@ const AuditPage: React.FC = () => {
         invoiceNumber: extracted.invoiceNumber || 'S/N',
         lines: auditLines,
         totalInvoice: extracted.total,
-        invoiceSubtotal: extracted.items.reduce((sum, item) => sum + Number(item.total || 0), 0),
+        invoiceSubtotal: extracted.subtotal || extracted.items.reduce((sum, item) => sum + Number(item.total || 0), 0),
+        taxTotal: extracted.taxTotal || 0,
         globalStatus: 'in_review',
         pdfPath: uploadedFile.path,
         pages: uploadedPages,
@@ -776,9 +796,10 @@ const AuditPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-7 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-8 gap-4">
           <SummaryCard label="Total factura" value={`${summary.invoiceTotal.toFixed(2)}€`} tone="indigo" />
           <SummaryCard label="Subtotal líneas" value={`${summary.compareTotal.toFixed(2)}€`} tone="slate" />
+          <SummaryCard label="IVA" value={`${Number(auditResult.taxTotal || 0).toFixed(2)}€`} tone="slate" />
           <SummaryCard label="Total líneas" value={`${summary.detectedTotal.toFixed(2)}€`} tone={Math.abs(summary.detectedTotal - summary.compareTotal) > 0.05 ? 'amber' : 'slate'} />
           <SummaryCard label="Líneas" value={summary.lines.toString()} tone="slate" />
           <SummaryCard label="Unidades" value={summary.units.toString()} tone="slate" />
@@ -921,13 +942,13 @@ const AuditPage: React.FC = () => {
         <p className="text-slate-500 font-bold">{file ? file.name : 'Haz clic para seleccionar archivo'}</p>
       </div>
       <div className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-sm space-y-5">
-        <div>
-          <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Modo de procesado</p>
+        <div className={extractionMode === 'disabled' ? 'opacity-50' : ''}>
+          <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Modelo de respaldo IA</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <button
               type="button"
               onClick={() => setSelectedModel('gemini-2.5-flash')}
-              disabled={isProcessing}
+              disabled={isProcessing || extractionMode === 'disabled'}
               className={`rounded-2xl border p-4 text-left transition-all ${selectedModel === 'gemini-2.5-flash' ? 'border-indigo-200 bg-indigo-50 text-indigo-800' : 'border-slate-100 bg-slate-50 text-slate-600 hover:bg-white'}`}
             >
               <span className="block text-sm font-black">Normal</span>
@@ -936,7 +957,7 @@ const AuditPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setSelectedModel('gemini-2.5-flash-lite')}
-              disabled={isProcessing}
+              disabled={isProcessing || extractionMode === 'disabled'}
               className={`rounded-2xl border p-4 text-left transition-all ${selectedModel === 'gemini-2.5-flash-lite' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-100 bg-slate-50 text-slate-600 hover:bg-white'}`}
             >
               <span className="block text-sm font-black">Flash-Lite</span>
@@ -950,10 +971,11 @@ const AuditPage: React.FC = () => {
             <span className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Páginas con IA</span>
             <select
               value={extractionMode}
-              onChange={(event) => setExtractionMode(event.target.value as 'economy' | 'complete')}
+              onChange={(event) => setExtractionMode(event.target.value as 'disabled' | 'economy' | 'complete')}
               disabled={isProcessing}
               className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-black text-slate-700 outline-none focus:border-indigo-300"
             >
+              <option value="disabled">{extractionModes.disabled.label}</option>
               <option value="economy">{extractionModes.economy.label}</option>
               <option value="complete">{extractionModes.complete.label}</option>
             </select>

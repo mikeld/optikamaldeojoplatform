@@ -73,6 +73,10 @@ export interface InvoiceData {
   date: string;
   invoiceNumber: string;
   items: InvoiceItem[];
+  subtotal?: number;
+  taxTotal?: number;
+  taxes?: Array<{ rate: number; base: number; amount: number }>;
+  hasFiscalSummary?: boolean;
   total: number;
 }
 
@@ -118,6 +122,7 @@ export interface AuditRecord {
   lines: AuditLine[];
   totalInvoice: number;
   invoiceSubtotal?: number;
+  taxTotal?: number;
   globalStatus: AuditStatus;
   pdfPath?: string | null;
   ocrText?: string | null;

@@ -6,6 +6,7 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 require_once '../../includes/auth_class.php';
 require_once '../includes/conexion.php';
+require_once '../includes/invoice_text_parser.php';
 
 Auth::verificarRolesJson([Auth::ROL_ADMIN, Auth::ROL_ENCARGADO]);
 
@@ -72,7 +73,7 @@ function facturasSchemaRequerido() {
     return [
         'facturas_product_families' => ['id', 'family_name', 'base_price', 'regex_pattern', 'product_type', 'provider', 'notes', 'created_at', 'updated_at'],
         'facturas_products' => ['id', 'sku', 'name', 'family_id', 'graduation', 'expected_price', 'vat', 'provider', 'last_updated'],
-        'facturas_audits' => ['id', 'created_at', 'invoice_date', 'provider', 'invoice_number', 'total_invoice', 'global_status', 'lines', 'pdf_path', 'ocr_text', 'alert_count', 'critical_alert_count', 'reviewed_by', 'reviewed_at', 'notes'],
+        'facturas_audits' => ['id', 'created_at', 'invoice_date', 'provider', 'invoice_number', 'invoice_subtotal', 'tax_total', 'total_invoice', 'global_status', 'lines', 'pdf_path', 'ocr_text', 'alert_count', 'critical_alert_count', 'reviewed_by', 'reviewed_at', 'notes'],
         'facturas_pages' => ['id', 'audit_id', 'page_number', 'image_path', 'mime_type', 'width', 'height', 'created_at'],
         'facturas_price_history' => ['id', 'product_id', 'old_price', 'new_price', 'change_date', 'reason', 'changed_by', 'invoice_id'],
         'facturas_alerts' => ['id', 'audit_id', 'line_number', 'alert_type', 'severity', 'product_sku', 'product_name', 'expected_value', 'actual_value', 'difference', 'difference_percent', 'status', 'resolution_action', 'resolved_at', 'created_at']
@@ -120,6 +121,22 @@ function asegurarTablaFacturasPages($pdo) {
         UNIQUE KEY `unique_audit_page` (`audit_id`, `page_number`),
         INDEX `idx_audit_id` (`audit_id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+}
+
+function asegurarColumnasResumenFacturas($pdo) {
+    $database = $pdo->query('SELECT DATABASE()')->fetchColumn();
+    $stmt = $pdo->prepare("SELECT COLUMN_NAME
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'facturas_audits'");
+    $stmt->execute([$database]);
+    $columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+    if (!in_array('invoice_subtotal', $columns, true)) {
+        $pdo->exec("ALTER TABLE `facturas_audits` ADD COLUMN `invoice_subtotal` DECIMAL(10, 2) DEFAULT 0.00 AFTER `invoice_number`");
+    }
+    if (!in_array('tax_total', $columns, true)) {
+        $pdo->exec("ALTER TABLE `facturas_audits` ADD COLUMN `tax_total` DECIMAL(10, 2) DEFAULT 0.00 AFTER `invoice_subtotal`");
+    }
 }
 
 function nombreSeguroFactura($name) {
@@ -381,118 +398,11 @@ function normalizarFacturaExtraida($invoice) {
     return $invoice;
 }
 
-function numeroFacturaTexto($value) {
-    $value = trim((string)$value);
-    $value = str_replace(["\xc2\xa0", ' '], '', $value);
-    $value = str_replace('.', '', $value);
-    $value = str_replace(',', '.', $value);
-    if ($value === '' || $value === '-') {
-        return 0.0;
-    }
-    return (float)$value;
-}
-
-function fechaFacturaTexto($value) {
-    $value = trim((string)$value);
-    if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $value, $matches)) {
-        return $matches[3] . '-' . $matches[2] . '-' . $matches[1];
-    }
-    return $value;
-}
-
-function baseProductoFacturaTexto($description) {
-    $base = trim((string)$description);
-    $base = preg_replace('/^\[[^\]]+\]\s*/', '', $base);
-    $base = preg_replace('/\|.*$/', '', $base);
-    $base = preg_replace('/\s+Pedido\s+BOD.*$/i', '', $base);
-    $base = preg_replace('/\s+Paciente:.*$/i', '', $base);
-    $base = preg_replace('/\s+\[[A-Z]{2}\].*$/u', '', $base);
-    $base = preg_replace('/\s+\((?:[+-]?\d+[,.]\d+|ADD|LOW|HIGH|MED|,\s*|-|\+|\d+)+\).*$/iu', '', $base);
-    $base = preg_replace('/\s+[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ\s.-]+-\d{8}$/u', '', $base);
-    $base = preg_replace('/\s+OTHER\s+-\s+[A-Z0-9]+\s+-.*$/i', '', $base);
-    $base = preg_replace('/\s+OTHER\s+Edging.*$/i', '', $base);
-    $base = preg_replace('/\s+PRECAL.*$/i', '', $base);
-    $base = trim(preg_replace('/\s+/', ' ', $base));
-    return $base !== '' ? $base : trim((string)$description);
-}
-
-function graduacionFacturaTexto($description) {
-    $description = (string)$description;
-    if (preg_match('/\(([^)]*(?:[+-]\d+[,.]\d+|ADD|LOW|HIGH|MED)[^)]*)\)/iu', $description, $matches)) {
-        return trim($matches[1]);
-    }
-    if (preg_match('/OJO\s+(?:DERECHO|IZQUIERDO)\s+-\s+([^|]+?)(?:\s+ANTIREFLEX|\s+OTHER|\s+PCS|$)/iu', $description, $matches)) {
-        return trim($matches[1]);
-    }
-    return '';
-}
-
-function limpiarDescripcionFacturaTexto($description) {
-    $description = trim((string)$description);
-    $description = preg_replace('/^Factura\s+[A-Z0-9\/.-]+\s+/iu', '', $description);
-    $description = preg_replace('/^(?:DESCRIPCI[ÓO]N\s+CANTIDAD\s+PRECIO\s+DESC\.\s+\(%\)\s+IMPUESTOS\s+IMPORTE\s*)+/iu', '', $description);
-    $description = preg_replace('/^Subtotal:\s*[-\d,.]+\s*€?\s*/iu', '', $description);
-    $description = preg_replace('/^Albarán:\s*\d{2}\/\d{2}\/\d{4}\s+[A-Z]\/OUT\/\d+\s+Pedido:\s*\[[^\]]+\]\s+Cliente:\s*\d+\s*/iu', '', $description);
-    $description = preg_replace('/^\(MALDEOJO.*$/iu', '', $description);
-    return trim(preg_replace('/\s+/', ' ', $description));
-}
-
-function extraerFacturaDesdeTextoPlano($textContent, $pageNumber = null) {
-    $text = trim(preg_replace('/\s+/', ' ', (string)$textContent));
-    $invoice = [
-        'providerName' => '',
-        'date' => '',
-        'invoiceNumber' => '',
-        'items' => [],
-        'total' => 0.0,
-    ];
-
-    if (stripos($text, 'VISIONIS') !== false) {
-        $invoice['providerName'] = 'VISIONIS DISTRIBUCIÓN S.L';
-    } elseif (preg_match('/([A-ZÁÉÍÓÚÑ0-9][A-ZÁÉÍÓÚÑ0-9 .,&-]{4,}(?:S\.L\.|S\.A\.|SL|SA))/u', $text, $matches)) {
-        $invoice['providerName'] = trim($matches[1]);
-    }
-
-    if (preg_match('/Factura\s+([A-Z0-9\/.-]+)/iu', $text, $matches)) {
-        $invoice['invoiceNumber'] = trim($matches[1]);
-    }
-    if (preg_match('/Fecha\s+de\s+factura:\s*(\d{2}\/\d{2}\/\d{4})/iu', $text, $matches)) {
-        $invoice['date'] = fechaFacturaTexto($matches[1]);
-    }
-    if (preg_match('/\bTotal\s*:?\s*([-\d., ]+)\s*€/iu', $text, $matches)) {
-        $invoice['total'] = numeroFacturaTexto($matches[1]);
-    }
-
-    $pattern = '/(.{2,420}?)\s+(\d+(?:[,.]\d+)?)\s+Ud\(s\)\s+(-?\s?\d+(?:[,.]\d{2})|-)\s+(-?\s?\d+(?:[,.]\d{2}))\s+IVA\s+\d+%\s+(-?\s?\d+(?:[,.]\d{2}))\s*€/iu';
-    if (preg_match_all($pattern, $text, $matches, PREG_SET_ORDER)) {
-        foreach ($matches as $idx => $match) {
-            $description = limpiarDescripcionFacturaTexto($match[1]);
-            if ($description === '' || stripos($description, 'VISIONIS DISTRIBUCIÓN') !== false) {
-                continue;
-            }
-            $quantity = numeroFacturaTexto($match[2]);
-            $unitPrice = numeroFacturaTexto($match[3]);
-            $lineTotal = numeroFacturaTexto($match[5]);
-
-            $invoice['items'][] = [
-                'id' => 'text-' . ($pageNumber ?: 'p') . '-' . ($idx + 1),
-                'description' => $description,
-                'baseProductName' => baseProductoFacturaTexto($description),
-                'graduation' => graduacionFacturaTexto($description),
-                'quantity' => $quantity,
-                'unitPrice' => $unitPrice,
-                'total' => $lineTotal,
-            ];
-        }
-    }
-
-    return $invoice;
-}
-
 try {
     switch ($action) {
         case 'getSchemaStatus':
             asegurarTablaFacturasPages($pdo);
+            asegurarColumnasResumenFacturas($pdo);
             echo json_encode(diagnosticarSchemaFacturas($pdo));
             break;
 
@@ -542,7 +452,7 @@ try {
             }
 
             if ($textContent !== '') {
-                $parsedInvoice = extraerFacturaDesdeTextoPlano($textContent, $pageNumber);
+                $parsedInvoice = extractInvoiceFromPlainText($textContent, $pageNumber);
                 if ($parserOnly || !empty($parsedInvoice['items'])) {
                     echo json_encode($parsedInvoice);
                     break;
@@ -830,6 +740,7 @@ Pregunta:
         // ============================================================
         
         case 'getAudits':
+            asegurarColumnasResumenFacturas($pdo);
             $stmt = $pdo->query("SELECT * FROM `facturas_audits` ORDER BY `created_at` DESC");
             $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
             foreach ($results as &$row) {
@@ -1221,6 +1132,7 @@ Pregunta:
 
         case 'saveAudit':
             if ($method === 'POST') {
+                asegurarColumnasResumenFacturas($pdo);
                 $data = json_decode(file_get_contents('php://input'), true);
                 $globalStatus = normalizarEstadoAuditoria($data['globalStatus'] ?? 'pending');
                 $reviewedBy = $data['reviewedBy'] ?? null;
@@ -1241,10 +1153,12 @@ Pregunta:
                 }
 
                 $stmt = $pdo->prepare("INSERT INTO `facturas_audits` 
-                    (`id`, `invoice_date`, `provider`, `invoice_number`, `total_invoice`, `global_status`, `lines`,
+                    (`id`, `invoice_date`, `provider`, `invoice_number`, `invoice_subtotal`, `tax_total`, `total_invoice`, `global_status`, `lines`,
                      `pdf_path`, `ocr_text`, `alert_count`, `critical_alert_count`, `reviewed_by`, `reviewed_at`, `notes`)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON DUPLICATE KEY UPDATE 
+                        `invoice_subtotal`=VALUES(`invoice_subtotal`),
+                        `tax_total`=VALUES(`tax_total`),
                         `total_invoice`=VALUES(`total_invoice`), 
                         `global_status`=VALUES(`global_status`), 
                         `lines`=VALUES(`lines`),
@@ -1262,6 +1176,8 @@ Pregunta:
                     $data['invoiceDate'],
                     $data['provider'],
                     $data['invoiceNumber'],
+                    $data['invoiceSubtotal'] ?? 0,
+                    $data['taxTotal'] ?? 0,
                     $data['totalInvoice'],
                     $globalStatus,
                     json_encode($data['lines'] ?? []),

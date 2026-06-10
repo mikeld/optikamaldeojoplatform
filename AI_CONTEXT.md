@@ -50,6 +50,8 @@ Docs largas:
 - MySQL como fuente central.
 - Gemini se llama desde backend PHP, nunca desde frontend.
 - PDF.js se carga bajo demanda para renderizar PDFs antes de mandar imagenes optimizadas a Gemini.
+- El parser de texto comun vive en `pedidos/includes/invoice_text_parser.php`.
+- Las pruebas del parser viven en `pedidos/tests/invoice_text_parser_test.php`.
 
 Rutas:
 
@@ -184,7 +186,10 @@ Reglas actuales:
 - PDF se convierte a imagen optimizada para evitar mandar archivos enormes.
 - Cuando el PDF tiene texto seleccionable, se envia texto por pagina antes que imagen. Es mas barato, rapido y estable.
 - En proveedores con texto tabular tipo Visionis, intentar parseo por reglas antes de Gemini. Coste IA: 0 para la extraccion de lineas.
+- La auditoria usa por defecto `0 paginas / Sin IA`. Gemini queda como respaldo manual para PDFs escaneados, imagenes o formatos que el parser local no reconozca.
+- Guardar fuentes visuales es independiente de Gemini: renderiza paginas localmente para aportar evidencia visual al asistente. Consume almacenamiento y tiempo, no creditos IA.
 - En facturas con columnas `PRECIO`, `DESC. (%)` e `IMPORTE`, el total de factura debe cuadrarse con `IMPORTE`, no con `PRECIO`. `PRECIO` sirve para comparar tarifa/catalogo; `IMPORTE` es lo realmente facturado tras descuentos y bonos.
+- La conciliacion fiscal separa subtotal, cuotas de IVA y total. Solo acepta un total final automatico cuando existe un resumen fiscal coherente; no confundir subtotales de albaran con total de factura.
 - Se usan primeras paginas para controlar coste y tiempo.
 - `generationConfig.temperature = 0` en extraccion.
 - `maxOutputTokens` limitado para extraccion/asistente.
@@ -327,6 +332,7 @@ Decision:
 6. Validar:
    - `npm run build` en `facturas-src`
    - `php -l pedidos/api/facturas.php` si se toca API
+   - `php pedidos/tests/invoice_text_parser_test.php` si se toca extraccion de texto
    - `git diff --check`
 7. Desplegar primero a `test`.
 8. Verificar URLs reales con `curl`.

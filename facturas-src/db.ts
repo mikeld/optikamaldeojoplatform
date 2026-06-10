@@ -197,6 +197,8 @@ export const db = {
         provider: a.provider,
         invoiceNumber: a.invoice_number,
         totalInvoice: parseFloat(a.total_invoice),
+        invoiceSubtotal: parseFloat(a.invoice_subtotal || 0),
+        taxTotal: parseFloat(a.tax_total || 0),
         globalStatus: a.global_status as any,
         lines: a.lines,
         pdfPath: a.pdf_path || null,

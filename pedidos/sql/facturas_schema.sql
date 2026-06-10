@@ -35,6 +35,8 @@ CREATE TABLE IF NOT EXISTS `facturas_audits` (
     `invoice_date` DATE,
     `provider` VARCHAR(255),
     `invoice_number` VARCHAR(100),
+    `invoice_subtotal` DECIMAL(10, 2) DEFAULT 0.00,
+    `tax_total` DECIMAL(10, 2) DEFAULT 0.00,
     `total_invoice` DECIMAL(10, 2),
     `global_status` ENUM('pending', 'approved', 'rejected', 'in_review') DEFAULT 'pending',
     `lines` JSON,
