@@ -16,6 +16,8 @@ $pdo = (new Conexion())->pdo;
 $sql = "SELECT lc_gafa_recambio, rx, rx_lineas, pack_tipo 
         FROM pedidos 
         WHERE referencia_cliente = :ref 
+          AND deleted_at IS NULL
+          AND recibido != 3
         ORDER BY fecha_pedido DESC 
         LIMIT 5";
 $stmt = $pdo->prepare($sql);

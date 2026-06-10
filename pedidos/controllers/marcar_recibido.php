@@ -4,20 +4,28 @@ require '../includes/conexion.php';
 
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        $pedido_id = $_POST['pedido_id'] ?? null;
-        $recibido_val = $_POST['recibido_val'] ?? 1; // 1 = Completo, 2 = Parcial
+        $pedido_id = isset($_POST['pedido_id']) ? (int)$_POST['pedido_id'] : 0;
+        $recibido_val = isset($_POST['recibido_val']) ? (int)$_POST['recibido_val'] : 1; // 1 = Completo, 2 = Parcial
         $notas_recepcion = $_POST['notas_recepcion'] ?? '';
         
         if (!$pedido_id) {
             throw new Exception('ID de pedido no válido.');
         }
+        if (!in_array($recibido_val, [0, 1, 2], true)) {
+            throw new Exception('Estado de recepción no válido.');
+        }
         
         $conexion = new Conexion();
 
         // Obtener el tipo de pack y estado actual para preservar las cantidades pedidas
-        $stmtCheck = $conexion->pdo->prepare("SELECT pack_tipo, pack_estado FROM pedidos WHERE id = :id");
+        $stmtCheck = $conexion->pdo->prepare(
+            "SELECT pack_tipo, pack_estado FROM pedidos WHERE id = :id AND deleted_at IS NULL"
+        );
         $stmtCheck->execute([':id' => $pedido_id]);
         $row = $stmtCheck->fetch(PDO::FETCH_ASSOC);
+        if (!$row) {
+            throw new Exception('Pedido no encontrado.');
+        }
 
         $pack_estado_json = $row['pack_estado'] ?? '{}';
         if ($row && $row['pack_tipo']) {
@@ -54,7 +62,7 @@ try {
             $pack_estado_json = json_encode($estadoArr);
         }
 
-        $sql = "UPDATE pedidos SET recibido = :val, notas_recepcion = :notas, pack_estado = :pack WHERE id = :id";
+        $sql = "UPDATE pedidos SET recibido = :val, notas_recepcion = :notas, pack_estado = :pack WHERE id = :id AND deleted_at IS NULL";
         $stmt = $conexion->pdo->prepare($sql);
         $stmt->bindValue(':val',   $recibido_val,    PDO::PARAM_INT);
         $stmt->bindValue(':notas', $notas_recepcion, PDO::PARAM_STR);

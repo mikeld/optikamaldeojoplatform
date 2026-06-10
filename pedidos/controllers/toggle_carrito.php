@@ -17,7 +17,9 @@ try {
     $conexion = new Conexion();
 
     // Leer estado actual
-    $stmt = $conexion->pdo->prepare("SELECT en_carrito FROM pedidos WHERE id = :id AND fecha_pedido IS NULL");
+    $stmt = $conexion->pdo->prepare(
+        "SELECT en_carrito FROM pedidos WHERE id = :id AND fecha_pedido IS NULL AND deleted_at IS NULL"
+    );
     $stmt->execute([':id' => $pedido_id]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -27,7 +29,9 @@ try {
 
     $nuevo_estado = $row['en_carrito'] ? 0 : 1;
 
-    $upd = $conexion->pdo->prepare("UPDATE pedidos SET en_carrito = :val WHERE id = :id");
+    $upd = $conexion->pdo->prepare(
+        "UPDATE pedidos SET en_carrito = :val WHERE id = :id AND fecha_pedido IS NULL AND deleted_at IS NULL"
+    );
     $upd->execute([':val' => $nuevo_estado, ':id' => $pedido_id]);
 
     echo json_encode(['success' => true, 'en_carrito' => $nuevo_estado]);

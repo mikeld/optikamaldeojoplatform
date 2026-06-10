@@ -5,7 +5,7 @@ require '../includes/conexion.php';
 $conexion = new Conexion();
 
 // Recoger y sanear
-$pedido_id           = $_POST['id'];
+$pedido_id           = isset($_POST['id']) ? (int)$_POST['id'] : 0;
 $referencia_cliente  = $_POST['referencia_cliente'];
 $lc_gafa_recambio    = trim($_POST['lc_gafa_recambio']);
 $rx                  = trim($_POST['rx'] ?? '');
@@ -45,6 +45,10 @@ if (!$pedido_id || !$referencia_cliente) {
     header('Location: editar_pedido.php?id=' . $pedido_id);
     exit();
 }
+if (!in_array($recibido, [0, 1, 2, 3], true)) {
+    header('Location: editar_pedido.php?id=' . $pedido_id . '&error=' . urlencode('Estado de pedido no válido'));
+    exit();
+}
 
 // Preparar UPDATE
 $sql = "UPDATE pedidos SET
@@ -62,7 +66,7 @@ $sql = "UPDATE pedidos SET
           observaciones       = :obs,
           notas_recepcion     = :nrec,
           proveedor_id        = :prov
-        WHERE id = :id";
+        WHERE id = :id AND deleted_at IS NULL";
 $stmt = $conexion->pdo->prepare($sql);
 $stmt->bindValue(':ref', $referencia_cliente, PDO::PARAM_STR);
 $stmt->bindValue(':lc',  $lc_gafa_recambio,    PDO::PARAM_STR);

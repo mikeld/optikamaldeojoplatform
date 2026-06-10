@@ -82,6 +82,17 @@ Idea funcional:
 
 No romper el aislamiento por roles al anadir enlaces o nuevas apps.
 
+## Pedidos - Reglas de Calidad
+
+- `recibido = 0`: pendiente.
+- `recibido = 1`: recibido completo / finalizado.
+- `recibido = 2`: recepcion parcial.
+- `recibido = 3`: cancelado.
+- `deleted_at IS NOT NULL`: eliminado logicamente. No debe entrar en listados operativos, busqueda, calendario, estadisticas, acciones AJAX ni sugerencias de ultimos pedidos.
+- Solo `restaurar_pedido.php` debe modificar pedidos eliminados.
+- Las acciones que reciben estado por POST deben limitarlo a valores conocidos, no aceptar enteros arbitrarios.
+- Checklist manual especifico: `pedidos/QA_PEDIDOS.md`.
+
 ## Deploy y Entornos
 
 Repo GitHub:

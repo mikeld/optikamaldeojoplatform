@@ -21,7 +21,7 @@ if (!$pedido_id) {
 }
 
 // Consultar los datos del pedido actual
-$sql = "SELECT * FROM pedidos WHERE id = :id";
+$sql = "SELECT * FROM pedidos WHERE id = :id AND deleted_at IS NULL";
 $stmt = $conexion->pdo->prepare($sql);
 $stmt->bindValue(':id', $pedido_id, PDO::PARAM_INT);
 $stmt->execute();

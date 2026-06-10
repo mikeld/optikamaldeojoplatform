@@ -17,6 +17,9 @@ try {
         "UPDATE pedidos SET recibido = 3, notas_recepcion = :motivo WHERE id = :id AND deleted_at IS NULL"
     );
     $stmt->execute([':motivo' => $motivo, ':id' => $pedido_id]);
+    if ($stmt->rowCount() === 0) {
+        throw new Exception('Pedido no encontrado.');
+    }
 
     echo json_encode(['success' => true]);
 

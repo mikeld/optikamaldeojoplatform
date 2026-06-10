@@ -12,7 +12,7 @@ try {
 
     $conexion = new Conexion();
 
-    $stmt = $conexion->pdo->prepare("SELECT avisado_cliente FROM pedidos WHERE id = :id");
+    $stmt = $conexion->pdo->prepare("SELECT avisado_cliente FROM pedidos WHERE id = :id AND deleted_at IS NULL");
     $stmt->execute([':id' => $pedido_id]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -20,7 +20,7 @@ try {
 
     $forzar = isset($_POST['forzar']) && $_POST['forzar'] === '1';
     $nuevo  = $forzar ? 1 : ($row['avisado_cliente'] ? 0 : 1);
-    $conexion->pdo->prepare("UPDATE pedidos SET avisado_cliente = :val WHERE id = :id")
+    $conexion->pdo->prepare("UPDATE pedidos SET avisado_cliente = :val WHERE id = :id AND deleted_at IS NULL")
         ->execute([':val' => $nuevo, ':id' => $pedido_id]);
 
     echo json_encode(['success' => true, 'avisado' => $nuevo]);
