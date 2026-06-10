@@ -98,6 +98,7 @@ export enum LineStatus {
 export interface AuditLine {
   id: string;
   invoiceDescription: string;
+  baseProductName?: string;
   quantity: number;
   invoiceUnitPrice: number;
   invoiceLineTotal?: number;

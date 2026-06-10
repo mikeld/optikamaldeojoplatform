@@ -190,6 +190,7 @@ Reglas actuales:
 - Guardar fuentes visuales es independiente de Gemini: renderiza paginas localmente para aportar evidencia visual al asistente. Consume almacenamiento y tiempo, no creditos IA.
 - En facturas con columnas `PRECIO`, `DESC. (%)` e `IMPORTE`, el total de factura debe cuadrarse con `IMPORTE`, no con `PRECIO`. `PRECIO` sirve para comparar tarifa/catalogo; `IMPORTE` es lo realmente facturado tras descuentos y bonos.
 - La conciliacion fiscal separa subtotal, cuotas de IVA y total. Solo acepta un total final automatico cuando existe un resumen fiscal coherente; no confundir subtotales de albaran con total de factura.
+- La auditoria agrupa lineas sin catalogo por producto base/precio y permite crear familias sugeridas en bloque. No crear automaticamente bonos, envios ni importes cero/negativos.
 - Se usan primeras paginas para controlar coste y tiempo.
 - `generationConfig.temperature = 0` en extraccion.
 - `maxOutputTokens` limitado para extraccion/asistente.

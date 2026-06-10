@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, FileText, Loader2, CheckCircle2, XCircle, AlertCircle, RefreshCw, Save, ArrowLeft, PlusCircle, Database, Trash2, X, CheckSquare, Edit3, AlertTriangle, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
+import { Upload, FileText, Loader2, CheckCircle2, XCircle, AlertCircle, RefreshCw, Save, ArrowLeft, PlusCircle, Database, Trash2, X, CheckSquare, Edit3, AlertTriangle, ArrowUpCircle, ArrowDownCircle, Layers } from 'lucide-react';
 import { extractInvoiceFile, extractInvoiceText } from '../services/geminiService';
 import { combineRenderedPagesAsJpeg, dataUrlToFile, extractPdfTextPages, renderPdfPageImages } from '../services/pdfPreview';
 import { db } from '../db';
@@ -108,6 +108,50 @@ const extractGraduation = (item: InvoiceItem) => {
   if (item.graduation) return item.graduation;
   const match = item.description.match(/[+-]\s?\d{1,2}([.,]\d{1,2})/);
   return match ? match[0].replace(/\s+/g, '').replace(',', '.') : null;
+};
+
+const regexEscape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const isCatalogCandidate = (line: AuditLine) => {
+  const name = (line.baseProductName || line.invoiceDescription || '').toLowerCase();
+  return line.status === LineStatus.NEW_PRODUCT
+    && line.invoiceUnitPrice > 0
+    && !name.includes('bono')
+    && !name.includes('envío')
+    && !name.includes('envio');
+};
+
+const unknownCatalogGroups = (lines: AuditLine[]) => {
+  const groups = new Map<string, {
+    key: string;
+    name: string;
+    price: number;
+    lineIndexes: number[];
+    units: number;
+    graduations: Set<string>;
+  }>();
+
+  lines.forEach((line, index) => {
+    if (!isCatalogCandidate(line)) return;
+    const name = (line.baseProductName || line.invoiceDescription).trim();
+    const key = `${normalizeLensName(name)}::${line.invoiceUnitPrice.toFixed(2)}`;
+    const current = groups.get(key) || {
+      key,
+      name,
+      price: line.invoiceUnitPrice,
+      lineIndexes: [],
+      units: 0,
+      graduations: new Set<string>(),
+    };
+    current.lineIndexes.push(index);
+    current.units += Number(line.quantity || 0);
+    if (line.graduation) current.graduations.add(line.graduation);
+    groups.set(key, current);
+  });
+
+  return [...groups.values()]
+    .sort((a, b) => b.lineIndexes.length - a.lineIndexes.length)
+    .slice(0, 12);
 };
 
 const matchInvoiceItem = (item: InvoiceItem, products: Product[], families: ProductFamily[]) => {
@@ -365,6 +409,7 @@ const AuditPage: React.FC = () => {
         return {
           id: `line-${idx}-${Date.now()}`,
           invoiceDescription: item.description,
+          baseProductName: item.baseProductName,
           quantity: item.quantity,
           invoiceUnitPrice: item.unitPrice,
           invoiceLineTotal: item.total,
@@ -489,6 +534,48 @@ const AuditPage: React.FC = () => {
     setTempSku('');
   };
 
+  const createSuggestedFamilies = async () => {
+    if (!auditResult) return;
+    const suggestions = unknownCatalogGroups(auditResult.lines).filter(group => group.lineIndexes.length >= 2);
+    if (suggestions.length === 0) {
+      setError('No hay grupos claros para crear en bloque. Usa Vincular en una línea concreta.');
+      return;
+    }
+
+    setIsBulkProcessing(true);
+    try {
+      const lines = [...auditResult.lines];
+      for (const group of suggestions) {
+        const family: ProductFamily = {
+          id: `fam-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          familyName: group.name,
+          basePrice: group.price,
+          regexPattern: regexEscape(group.name),
+          productType: group.graduations.size > 0 ? 'lens' : 'other',
+          provider: auditResult.provider,
+          notes: `Creada desde factura ${auditResult.invoiceNumber}. ${group.lineIndexes.length} líneas agrupadas.`,
+        };
+        const familyId = await db.upsertFamily(family);
+        group.lineIndexes.forEach(index => {
+          const diff = lines[index].invoiceUnitPrice - group.price;
+          lines[index] = {
+            ...lines[index],
+            matchedFamilyId: familyId,
+            matchedFamilyName: group.name,
+            masterProductPrice: group.price,
+            difference: diff,
+            status: Math.abs(diff) < 0.01 ? LineStatus.ACCEPTED : LineStatus.DISCREPANCY,
+          };
+        });
+      }
+      setAuditResult({ ...auditResult, lines });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se han podido crear las familias sugeridas');
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
+
   const saveEditedLine = () => {
     if (activeLineIdx === null || !auditResult || !editLineData) return;
     const lines = [...auditResult.lines];
@@ -571,6 +658,7 @@ const AuditPage: React.FC = () => {
 
   if (auditResult) {
     const summary = invoiceSummary(auditResult);
+    const catalogSuggestions = unknownCatalogGroups(auditResult.lines);
 
     return (
       <div className="space-y-6 max-w-6xl mx-auto pb-20">
@@ -814,6 +902,41 @@ const AuditPage: React.FC = () => {
               Revisa la factura antes de guardarla: hay {summary.unknown} productos sin catálogo, {summary.discrepancies} diferencias de precio
               {Math.abs(summary.detectedTotal - summary.compareTotal) > 0.05 ? ` y el total de líneas detectado no coincide con el subtotal de factura (${summary.detectedTotal.toFixed(2)}€ vs ${summary.compareTotal.toFixed(2)}€).` : '.'}
             </p>
+          </div>
+        )}
+
+        {catalogSuggestions.length > 0 && (
+          <div className="rounded-2xl border border-indigo-100 bg-white p-5 shadow-sm">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <Layers className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide">Familias sugeridas</h3>
+                  <p className="text-xs font-semibold text-slate-500 mt-1">Agrupa productos repetidos por nombre base y precio para no vincular línea a línea.</p>
+                </div>
+              </div>
+              <button
+                onClick={createSuggestedFamilies}
+                disabled={isBulkProcessing}
+                className="px-4 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-black hover:bg-indigo-600 disabled:bg-slate-200 transition-all flex items-center justify-center gap-2"
+              >
+                {isBulkProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlusCircle className="w-4 h-4" />}
+                Crear grupos claros
+              </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              {catalogSuggestions.slice(0, 6).map(group => (
+                <div key={group.key} className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                  <p className="font-black text-slate-800 text-sm line-clamp-2">{group.name}</p>
+                  <p className="mt-2 text-[10px] font-black uppercase text-slate-400">
+                    {group.lineIndexes.length} líneas · {group.units} uds · {group.graduations.size} grad.
+                  </p>
+                  <p className="mt-1 font-mono font-black text-indigo-600">{group.price.toFixed(2)}€</p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
