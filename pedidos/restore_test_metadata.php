@@ -21,16 +21,72 @@ $prodDb = 'u373487989_maldeojo';
 $prodCounts = ['clientes' => 0, 'proveedores' => 0];
 $testCounts = ['clientes' => 0, 'proveedores' => 0];
 
-// Obtener conteos de test y de producción (si hay acceso)
+$debugMsg = '';
+$prodPdo = null;
+
+if ($isTestDb) {
+    // Intentar buscar y cargar el archivo de configuración de producción
+    $possiblePaths = [
+        dirname(__DIR__, 2) . '/includes/db_config.php',
+        dirname(__DIR__, 3) . '/public_html/includes/db_config.php',
+        dirname(__DIR__, 3) . '/httpdocs/includes/db_config.php',
+    ];
+    
+    $foundPath = null;
+    foreach ($possiblePaths as $path) {
+        if (file_exists($path)) {
+            $foundPath = $path;
+            break;
+        }
+    }
+    
+    if ($foundPath) {
+        $content = file_get_contents($foundPath);
+        
+        $matchConstant = function($content, $constName, $default = '') {
+            if (preg_match("/define\(\s*['\"]" . $constName . "['\"]\s*,\s*['\"](.*?)['\"]\s*\)/", $content, $matches)) {
+                return $matches[1];
+            }
+            return $default;
+        };
+        
+        $prodHost = $matchConstant($content, 'DB_HOST');
+        $prodDbName = $matchConstant($content, 'DB_NAME');
+        $prodUser = $matchConstant($content, 'DB_USER');
+        $prodPass = $matchConstant($content, 'DB_PASS');
+        $prodCharset = $matchConstant($content, 'DB_CHARSET', 'utf8mb4');
+        
+        if ($prodHost && $prodDbName && $prodUser && $prodPass) {
+            try {
+                $prodPdo = new PDO("mysql:host=$prodHost;dbname=$prodDbName;charset=$prodCharset", $prodUser, $prodPass);
+                $prodPdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            } catch (PDOException $e) {
+                $debugMsg = "Error conectando a BD producción: " . $e->getMessage();
+            }
+        } else {
+            $debugMsg = "No se pudieron extraer todas las credenciales de producción del archivo configurado.";
+        }
+    } else {
+        $debugMsg = "No se encontró el archivo db_config.php de producción en los directorios esperados.";
+    }
+}
+
+// Obtener conteos de test y de producción
 if ($isTestDb) {
     try {
         $testCounts['clientes'] = (int)$pdo->query("SELECT COUNT(*) FROM `clientes`")->fetchColumn();
         $testCounts['proveedores'] = (int)$pdo->query("SELECT COUNT(*) FROM `proveedores`")->fetchColumn();
-        
-        $prodCounts['clientes'] = (int)$pdo->query("SELECT COUNT(*) FROM `$prodDb`.`clientes`")->fetchColumn();
-        $prodCounts['proveedores'] = (int)$pdo->query("SELECT COUNT(*) FROM `$prodDb`.`proveedores`")->fetchColumn();
     } catch (Exception $e) {
-        // En caso de que falle el acceso cross-db, se manejará en la UI
+        $debugMsg .= ($debugMsg ? ' | ' : '') . "Error al contar tablas de test: " . $e->getMessage();
+    }
+    
+    if ($prodPdo) {
+        try {
+            $prodCounts['clientes'] = (int)$prodPdo->query("SELECT COUNT(*) FROM `clientes`")->fetchColumn();
+            $prodCounts['proveedores'] = (int)$prodPdo->query("SELECT COUNT(*) FROM `proveedores`")->fetchColumn();
+        } catch (Exception $e) {
+            $debugMsg .= ($debugMsg ? ' | ' : '') . "Error al contar tablas de producción: " . $e->getMessage();
+        }
     }
 }
 
@@ -43,20 +99,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isTestDb) {
     if (strtolower($confirmation) !== 'restaurar') {
         $message = "Confirmación incorrecta. Debes escribir la palabra 'RESTAURAR' exactamente.";
         $messageType = "danger";
+    } elseif (!$prodPdo) {
+        $message = "No se puede iniciar la copia porque no se ha establecido conexión con la base de datos de producción. Detalle: " . ($debugMsg ?: 'Archivo config no hallado');
+        $messageType = "danger";
     } else {
         try {
+            // Obtener clientes de prod
+            $stmtProdClients = $prodPdo->query("SELECT * FROM `clientes`");
+            $prodClients = $stmtProdClients->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Obtener proveedores de prod
+            $stmtProdProviders = $prodPdo->query("SELECT * FROM `proveedores`");
+            $prodProviders = $stmtProdProviders->fetchAll(PDO::FETCH_ASSOC);
+            
             $pdo->beginTransaction();
             
             // Desactivar restricciones de claves foráneas
             $pdo->exec("SET FOREIGN_KEY_CHECKS = 0");
             
-            // 1. Clientes
+            // 1. Copiar Clientes
             $pdo->exec("TRUNCATE TABLE `clientes`");
-            $pdo->exec("INSERT INTO `clientes` SELECT * FROM `$prodDb`.`clientes`");
+            if (!empty($prodClients)) {
+                $cols = array_keys($prodClients[0]);
+                $colList = '`' . implode('`, `', $cols) . '`';
+                $placeholders = implode(', ', array_fill(0, count($cols), '?'));
+                $insertStmt = $pdo->prepare("INSERT INTO `clientes` ($colList) VALUES ($placeholders)");
+                foreach ($prodClients as $client) {
+                    $insertStmt->execute(array_values($client));
+                }
+            }
             
-            // 2. Proveedores
+            // 2. Copiar Proveedores
             $pdo->exec("TRUNCATE TABLE `proveedores`");
-            $pdo->exec("INSERT INTO `proveedores` SELECT * FROM `$prodDb`.`proveedores`");
+            if (!empty($prodProviders)) {
+                $cols = array_keys($prodProviders[0]);
+                $colList = '`' . implode('`, `', $cols) . '`';
+                $placeholders = implode(', ', array_fill(0, count($cols), '?'));
+                $insertStmt = $pdo->prepare("INSERT INTO `proveedores` ($colList) VALUES ($placeholders)");
+                foreach ($prodProviders as $provider) {
+                    $insertStmt->execute(array_values($provider));
+                }
+            }
             
             // Activar restricciones de claves foráneas
             $pdo->exec("SET FOREIGN_KEY_CHECKS = 1");
@@ -70,7 +153,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isTestDb) {
             $testCounts['proveedores'] = (int)$pdo->query("SELECT COUNT(*) FROM `proveedores`")->fetchColumn();
             
         } catch (Exception $e) {
-            $pdo->rollBack();
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             $pdo->exec("SET FOREIGN_KEY_CHECKS = 1");
             $message = "❌ Error durante la restauración: " . $e->getMessage();
             $messageType = "danger";
@@ -133,6 +218,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isTestDb) {
             </div>
         </div>
     </div>
+
+    <?php if ($debugMsg && $isTestDb): ?>
+        <div class="alert alert-warning shadow-sm mb-4" role="alert">
+            <i class="fas fa-exclamation-circle me-2"></i> <strong>Detalle técnico (depuración):</strong> <?= htmlspecialchars($debugMsg) ?>
+        </div>
+    <?php endif; ?>
 
     <?php if ($message): ?>
         <div class="alert alert-<?= $messageType ?> shadow-sm mb-4" role="alert">
