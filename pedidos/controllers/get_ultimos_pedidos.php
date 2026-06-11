@@ -26,3 +26,4 @@ $stmt->execute();
 
 $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 echo json_encode($rows);
+// force deploy
