@@ -2091,6 +2091,12 @@ Return ONLY the raw JSON object conforming to this schema (no markdown formattin
                     `extraction_rules` = VALUES(`extraction_rules`)");
             $stmt->execute([$id, $name, $pedidosProviderId, $systemDescription, $extractionRules]);
 
+            // Propagar el enlace de pedidosProviderId a todas las facturas de este proveedor en facturas_audits
+            if ($pedidosProviderId !== null) {
+                $updateAuditsStmt = $pdo->prepare("UPDATE `facturas_audits` SET `pedidos_provider_id` = ? WHERE `provider` = ?");
+                $updateAuditsStmt->execute([$pedidosProviderId, $name]);
+            }
+
             echo json_encode(['status' => 'success']);
             break;
 

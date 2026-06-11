@@ -32,6 +32,21 @@ if ($filtro) {
 }
 
 try {
+    // Intentar asociar de forma retroactiva las facturas con proveedores oficiales si la columna existe
+    try {
+        $pdo->exec("UPDATE `facturas_audits` fa
+                    JOIN `proveedores` p ON LOWER(TRIM(fa.provider)) = LOWER(TRIM(p.nombre))
+                    SET fa.pedidos_provider_id = p.id
+                    WHERE fa.pedidos_provider_id IS NULL");
+
+        $pdo->exec("UPDATE `facturas_audits` fa
+                    JOIN `facturas_providers` fp ON fa.provider = fp.name
+                    SET fa.pedidos_provider_id = fp.pedidos_provider_id
+                    WHERE fa.pedidos_provider_id IS NULL AND fp.pedidos_provider_id IS NOT NULL");
+    } catch (Exception $e) {
+        // Ignorar si las tablas o columnas de facturas no existen todavía
+    }
+
     $stmt = $pdo->prepare("SELECT p.*, COUNT(fa.id) as total_facturas 
                            FROM proveedores p 
                            LEFT JOIN facturas_audits fa ON p.id = fa.pedidos_provider_id 
