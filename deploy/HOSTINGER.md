@@ -81,36 +81,47 @@ bloqueado hacia Hostinger de forma sistemática.
 
 ### Paso 1 — subir upload_receiver.php al servidor (una sola vez)
 
-Sube manualmente `deploy/upload_receiver.php` via el gestor de archivos de Hostinger (hPanel):
+Sube `deploy/upload_receiver.php` tal cual (sin editar) via el gestor de
+archivos de Hostinger (hPanel):
 
 ```
 public_html/upload_receiver.php       ← producción
 public_html/test/upload_receiver.php  ← test
 ```
 
-Edita cada copia y reemplaza la línea:
-
-```php
-$secret = getenv('DEPLOY_UPLOAD_TOKEN') ?: 'REPLACE_WITH_STATIC_TOKEN';
-```
-
-por el token que generaste (ver paso 2). Hostinger shared hosting no pasa
-variables de entorno a PHP, así que el token va hardcodeado en el archivo del servidor.
-
-### Paso 2 — crear secreto DEPLOY_UPLOAD_TOKEN (una sola vez)
+### Paso 2 — crear el token (una sola vez)
 
 ```bash
 openssl rand -hex 32
 ```
 
-Guarda ese valor como secreto de GitHub `DEPLOY_UPLOAD_TOKEN` Y ponlo en
-`upload_receiver.php` en el servidor (paso 1).
+Guarda ese valor en DOS sitios:
+
+1. Secreto de GitHub `DEPLOY_UPLOAD_TOKEN`.
+2. Un fichero `.deploy_token` en cada entorno del servidor, con el token como
+   única línea (sin comillas ni espacios):
+
+```
+public_html/.deploy_token             ← producción
+public_html/test/.deploy_token        ← test
+```
+
+`upload_receiver.php` lee el token de ese fichero. Como `.deploy_token` no
+forma parte del release, **nunca se sobreescribe en los deploys** y no hay que
+volver a editar nada a mano.
 
 ### Seguridad
 
 - Solo acepta POST con token correcto y extensiones `.zip` / `.php`
+- Si `.deploy_token` no existe o está vacío, el endpoint devuelve 403 siempre
 - `unzip.php` usa token de un solo uso y se auto-elimina tras extraer
 - `upload_receiver.php` permanece en el servidor entre deploys (no se auto-elimina)
+
+### Si el deploy falla con 403 en "Upload to Hostinger"
+
+El token de `.deploy_token` en el servidor no coincide con el secreto
+`DEPLOY_UPLOAD_TOKEN` de GitHub. Revisa que el fichero exista en el entorno
+correcto (test o prod) y que contenga el token completo en una sola línea.
 
 Valores esperados:
 
