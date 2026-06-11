@@ -54,10 +54,32 @@ const formatSeconds = (startedAt: number | null) => {
 
 const modelLabel = (model: InvoiceAiModel) => model === 'gemini-2.5-flash-lite' ? 'Flash-Lite' : 'Normal';
 
+// Misma lógica de validación que el backend: la suma de líneas (importe neto)
+// debe coincidir con el total, o quedar por debajo dentro del margen del IVA.
+const computeInvoiceValidation = (items: InvoiceData['items'], declaredTotal: number) => {
+  const linesSum = Math.round(items.reduce((sum, it) => sum + Number(it.total || 0), 0) * 100) / 100;
+  let ok = false;
+  let message = '';
+  if (declaredTotal <= 0) {
+    message = 'La factura no declara total; no se puede validar la suma de líneas.';
+  } else if (Math.abs(linesSum - declaredTotal) <= 0.05) {
+    ok = true;
+  } else if (linesSum < declaredTotal && linesSum >= declaredTotal * 0.75) {
+    ok = true; // diferencia compatible con IVA
+  } else {
+    message = `La suma de líneas (${linesSum.toFixed(2)}€) no cuadra con el total declarado (${declaredTotal.toFixed(2)}€). Revisa si faltan líneas o hay importes mal leídos.`;
+  }
+  return { linesSum, declaredTotal, ok, message };
+};
+
 const mergeInvoicePages = (pages: InvoiceData[]): InvoiceData => {
   const firstWithHeader = pages.find(page => page.providerName || page.invoiceNumber || page.date) || pages[0];
   const fiscalSummary = [...pages].reverse().find(page => page.hasFiscalSummary)
     || [...pages].reverse().find(page => Number(page.total || 0) > 0);
+  const withOfficial = pages.find(page => page.officialProvider?.id);
+
+  const items = pages.flatMap(page => page.items || []);
+  const total = fiscalSummary?.total || 0;
 
   return {
     providerName: firstWithHeader?.providerName || 'Proveedor sin detectar',
@@ -67,8 +89,11 @@ const mergeInvoicePages = (pages: InvoiceData[]): InvoiceData => {
     taxTotal: fiscalSummary?.taxTotal || 0,
     taxes: fiscalSummary?.taxes || [],
     hasFiscalSummary: Boolean(fiscalSummary?.hasFiscalSummary),
-    total: fiscalSummary?.total || 0,
-    items: pages.flatMap(page => page.items || []),
+    total,
+    items,
+    officialProvider: withOfficial?.officialProvider || null,
+    // La validación por página no sirve (cada página solo ve sus líneas): se recalcula sobre el total combinado
+    validation: computeInvoiceValidation(items, total),
   };
 };
 
@@ -230,6 +255,7 @@ const AuditPage: React.FC = () => {
   }, []);
 
   const [auditResult, setAuditResult] = useState<AuditRecord | null>(null);
+  const [extractionWarning, setExtractionWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -436,16 +462,23 @@ const AuditPage: React.FC = () => {
           matchedFamilyName: match?.familyName,
           graduation: extractGraduation(item),
           status: status,
-          difference: match ? item.unitPrice - match.price : 0
+          difference: match ? item.unitPrice - match.price : 0,
+          orderNumber: item.orderNumber || null,
+          orderDate: item.orderDate || null,
+          clientRef: item.clientRef || null
         };
       });
 
+      setExtractionWarning(extracted.validation && !extracted.validation.ok && extracted.validation.message ? extracted.validation.message : null);
       setAuditResult({
         id: `temp-${Date.now()}`,
         createdAt: new Date().toISOString(),
         invoiceDate: extracted.date || new Date().toISOString().split('T')[0],
-        provider: extracted.providerName,
-        pedidosProviderId: selectedProviderId || providers.find(p => p.name.toLowerCase() === (extracted.providerName || '').toLowerCase())?.pedidosProviderId || null,
+        provider: extracted.officialProvider?.name || extracted.providerName,
+        pedidosProviderId: selectedProviderId
+          || extracted.officialProvider?.id
+          || providers.find(p => p.name.toLowerCase() === (extracted.providerName || '').toLowerCase())?.pedidosProviderId
+          || null,
         invoiceNumber: extracted.invoiceNumber || 'S/N',
         lines: auditLines,
         totalInvoice: extracted.total,
@@ -913,6 +946,15 @@ const AuditPage: React.FC = () => {
           <SummaryCard label="Diferencias" value={summary.discrepancies.toString()} tone={summary.discrepancies > 0 ? 'rose' : 'emerald'} />
         </div>
 
+        {extractionWarning && (
+          <div className="rounded-2xl border border-rose-100 bg-rose-50 px-5 py-4 text-rose-800 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
+            <p className="text-sm font-bold leading-relaxed">
+              Aviso de extracción IA: {extractionWarning}
+            </p>
+          </div>
+        )}
+
         {(summary.unknown > 0 || summary.discrepancies > 0 || Math.abs(summary.detectedTotal - summary.compareTotal) > 0.05) && (
           <div className="rounded-2xl border border-amber-100 bg-amber-50 px-5 py-4 text-amber-800 flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
@@ -982,6 +1024,13 @@ const AuditPage: React.FC = () => {
                         {line.graduation ? ` · Grad: ${line.graduation}` : ''}
                         {line.matchedFamilyName ? ` · Familia: ${line.matchedFamilyName}` : ''}
                       </p>
+                      {(line.orderNumber || line.clientRef) && (
+                        <p className="text-[10px] text-indigo-400 font-bold uppercase mt-0.5">
+                          {line.orderNumber ? `Pedido ${line.orderNumber}` : ''}
+                          {line.orderNumber && line.orderDate ? ` (${line.orderDate})` : ''}
+                          {line.clientRef ? `${line.orderNumber ? ' · ' : ''}Cliente: ${line.clientRef}` : ''}
+                        </p>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-center">
                       <span className="font-mono text-indigo-400 font-bold">{line.masterProductPrice ? `${line.masterProductPrice.toFixed(2)}€` : '--'}</span>

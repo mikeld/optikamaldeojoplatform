@@ -431,6 +431,9 @@ function normalizarFacturaExtraida($invoice) {
                 'quantity' => (float)($line['q'] ?? $line['quantity'] ?? 0),
                 'unitPrice' => (float)($line['u'] ?? $line['unitPrice'] ?? 0),
                 'total' => (float)($line['lt'] ?? $line['total'] ?? 0),
+                'orderNumber' => isset($line['o']) ? (string)$line['o'] : ($line['orderNumber'] ?? null),
+                'orderDate' => isset($line['od']) ? (string)$line['od'] : ($line['orderDate'] ?? null),
+                'clientRef' => isset($line['cr']) ? (string)$line['cr'] : ($line['clientRef'] ?? null),
             ];
         }
 
@@ -444,6 +447,110 @@ function normalizarFacturaExtraida($invoice) {
     }
 
     return $invoice;
+}
+
+// ── Matching de proveedores ────────────────────────────────────────────────
+// El nombre que viene en la factura es el nombre fiscal ("ALCON HEALTHCARE, S.A.")
+// mientras que el proveedor oficial en pedidos suele ser corto ("Alcon").
+// Normalizamos ambos y comprobamos contención mutua de tokens.
+
+function normalizarNombreProveedor($nombre) {
+    $n = mb_strtolower(trim((string)$nombre));
+    // Quitar acentos básicos
+    $n = strtr($n, ['á'=>'a','é'=>'e','í'=>'i','ó'=>'o','ú'=>'u','ü'=>'u','ñ'=>'n']);
+    // Quitar formas societarias y palabras genéricas que no identifican
+    $stopwords = ['s\.a\.u?', 's\.l\.u?', 'sau', 'slu', 'sa', 'sl', 'sociedad anonima', 'sociedad limitada',
+                  'healthcare', 'health care', 'iberia', 'espana', 'spain', 'europe', 'distribucion',
+                  'distribuciones', 'group', 'grupo', 'optical', 'vision care', 'unipersonal', 'the'];
+    foreach ($stopwords as $sw) {
+        $n = preg_replace('/\b' . $sw . '\b/u', ' ', $n);
+    }
+    // Solo alfanumérico
+    $n = preg_replace('/[^a-z0-9]+/', ' ', $n);
+    return trim(preg_replace('/\s+/', ' ', $n));
+}
+
+function nombresProveedorCoinciden($a, $b) {
+    $na = normalizarNombreProveedor($a);
+    $nb = normalizarNombreProveedor($b);
+    if ($na === '' || $nb === '') return false;
+    if ($na === $nb) return true;
+    // Contención de la forma corta dentro de la larga (mínimo 4 chars para evitar falsos positivos)
+    $corto = strlen($na) <= strlen($nb) ? $na : $nb;
+    $largo = strlen($na) <= strlen($nb) ? $nb : $na;
+    if (strlen($corto) < 4) return false;
+    // Como palabra completa dentro del largo
+    return (bool)preg_match('/\b' . preg_quote($corto, '/') . '\b/', $largo);
+}
+
+/**
+ * Resuelve el proveedor oficial de pedidos a partir del nombre extraído de la factura.
+ * Devuelve ['id' => int, 'nombre' => string] o null.
+ */
+function resolverProveedorOficial($pdo, $nombreExtraido) {
+    $nombreExtraido = trim((string)$nombreExtraido);
+    if ($nombreExtraido === '') return null;
+
+    $oficiales = $pdo->query("SELECT `id`, `nombre` FROM `proveedores`")->fetchAll(PDO::FETCH_ASSOC);
+
+    // 1. Match exacto
+    foreach ($oficiales as $of) {
+        if (strcasecmp($of['nombre'], $nombreExtraido) === 0) {
+            return ['id' => (int)$of['id'], 'nombre' => $of['nombre']];
+        }
+    }
+    // 2. Match normalizado/contención
+    foreach ($oficiales as $of) {
+        if (nombresProveedorCoinciden($of['nombre'], $nombreExtraido)) {
+            return ['id' => (int)$of['id'], 'nombre' => $of['nombre']];
+        }
+    }
+    // 3. Via facturas_providers (nombre fiscal guardado allí con pedidos_provider_id enlazado)
+    $fps = $pdo->query("SELECT fp.`name`, fp.`pedidos_provider_id`, p.`nombre` AS oficial
+                        FROM `facturas_providers` fp
+                        JOIN `proveedores` p ON p.id = fp.pedidos_provider_id
+                        WHERE fp.`pedidos_provider_id` IS NOT NULL")->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($fps as $fp) {
+        if (nombresProveedorCoinciden($fp['name'], $nombreExtraido)) {
+            return ['id' => (int)$fp['pedidos_provider_id'], 'nombre' => $fp['oficial']];
+        }
+    }
+    return null;
+}
+
+/**
+ * Validación aritmética de la extracción: suma de líneas vs totales declarados.
+ * Devuelve un array con el resultado para que el frontend pueda avisar.
+ */
+function validarExtraccionFactura($invoice) {
+    $linesSum = 0.0;
+    foreach (($invoice['items'] ?? []) as $it) {
+        $linesSum += (float)($it['total'] ?? 0);
+    }
+    $declaredTotal = (float)($invoice['total'] ?? 0);
+    $linesSum = round($linesSum, 2);
+
+    // El total declarado incluye IVA; la suma de líneas debería ser la base imponible.
+    // Aceptamos como válido si la suma coincide con el total o queda por debajo dentro
+    // de un margen razonable de impuestos (hasta el 25%).
+    $ok = false;
+    $msg = '';
+    if ($declaredTotal <= 0) {
+        $msg = 'La factura no declara total; no se puede validar la suma de líneas.';
+    } elseif (abs($linesSum - $declaredTotal) <= 0.05) {
+        $ok = true;
+    } elseif ($linesSum < $declaredTotal && $linesSum >= $declaredTotal * 0.75) {
+        $ok = true; // diferencia compatible con IVA
+    } else {
+        $msg = sprintf('La suma de líneas (%.2f) no cuadra con el total declarado (%.2f). Revisa si faltan líneas o hay importes mal leídos.', $linesSum, $declaredTotal);
+    }
+
+    return [
+        'linesSum' => $linesSum,
+        'declaredTotal' => $declaredTotal,
+        'ok' => $ok,
+        'message' => $msg,
+    ];
 }
 
 try {
@@ -507,6 +614,10 @@ try {
             if ($textContent !== '') {
                 $parsedInvoice = extractInvoiceFromPlainText($textContent, $pageNumber);
                 if ($parserOnly || !empty($parsedInvoice['items'])) {
+                    $oficialParser = resolverProveedorOficial($pdo, $parsedInvoice['providerName'] ?? '');
+                    if ($oficialParser !== null) {
+                        $parsedInvoice['officialProvider'] = ['id' => $oficialParser['id'], 'name' => $oficialParser['nombre']];
+                    }
                     echo json_encode($parsedInvoice);
                     break;
                 }
@@ -595,13 +706,17 @@ try {
             $promptText .= "IMPORTANT Rules for Item Extraction:
 1. Contact lenses are critical. Read lens powers/graduations exactly when present (examples: -1.50, +2.25, -03.00, ADD LOW, BC/DIA values), but do not treat different powers as different base products.
 2. Return compact JSON with these exact keys only:
-   p=providerName, d=date, n=invoiceNumber, t=invoice total, l=line array.
-   Each line: de=description, b=baseProductName, g=graduation, q=quantity, u=unitPrice, lt=line total.
-3. Keep product identity separate from graduation. b must be the same for the same lens family regardless of graduation/power. Remove powers, sphere/cylinder, BC, DIA and eye-specific numeric noise from b.
-4. unitPrice must be the final net unit price (price per unit/box after any line discounts are applied). If the invoice only shows gross unit price and a discount percentage, compute the net unit price as (line total / quantity). Preserve decimals exactly.
-5. Group only when b, g and u are the same. Do not merge different graduations, but keep b equal.
-6. Date Format: MUST be in YYYY-MM-DD. If this page has no header/date/total, use empty strings and 0 for missing header values.
-7. Return JSON only. No markdown. Keep descriptions concise but identifiable.";
+   p=providerName (the SELLER/issuer of the invoice, never the customer), d=date, n=invoiceNumber, t=invoice grand total, l=line array.
+   Each line: de=description, b=baseProductName, g=graduation, q=quantity, u=unitPrice, lt=line NET total, o=orderNumber, od=orderDate, cr=clientReference.
+3. NEVER extract as products: the customer/recipient block (customer name, address, customer NIF/VAT, 'Solicitado por' blocks), bank details (IBAN/SWIFT), payment terms, page footers, legal registry text, tax summary rows. Only extract real product/service line items (usually numbered rows in the items table).
+4. lt (line total) must be the NET amount of the line AFTER all discounts ('Importe neto' column when present). Lines with net amount 0.00 (free replacements, warranty) MUST still be extracted with lt=0 and their real quantity. Do NOT skip zero lines.
+5. unitPrice must be the final net unit price (lt / q when discounts apply). Preserve decimals exactly.
+6. Keep product identity separate from graduation. b must be the same for the same lens family regardless of graduation/power. Remove powers, sphere/cylinder, BC, DIA and eye-specific numeric noise from b.
+7. Many invoices group lines under order blocks like 'Número de pedido: 1132943129 ... Su pedido 30/04/2026'. For each product line, fill o with that order number and od with that order date (YYYY-MM-DD). If a line shows a customer/patient reference ('Referencia cliente NAME'), put that name in cr. If the invoice has no order grouping, leave o/od/cr empty.
+8. Shipping/handling charges ('Portes y servicios', 'Gastos de envío') are real lines: extract them with b='Portes y servicios', q=1 and their amount, keeping the o of the order block they belong to.
+9. Group identical lines only when b, g, u AND o are all the same. Do not merge lines from different orders.
+10. Date Format: MUST be YYYY-MM-DD. If this page has no header/date/total, use empty strings and 0 for missing header values.
+11. Return JSON only. No markdown. Keep descriptions concise but identifiable.";
 
             $parts[] = [
                 'text' => $promptText,
@@ -631,6 +746,9 @@ try {
                                         'q' => ['type' => 'NUMBER'],
                                         'u' => ['type' => 'NUMBER'],
                                         'lt' => ['type' => 'NUMBER'],
+                                        'o' => ['type' => 'STRING'],
+                                        'od' => ['type' => 'STRING'],
+                                        'cr' => ['type' => 'STRING'],
                                     ],
                                     'required' => ['de', 'b', 'q', 'u', 'lt'],
                                 ],
@@ -654,6 +772,25 @@ try {
             if (!isset($invoice['items']) || !is_array($invoice['items'])) {
                 throw new Exception('Gemini ha devuelto JSON, pero no incluye líneas de factura válidas');
             }
+
+            // Resolver el proveedor oficial de pedidos (evita duplicados tipo "ALCON HEALTHCARE, S.A." vs "Alcon")
+            $oficial = null;
+            if ($providerId !== null && $providerId > 0) {
+                $stmtOf = $pdo->prepare("SELECT `id`, `nombre` FROM `proveedores` WHERE `id` = ?");
+                $stmtOf->execute([$providerId]);
+                $rowOf = $stmtOf->fetch(PDO::FETCH_ASSOC);
+                if ($rowOf) $oficial = ['id' => (int)$rowOf['id'], 'nombre' => $rowOf['nombre']];
+            }
+            if ($oficial === null) {
+                $oficial = resolverProveedorOficial($pdo, $invoice['providerName'] ?? '');
+            }
+            if ($oficial !== null) {
+                $invoice['officialProvider'] = ['id' => $oficial['id'], 'name' => $oficial['nombre']];
+            }
+
+            // Validación aritmética para que el frontend avise si la extracción no cuadra
+            $invoice['validation'] = validarExtraccionFactura($invoice);
+
             echo json_encode($invoice);
             break;
 
@@ -1267,9 +1404,10 @@ Pregunta:
 
                 $pedidosProviderId = isset($data['pedidosProviderId']) && $data['pedidosProviderId'] !== '' ? (int)$data['pedidosProviderId'] : null;
                 if ($pedidosProviderId === null && !empty($data['provider'])) {
-                    $stmtSearch = $pdo->prepare("SELECT `id` FROM `proveedores` WHERE `nombre` = ? LIMIT 1");
-                    $stmtSearch->execute([$data['provider']]);
-                    $pedidosProviderId = $stmtSearch->fetchColumn() ?: null;
+                    // Matching robusto: resuelve nombres fiscales largos ("ALCON HEALTHCARE, S.A.")
+                    // contra el proveedor oficial de pedidos ("Alcon")
+                    $oficialAudit = resolverProveedorOficial($pdo, $data['provider']);
+                    $pedidosProviderId = $oficialAudit ? $oficialAudit['id'] : null;
                 }
 
                 $oldPdfPath = null;
@@ -1804,8 +1942,20 @@ Pregunta:
             $providersStmt = $pdo->query("SELECT * FROM `facturas_providers`");
             $savedProviders = $providersStmt->fetchAll(PDO::FETCH_ASSOC);
 
+            // 2b. Reparar auditorías huérfanas: enlazar por matching robusto de nombre
+            // (corrige duplicados históricos tipo "ALCON HEALTHCARE, S.A." sin pedidos_provider_id)
+            $orphanStmt = $pdo->query("SELECT DISTINCT `provider` FROM `facturas_audits` WHERE (`pedidos_provider_id` IS NULL OR `pedidos_provider_id` = 0) AND `provider` IS NOT NULL AND `provider` != ''");
+            foreach ($orphanStmt->fetchAll(PDO::FETCH_COLUMN) as $orphanName) {
+                $resolved = resolverProveedorOficial($pdo, $orphanName);
+                if ($resolved) {
+                    $fixStmt = $pdo->prepare("UPDATE `facturas_audits` SET `pedidos_provider_id` = ? WHERE `provider` = ? AND (`pedidos_provider_id` IS NULL OR `pedidos_provider_id` = 0)");
+                    $fixStmt->execute([$resolved['id'], $orphanName]);
+                }
+            }
+
             // 3. Obtener nombres de proveedores que tienen facturas pero tal vez no están registrados
-            $auditsStmt = $pdo->query("SELECT DISTINCT `provider` FROM `facturas_audits` WHERE `provider` IS NOT NULL AND `provider` != ''");
+            //    (solo auditorías que siguen sin enlace tras la reparación)
+            $auditsStmt = $pdo->query("SELECT DISTINCT `provider` FROM `facturas_audits` WHERE `provider` IS NOT NULL AND `provider` != '' AND (`pedidos_provider_id` IS NULL OR `pedidos_provider_id` = 0)");
             $uploadedNames = $auditsStmt->fetchAll(PDO::FETCH_COLUMN);
 
             // Crear mapas para cruzar datos
