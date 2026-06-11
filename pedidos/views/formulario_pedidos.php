@@ -511,7 +511,7 @@ try {
                 <button type="button" class="btn-remove-rx" onclick="removerLineaRX(this)"><i class="fas fa-times"></i></button>
                 
                 <div class="row g-2 mb-2 mt-2">
-                    <div class="col-md-3">
+                    <div class="col-6 col-md-3">
                         <label class="form-label small mb-1">Tipo de Artículo</label>
                         <select class="form-select form-select-sm rx-tipo" onchange="toggleRxFields(this)">
                             <option value="ninguno" ${data && data.tipo === 'ninguno' ? 'selected' : ''}>Ninguno (Gafa)</option>
@@ -519,7 +519,7 @@ try {
                             <option value="blister" ${data && data.tipo === 'blister' ? 'selected' : ''}>Blister</option>
                         </select>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-6 col-md-3">
                         <label class="form-label small mb-1">Ojo</label>
                         <select class="form-select form-select-sm rx-ojo" onchange="toggleRxFields(this)">
                             <option value="ninguno" ${data && data.ojo === 'ninguno' ? 'selected' : ''}>Ninguno</option>
@@ -528,14 +528,16 @@ try {
                             <option value="OTRO" ${data && data.ojo === 'OTRO' ? 'selected' : ''}>Otro / Sin Especificar</option>
                         </select>
                     </div>
-                    <div class="col-md-2 rx-cantidad-wrap d-none">
+                    <div class="col-6 col-md-2 rx-cantidad-wrap d-none">
                         <label class="form-label small mb-1">Cantidad</label>
                         <input type="number" class="form-control form-control-sm rx-cantidad" min="1" value="${data ? (data.cantidad || 1) : 1}" oninput="serializeRxLines(); actualizarResumenPack();">
                     </div>
-                    <div class="col-md rx-nota-column">
+                </div>
+                <div class="row g-2 mb-1">
+                    <div class="col-12">
                         <label class="form-label small mb-1">Notas / Tipo Lente</label>
                         <div class="d-flex rx-nota-container gap-1">
-                            <input type="text" list="productos-list" class="form-control form-control-sm rx-input-nota" placeholder="ej: Biofinity" value="${data ? (data.nota || '') : ''}" oninput="serializeRxLines();">
+                            <input type="text" list="productos-list" class="form-control form-control-sm rx-input-nota" placeholder="ej: Biofinity" value="${data ? (data.nota || '') : ''}" oninput="serializeRxLines();" autocomplete="off">
                             <button class="btn btn-sm btn-outline-primary" type="button" title="Crear nuevo producto" onclick="abrirModalNuevoProducto(this)" style="flex-shrink: 0; width: 31px; height: 31px; display: flex; align-items: center; justify-content: center; border-radius: 6px !important;">
                                 <i class="fas fa-plus"></i>
                             </button>
