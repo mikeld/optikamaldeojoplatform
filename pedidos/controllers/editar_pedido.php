@@ -33,12 +33,16 @@ if (!$pedido) {
     exit();
 }
 
-// Obtener lista de proveedores activos
+// Obtener lista de proveedores activos y productos activos
 try {
     $stmt_prov = $conexion->pdo->query("SELECT id, nombre FROM proveedores WHERE activo = 1 ORDER BY nombre ASC");
     $proveedores = $stmt_prov->fetchAll(PDO::FETCH_ASSOC);
+
+    $stmt_prod = $conexion->pdo->query("SELECT id, codigo, descripcion, marca FROM productos WHERE deleted_at IS NULL ORDER BY codigo ASC");
+    $productos = $stmt_prod->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {
-    $proveedores = [];
+    $proveedores = $proveedores ?? [];
+    $productos = [];
 }
 
 $breadcrumbs = [
@@ -307,6 +311,51 @@ include '../views/header.php';
     </div>
 </div>
 
+<!-- Datalist de productos -->
+<datalist id="productos-list">
+    <?php foreach ($productos as $prod): ?>
+        <option value="<?= htmlspecialchars($prod['codigo']) ?>"><?= htmlspecialchars($prod['codigo']) ?> - <?= htmlspecialchars($prod['descripcion']) ?> (<?= htmlspecialchars($prod['marca'] ?? '') ?>)</option>
+    <?php endforeach; ?>
+</datalist>
+
+<!-- Modal Nuevo Producto -->
+<div class="modal fade" id="modalNuevoProducto" tabindex="-1" aria-labelledby="modalNuevoProductoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalNuevoProductoLabel"><i class="fas fa-box-open me-2"></i>Nuevo Producto</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="formNuevoProducto">
+                    <div class="mb-3">
+                        <label for="modal_prod_codigo" class="form-label">Código del Producto *</label>
+                        <input type="text" id="modal_prod_codigo" name="codigo" class="form-control" required placeholder="Ej: BIOFINITY-MF(3)">
+                    </div>
+                    <div class="mb-3">
+                        <label for="modal_prod_descripcion" class="form-label">Descripción *</label>
+                        <input type="text" id="modal_prod_descripcion" name="descripcion" class="form-control" required placeholder="Ej: BIOFINITY MULTIFOCAL CAJA DE 3 UNIDADES">
+                    </div>
+                    <div class="mb-3">
+                        <label for="modal_prod_grupo" class="form-label">Grupo *</label>
+                        <input type="text" id="modal_prod_grupo" name="grupo" class="form-control" required value="LENTES DE CONTACTO">
+                    </div>
+                    <div class="mb-3">
+                        <label for="modal_prod_marca" class="form-label">Marca (Opcional)</label>
+                        <input type="text" id="modal_prod_marca" name="marca" class="form-control" placeholder="Ej: COOPERVISION">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" id="btnGuardarProducto" class="btn btn-primary px-4">
+                    <i class="fas fa-save me-2"></i>Guardar Producto
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
     <script>
         // --- Vía de Pedido ---
         const VIA_PLACEHOLDERS = {
@@ -368,7 +417,12 @@ include '../views/header.php';
                     </div>
                     <div class="col-md-2">
                         <label class="form-label small mb-1">Notas / Tipo Lente</label>
-                        <input type="text" class="form-control form-control-sm rx-input-nota" placeholder="ej: Biofinity" value="${data ? (data.nota || '') : ''}" oninput="serializeRxLines();">
+                        <div class="input-group input-group-sm">
+                            <input type="text" list="productos-list" class="form-control rx-input-nota" placeholder="ej: Biofinity" value="${data ? (data.nota || '') : ''}" oninput="serializeRxLines();">
+                            <button class="btn btn-outline-success" type="button" title="Crear nuevo producto" onclick="abrirModalNuevoProducto(this)">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -680,6 +734,71 @@ include '../views/header.php';
             document.querySelector('form').addEventListener('submit', function() {
                 actualizarVia();
                 serializeRxLines();
+            });
+
+            // Lógica para guardar nuevo producto vía AJAX
+            let activeProductInput = null;
+            window.abrirModalNuevoProducto = function(button) {
+                const group = button.closest('.input-group');
+                activeProductInput = group.querySelector('.rx-input-nota');
+                
+                const modalEl = document.getElementById('modalNuevoProducto');
+                const modal = new bootstrap.Modal(modalEl);
+                modal.show();
+            };
+
+            document.getElementById('btnGuardarProducto').addEventListener('click', function() {
+                const form = document.getElementById('formNuevoProducto');
+                const formData = new FormData(form);
+
+                if (!formData.get('codigo').trim() || !formData.get('descripcion').trim()) {
+                    alert('Código y Descripción son obligatorios.');
+                    return;
+                }
+
+                const btn = this;
+                const originalContent = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Guardando...';
+
+                // Llama al controlador local en la misma carpeta
+                fetch('crear_producto_ajax.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        // 1. Añadir el nuevo producto al datalist
+                        const datalist = document.getElementById('productos-list');
+                        const option = document.createElement('option');
+                        option.value = data.producto.codigo;
+                        option.textContent = `${data.producto.codigo} - ${data.producto.descripcion} (${data.producto.marca || ''})`;
+                        datalist.appendChild(option);
+
+                        // 2. Establecer el valor en el input activo
+                        if (activeProductInput) {
+                            activeProductInput.value = data.producto.codigo;
+                            activeProductInput.dispatchEvent(new Event('input'));
+                        }
+
+                        // 3. Cerrar modal y limpiar formulario
+                        const modalEl = document.getElementById('modalNuevoProducto');
+                        const modal = bootstrap.Modal.getInstance(modalEl);
+                        modal.hide();
+                        form.reset();
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Ocurrió un error al procesar la solicitud.');
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.innerHTML = originalContent;
+                });
             });
         });
     </script>
