@@ -38,6 +38,8 @@ pedidos/
 │   ├── ficha_cliente.php     # Perfil completo de un cliente
 │   ├── listado_usuarios.php  # Listado de todos los clientes
 │   ├── listado_proveedores.php# Listado de proveedores
+│   ├── listado_productos.php  # Listado de productos (Lentillas)
+│   ├── formulario_productos.php # Nuevo producto / editar producto
 │   ├── carrito_pedidos.php   # Vista de pedidos listos para pedir al proveedor
 │   ├── busqueda.php          # Búsqueda global en toda la base de datos
 │   ├── estadisticas.php      # Dashboard de KPIs y gráficas
@@ -65,6 +67,9 @@ pedidos/
 │   ├── guardar_proveedor.php # Crear/actualizar proveedor
 │   ├── eliminar_proveedor.php# Eliminar proveedor
 │   ├── crear_proveedor_ajax.php # Crear proveedor vía AJAX
+│   ├── guardar_producto.php  # Crear/actualizar producto
+│   ├── eliminar_producto.php # Eliminar producto (soft delete)
+│   ├── crear_producto_ajax.php # Crear producto vía AJAX
 │   ├── exportar_pedidos.php  # Exportar pedidos a CSV
 │   ├── exportar_clientes.php # Exportar clientes a CSV
 │   └── exportar_proveedores.php # Exportar proveedores a CSV
@@ -87,6 +92,7 @@ pedidos/
     ├── soft_delete_pedidos.sql
     ├── add_en_carrito.sql
     └── avisado_cliente.sql
+├── update_db_productos.php    # Script de migración base de datos de productos
 ```
 
 ---
@@ -136,6 +142,18 @@ pedidos/
 | `contacto` | Persona de contacto |
 | `telefono` | Teléfono |
 | `email` | Email |
+
+#### `productos`
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `id` | INT UNSIGNED AUTO_INCREMENT | Clave primaria |
+| `codigo` | VARCHAR(100) UNIQUE | Código identificador único del producto |
+| `descripcion` | VARCHAR(255) | Nombre/descripción detallada del producto |
+| `grupo` | VARCHAR(100) | Grupo/Categoría (default 'LENTES DE CONTACTO') |
+| `marca` | VARCHAR(100) NULL | Marca del fabricante |
+| `created_at` | DATETIME | Fecha de creación |
+| `updated_at` | DATETIME | Última modificación |
+| `deleted_at` | DATETIME NULL | Borrado lógico — NULL = activo |
 
 #### `mensajes_whatsapp`
 | Campo | Descripción |
