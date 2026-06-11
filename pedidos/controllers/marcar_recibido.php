@@ -17,57 +17,89 @@ try {
         
         $conexion = new Conexion();
 
-        // Obtener el tipo de pack y estado actual para preservar las cantidades pedidas
+        // Obtener el pedido actual
         $stmtCheck = $conexion->pdo->prepare(
-            "SELECT pack_tipo, pack_estado FROM pedidos WHERE id = :id AND deleted_at IS NULL"
+            "SELECT rx_lineas, pack_tipo, pack_estado FROM pedidos WHERE id = :id AND deleted_at IS NULL"
         );
         $stmtCheck->execute([':id' => $pedido_id]);
-        $row = $stmtCheck->fetch(PDO::FETCH_ASSOC);
-        if (!$row) {
+        $pedido = $stmtCheck->fetch(PDO::FETCH_ASSOC);
+        if (!$pedido) {
             throw new Exception('Pedido no encontrado.');
         }
 
-        $pack_estado_json = $row['pack_estado'] ?? '{}';
-        if ($row && $row['pack_tipo']) {
-            $estadoArr = json_decode($pack_estado_json, true) ?: [];
+        $rx_lineas_json = $pedido['rx_lineas'];
+        $pack_tipo = $pedido['pack_tipo'];
+        $pack_estado = $pedido['pack_estado'];
 
-            if ($row['pack_tipo'] === 'cajas' || $row['pack_tipo'] === 'ambos') {
-                $recibidas = max(0, (int)($_POST['pack_cajas_recibidas'] ?? 0));
-                // Preservar 'pedidas' del estado actual (sea formato nuevo o legado)
-                $existing  = $estadoArr['cajas'] ?? [];
-                $pedidas   = is_array($existing) ? (int)($existing['pedidas'] ?? 0) : 0;
-                $estadoArr['cajas'] = ['pedidas' => $pedidas, 'recibidas' => $recibidas];
-            }
-            if ($row['pack_tipo'] === 'blisters' || $row['pack_tipo'] === 'ambos') {
-                $recibidas = max(0, (int)($_POST['pack_blisters_recibidas'] ?? 0));
-                $existing  = $estadoArr['blisters'] ?? [];
-                $pedidas   = is_array($existing) ? (int)($existing['pedidas'] ?? 0) : 0;
-                $estadoArr['blisters'] = ['pedidas' => $pedidas, 'recibidas' => $recibidas];
-            }
+        if ($rx_lineas_json) {
+            $lineas = json_decode($rx_lineas_json, true);
+            if (is_array($lineas)) {
+                // Si es completado completo (recibido_val = 1), marcar todas las cantidades recibidas como completadas
+                if ($recibido_val === 1) {
+                    foreach ($lineas as $idx => &$l) {
+                        if (isset($l['cantidad'])) {
+                            $l['cantidad_recibida'] = (int)$l['cantidad'];
+                        }
+                    }
+                    unset($l);
+                } 
+                // Si es parcial (recibido_val = 2) y se enviaron lineas_recibidas
+                else if ($recibido_val === 2 && isset($_POST['lineas_recibidas'])) {
+                    $lineas_recibidas = $_POST['lineas_recibidas'];
+                    foreach ($lineas as $idx => &$l) {
+                        if (isset($lineas_recibidas[$idx])) {
+                            $l['cantidad_recibida'] = max(0, (int)$lineas_recibidas[$idx]);
+                        }
+                    }
+                    unset($l);
+                }
 
-            // Derivar el estado global según las cantidades
-            $todasCompletas = true;
-            $algunaRecibida = false;
-            foreach (['cajas', 'blisters'] as $t) {
-                if (!isset($estadoArr[$t])) continue;
-                $ped = (int)($estadoArr[$t]['pedidas']   ?? 0);
-                $rec = (int)($estadoArr[$t]['recibidas'] ?? 0);
-                if (!($ped > 0 && $rec >= $ped)) $todasCompletas = false;
-                if ($rec > 0) $algunaRecibida = true;
-            }
-            if ($todasCompletas)      $recibido_val = 1;
-            elseif ($algunaRecibida)  $recibido_val = 2;
-            else                      $recibido_val = 0;
+                // Volver a codificar a JSON
+                $rx_lineas_json = json_encode($lineas);
 
-            $pack_estado_json = json_encode($estadoArr);
+                // Calcular automáticamente pack_tipo y pack_estado agregados
+                require_once '../includes/funciones.php';
+                $packInfo = calcularPackDesdeLineas($rx_lineas_json);
+                $pack_tipo = $packInfo['pack_tipo'];
+                $pack_estado = $packInfo['pack_estado'];
+                
+                // Determinar el estado general de recibido basado en las cantidades pedidas vs recibidas
+                if ($pack_tipo) {
+                    $estadoArr = json_decode($pack_estado, true) ?: [];
+                    $todasCompletas = true;
+                    $algunaRecibida = false;
+                    foreach (['cajas', 'blisters'] as $t) {
+                        if (!isset($estadoArr[$t])) continue;
+                        $ped = (int)($estadoArr[$t]['pedidas']   ?? 0);
+                        $rec = (int)($estadoArr[$t]['recibidas'] ?? 0);
+                        if (!($ped > 0 && $rec >= $ped)) $todasCompletas = false;
+                        if ($rec > 0) $algunaRecibida = true;
+                    }
+                    if ($todasCompletas) {
+                        $recibido_val = 1;
+                    } elseif ($algunaRecibida) {
+                        $recibido_val = 2;
+                    } else {
+                        $recibido_val = 0;
+                    }
+                }
+            }
         }
 
-        $sql = "UPDATE pedidos SET recibido = :val, notas_recepcion = :notas, pack_estado = :pack WHERE id = :id AND deleted_at IS NULL";
+        $sql = "UPDATE pedidos SET 
+                  recibido = :val, 
+                  notas_recepcion = :notas, 
+                  rx_lineas = :rx_lineas,
+                  pack_tipo = :pack_tipo,
+                  pack_estado = :pack_estado 
+                WHERE id = :id AND deleted_at IS NULL";
         $stmt = $conexion->pdo->prepare($sql);
-        $stmt->bindValue(':val',   $recibido_val,    PDO::PARAM_INT);
-        $stmt->bindValue(':notas', $notas_recepcion, PDO::PARAM_STR);
-        $stmt->bindValue(':pack',  $pack_estado_json, PDO::PARAM_STR);
-        $stmt->bindValue(':id',    $pedido_id,        PDO::PARAM_INT);
+        $stmt->bindValue(':val',         $recibido_val,     PDO::PARAM_INT);
+        $stmt->bindValue(':notas',       $notas_recepcion,  PDO::PARAM_STR);
+        $stmt->bindValue(':rx_lineas',   $rx_lineas_json,   $rx_lineas_json ? PDO::PARAM_STR : PDO::PARAM_NULL);
+        $stmt->bindValue(':pack_tipo',   $pack_tipo,        $pack_tipo ? PDO::PARAM_STR : PDO::PARAM_NULL);
+        $stmt->bindValue(':pack_estado', $pack_estado,      $pack_estado ? PDO::PARAM_STR : PDO::PARAM_NULL);
+        $stmt->bindValue(':id',          $pedido_id,        PDO::PARAM_INT);
         $stmt->execute();
         
         header('Location: ../views/listado_pedidos.php?success=1');

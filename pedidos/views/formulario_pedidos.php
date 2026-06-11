@@ -72,30 +72,6 @@ include('header.php');
     }
     .btn-remove-rx:hover { color: #dc3545; }
 
-    /* --- Pack Tags --- */
-    .pack-options .form-check-input:checked + .form-check-label .pack-tag {
-        border-color: transparent;
-        color: #fff;
-    }
-    .pack-tag {
-        display: inline-block;
-        padding: 6px 18px;
-        border-radius: 30px;
-        border: 2px solid #dee2e6;
-        cursor: pointer;
-        font-weight: 600;
-        font-size: .85rem;
-        transition: all .2s;
-        user-select: none;
-    }
-    #pack-cajas:checked ~ * .pack-tag-cajas,
-    .pack-tag-cajas-active   { background: #0d6efd; border-color: #0d6efd; color:#fff; }
-    #pack-blisters:checked ~ * .pack-tag-blisters,
-    .pack-tag-blisters-active { background: #6610f2; border-color: #6610f2; color:#fff; }
-    #pack-ambos:checked ~ * .pack-tag-ambos,
-    .pack-tag-ambos-active   { background: #198754; border-color: #198754; color:#fff; }
-    .pack-tag:hover { opacity: .85; transform: translateY(-1px); }
-
     /* --- Vía de Pedido --- */
     .via-detalle-wrap { transition: opacity .2s; }
     .via-detalle-wrap.d-none { display: none !important; }
@@ -158,6 +134,16 @@ try {
                         </div>
                     </div>
 
+                    <!-- Dropdown para copiar pedido anterior, inicialmente oculto -->
+                    <div id="wrapper-copiar-pedido" class="mb-4 d-none">
+                        <label for="copiar_pedido_select" class="form-label text-primary fw-semibold">
+                            <i class="fas fa-clone me-1"></i>Copiar pedido anterior
+                        </label>
+                        <select id="copiar_pedido_select" class="form-select">
+                            <option value="">-- Seleccionar pedido para copiar --</option>
+                        </select>
+                    </div>
+
                     <hr class="my-4 opacity-10">
 
                     <!-- LC / Gafa / Recambio -->
@@ -175,63 +161,6 @@ try {
                         <datalist id="lc-list"></datalist>
                     </div>
 
-                    <!-- PACK (Cajas / Blisteres / Ambos) -->
-                    <div class="mb-4">
-                        <label class="form-label d-flex justify-content-between align-items-center">
-                            <span><i class="fas fa-box me-1 text-muted"></i>Pack</span>
-                            <span class="text-muted small">Opcional</span>
-                        </label>
-                        <div class="d-flex flex-wrap gap-2 pack-options" id="pack-options">
-                            <div>
-                                <input type="radio" class="d-none" name="pack_tipo" id="pack-cajas" value="cajas">
-                                <label for="pack-cajas">
-                                    <span class="pack-tag pack-tag-cajas" id="label-pack-cajas">
-                                        <i class="fas fa-box me-1"></i>Cajas
-                                    </span>
-                                </label>
-                            </div>
-                            <div>
-                                <input type="radio" class="d-none" name="pack_tipo" id="pack-blisters" value="blisters">
-                                <label for="pack-blisters">
-                                    <span class="pack-tag pack-tag-blisters" id="label-pack-blisters">
-                                        <i class="fas fa-tablets me-1"></i>Blisteres
-                                    </span>
-                                </label>
-                            </div>
-                            <div>
-                                <input type="radio" class="d-none" name="pack_tipo" id="pack-ambos" value="ambos">
-                                <label for="pack-ambos">
-                                    <span class="pack-tag pack-tag-ambos" id="label-pack-ambos">
-                                        <i class="fas fa-layer-group me-1"></i>Cajas + Blisteres
-                                    </span>
-                                </label>
-                            </div>
-                            <div>
-                                <button type="button" class="pack-tag" id="btn-pack-ninguno" style="border-style:dashed; color:#6c757d">
-                                    <i class="fas fa-times me-1"></i>Ninguno
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Inputs de cantidad (aparecen al seleccionar tipo de pack) -->
-                        <div id="pack-cantidades" class="mt-3 row g-3 d-none">
-                            <div class="col-auto d-none" id="pack-qty-cajas">
-                                <label class="form-label small mb-1 text-primary fw-semibold">
-                                    <i class="fas fa-box me-1"></i>Cajas pedidas
-                                </label>
-                                <input type="number" id="pack_cajas_pedidas" name="pack_cajas_pedidas"
-                                       class="form-control form-control-sm" min="1" placeholder="0" style="width:90px;">
-                            </div>
-                            <div class="col-auto d-none" id="pack-qty-blisters">
-                                <label class="form-label small mb-1 fw-semibold" style="color:#6610f2;">
-                                    <i class="fas fa-tablets me-1"></i>Blisters pedidos
-                                </label>
-                                <input type="number" id="pack_blisters_pedidas" name="pack_blisters_pedidas"
-                                       class="form-control form-control-sm" min="1" placeholder="0" style="width:90px;">
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- RX Multi-línea OD/OI -->
                     <div class="mb-4">
                         <label class="form-label d-flex justify-content-between align-items-center">
@@ -247,6 +176,11 @@ try {
                         <!-- Contenedor dinámico de líneas RX -->
                         <div id="rx-lineas-container">
                             <!-- Se inserta por JS -->
+                        </div>
+
+                        <!-- Resumen del Pack en tiempo real -->
+                        <div id="resumen-pack-box" class="alert alert-info py-2 px-3 mt-3 d-none">
+                            <strong>Resumen de Pack:</strong> <span id="resumen-pack-texto"></span>
                         </div>
 
                         <!-- Campo oculto que envía el JSON final al servidor -->
@@ -410,7 +344,7 @@ try {
             return true;
         }
 
-        // --- Lógica RX Multi-línea (Anidada OD/OI) ---
+        // --- Lógica RX Multi-línea (Plana con Soporte de Pack) ---
         function addRxLine(data = null) {
             const container = document.getElementById('rx-lineas-container');
             const index = container.children.length + 1;
@@ -419,49 +353,92 @@ try {
             div.innerHTML = `
                 <div class="rx-linea-numero">LINEA #${index}</div>
                 <button type="button" class="btn-remove-rx" onclick="removerLineaRX(this)"><i class="fas fa-times"></i></button>
-                <div class="row g-2 align-items-center mb-2">
-                    <div class="col-8">
-                        <input type="text" class="form-control form-control-sm rx-input-nota" placeholder="Notas / Tipo Lente (ej: Biofinity)" value="${data ? (data.nota || '') : ''}">
+                
+                <div class="row g-2 align-items-center mb-2 mt-2">
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">Tipo de Artículo</label>
+                        <select class="form-select form-select-sm rx-tipo" onchange="toggleRxFields(this)">
+                            <option value="ninguno" ${data && data.tipo === 'ninguno' ? 'selected' : ''}>Ninguno (Gafa)</option>
+                            <option value="caja" ${data && data.tipo === 'caja' ? 'selected' : ''}>Caja</option>
+                            <option value="blister" ${data && data.tipo === 'blister' ? 'selected' : ''}>Blister</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">Ojo</label>
+                        <select class="form-select form-select-sm rx-ojo" onchange="toggleRxFields(this)">
+                            <option value="ninguno" ${data && data.ojo === 'ninguno' ? 'selected' : ''}>Ninguno</option>
+                            <option value="OD" ${data && data.ojo === 'OD' ? 'selected' : ''}>Ojo Derecho (OD)</option>
+                            <option value="OI" ${data && data.ojo === 'OI' ? 'selected' : ''}>Ojo Izquierdo (OI)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 rx-cantidad-wrap d-none">
+                        <label class="form-label small mb-1">Cantidad</label>
+                        <input type="number" class="form-control form-control-sm rx-cantidad" min="1" value="${data ? (data.cantidad || 1) : 1}" oninput="serializeRxLines(); actualizarResumenPack();">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small mb-1">Notas / Tipo Lente</label>
+                        <input type="text" class="form-control form-control-sm rx-input-nota" placeholder="ej: Biofinity" value="${data ? (data.nota || '') : ''}" oninput="serializeRxLines();">
                     </div>
                 </div>
-                <div class="row g-2">
-                    <div class="col-6">
-                        <div class="d-flex align-items-center gap-2 mb-2">
-                            <span class="rx-ojo-label rx-od">OD</span>
-                            <div class="row g-1 flex-grow-1">
-                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-od-esf" placeholder="Esf" value="${data ? (data.od?.esf || '') : ''}"></div>
-                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-od-cil" placeholder="Cil" value="${data ? (data.od?.cil || '') : ''}"></div>
-                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-od-eje" placeholder="Eje" value="${data ? (data.od?.eje || '') : ''}"></div>
-                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-od-add" placeholder="Add" value="${data ? (data.od?.add || '') : ''}"></div>
-                            </div>
-                        </div>
+
+                <!-- Los 4 inputs de graduación, ocultos inicialmente -->
+                <div class="row g-2 rx-inputs-wrap d-none mb-1">
+                    <div class="col-3">
+                        <label class="form-label x-small text-muted mb-0">Esf</label>
+                        <input type="text" class="form-control form-control-sm rx-input rx-esf" placeholder="Esf" value="${data ? (data.esf || '') : ''}" oninput="serializeRxLines();">
                     </div>
-                    <div class="col-6">
-                        <div class="d-flex align-items-center gap-2 mb-2">
-                            <span class="rx-ojo-label rx-oi">OI</span>
-                            <div class="row g-1 flex-grow-1">
-                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-oi-esf" placeholder="Esf" value="${data ? (data.oi?.esf || '') : ''}"></div>
-                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-oi-cil" placeholder="Cil" value="${data ? (data.oi?.cil || '') : ''}"></div>
-                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-oi-eje" placeholder="Eje" value="${data ? (data.oi?.eje || '') : ''}"></div>
-                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-oi-add" placeholder="Add" value="${data ? (data.oi?.add || '') : ''}"></div>
-                            </div>
-                        </div>
+                    <div class="col-3">
+                        <label class="form-label x-small text-muted mb-0">Cil</label>
+                        <input type="text" class="form-control form-control-sm rx-input rx-cil" placeholder="Cil" value="${data ? (data.cil || '') : ''}" oninput="serializeRxLines();">
+                    </div>
+                    <div class="col-3">
+                        <label class="form-label x-small text-muted mb-0">Eje</label>
+                        <input type="text" class="form-control form-control-sm rx-input rx-eje" placeholder="Eje" value="${data ? (data.eje || '') : ''}" oninput="serializeRxLines();">
+                    </div>
+                    <div class="col-3">
+                        <label class="form-label x-small text-muted mb-0">Add</label>
+                        <input type="text" class="form-control form-control-sm rx-input rx-add" placeholder="Add" value="${data ? (data.add || '') : ''}" oninput="serializeRxLines();">
                     </div>
                 </div>
             `;
             container.appendChild(div);
             
-            // Añadir listeners para serializar al cambiar
-            div.querySelectorAll('input').forEach(input => {
-                input.addEventListener('input', serializeRxLines);
-            });
+            // Inicializar visibilidad basada en el estado actual de los selectores
+            const tipoSelect = div.querySelector('.rx-tipo');
+            toggleRxFields(tipoSelect);
+        }
+
+        function toggleRxFields(el) {
+            const card = el.closest('.rx-line-row');
+            const tipo = card.querySelector('.rx-tipo').value;
+            const ojo = card.querySelector('.rx-ojo').value;
+
+            const rxInputsWrap = card.querySelector('.rx-inputs-wrap');
+            const qtyWrap = card.querySelector('.rx-cantidad-wrap');
+
+            // 1. Mostrar/ocultar inputs RX si se selecciona un ojo
+            if (ojo === 'OD' || ojo === 'OI') {
+                rxInputsWrap.classList.remove('d-none');
+            } else {
+                rxInputsWrap.classList.add('d-none');
+            }
+
+            // 2. Mostrar/ocultar cantidad si es pack y ojo
+            if ((tipo === 'caja' || tipo === 'blister') && (ojo === 'OD' || ojo === 'OI')) {
+                qtyWrap.classList.remove('d-none');
+            } else {
+                qtyWrap.classList.add('d-none');
+            }
+
             serializeRxLines();
+            actualizarResumenPack();
         }
 
         function removerLineaRX(btn) {
             btn.closest('.rx-linea-card').remove();
             reordenarLineas();
             serializeRxLines();
+            actualizarResumenPack();
         }
 
         function reordenarLineas() {
@@ -473,88 +450,119 @@ try {
         function serializeRxLines() {
             const rxLines = [];
             let textLegacy = "";
+            
             document.querySelectorAll('.rx-line-row').forEach((card, idx) => {
-                const row = {
-                    nota: card.querySelector('.rx-input-nota').value,
-                    od: {
-                        esf: card.querySelector('.rx-od-esf').value,
-                        cil: card.querySelector('.rx-od-cil').value,
-                        eje: card.querySelector('.rx-od-eje').value,
-                        add: card.querySelector('.rx-od-add').value
-                    },
-                    oi: {
-                        esf: card.querySelector('.rx-oi-esf').value,
-                        cil: card.querySelector('.rx-oi-cil').value,
-                        eje: card.querySelector('.rx-oi-eje').value,
-                        add: card.querySelector('.rx-oi-add').value
-                    }
-                };
+                const tipo = card.querySelector('.rx-tipo').value;
+                const ojo = card.querySelector('.rx-ojo').value;
+                const cantidad = parseInt(card.querySelector('.rx-cantidad').value) || 1;
+                const nota = card.querySelector('.rx-input-nota').value.trim();
                 
-                // Solo añadir si hay algún dato real
-                if (row.nota || row.od.esf || row.od.cil || row.oi.esf || row.oi.cil) {
+                const esf = card.querySelector('.rx-esf').value.trim();
+                const cil = card.querySelector('.rx-cil').value.trim();
+                const eje = card.querySelector('.rx-eje').value.trim();
+                const add = card.querySelector('.rx-add').value.trim();
+
+                const row = {
+                    tipo: tipo,
+                    ojo: ojo,
+                    cantidad: (tipo !== 'ninguno' && ojo !== 'ninguno') ? cantidad : 0,
+                    cantidad_recibida: 0,
+                    esf: esf,
+                    cil: cil,
+                    eje: eje,
+                    add: add,
+                    nota: nota
+                };
+
+                if (ojo !== 'ninguno' || tipo !== 'ninguno' || nota) {
                     rxLines.push(row);
-                    const label = row.nota ? `[${row.nota}] ` : `L#${idx+1}: `;
-                    textLegacy += `${label}OD(${row.od.esf || '0'} ${row.od.cil || ''}) OI(${row.oi.esf || '0'} ${row.oi.cil || ''}) | `;
+                    
+                    let lineText = "";
+                    if (ojo !== 'ninguno') {
+                        lineText += ojo + " ";
+                        if (esf) lineText += esf + " ";
+                        if (cil) lineText += cil + " ";
+                        if (eje) lineText += eje + " ";
+                        if (add) lineText += add + " ";
+                    }
+                    if (tipo !== 'ninguno' && ojo !== 'ninguno') {
+                        lineText += `(${cantidad} ${tipo}s)`;
+                    }
+                    if (nota) {
+                        lineText += ` [${nota}]`;
+                    }
+                    if (lineText.trim()) {
+                        textLegacy += lineText.trim() + " | ";
+                    }
                 }
             });
+
             document.getElementById('rx_lineas_json').value = JSON.stringify(rxLines);
             document.getElementById('rx').value = textLegacy.replace(/\|\s*$/, '');
         }
 
-        document.getElementById('btn-add-rx-linea').addEventListener('click', () => addRxLine());
+        function actualizarResumenPack() {
+            let totalCajasOD = 0;
+            let totalCajasOI = 0;
+            let totalBlistersOD = 0;
+            let totalBlistersOI = 0;
 
-        // --- Lógica para Pack interactivo ---
-        function actualizarCantidadesPack(tipo) {
-            const contenedor  = document.getElementById('pack-cantidades');
-            const rowCajas    = document.getElementById('pack-qty-cajas');
-            const rowBlisters = document.getElementById('pack-qty-blisters');
+            document.querySelectorAll('.rx-line-row').forEach(card => {
+                const tipo = card.querySelector('.rx-tipo').value;
+                const ojo = card.querySelector('.rx-ojo').value;
+                const cantidad = parseInt(card.querySelector('.rx-cantidad').value) || 0;
 
-            if (!tipo) {
-                contenedor.classList.add('d-none');
-                rowCajas.classList.add('d-none');
-                rowBlisters.classList.add('d-none');
-                document.getElementById('pack_cajas_pedidas').value = '';
-                document.getElementById('pack_blisters_pedidas').value = '';
-                return;
-            }
-            contenedor.classList.remove('d-none');
-            if (tipo === 'cajas' || tipo === 'ambos') {
-                rowCajas.classList.remove('d-none');
+                if (ojo === 'OD') {
+                    if (tipo === 'caja') totalCajasOD += cantidad;
+                    else if (tipo === 'blister') totalBlistersOD += cantidad;
+                } else if (ojo === 'OI') {
+                    if (tipo === 'caja') totalCajasOI += cantidad;
+                    else if (tipo === 'blister') totalBlistersOI += cantidad;
+                }
+            });
+
+            const parts = [];
+            if (totalCajasOD > 0) parts.push(`${totalCajasOD} caja(s) OD`);
+            if (totalCajasOI > 0) parts.push(`${totalCajasOI} caja(s) OI`);
+            if (totalBlistersOD > 0) parts.push(`${totalBlistersOD} blister(s) OD`);
+            if (totalBlistersOI > 0) parts.push(`${totalBlistersOI} blister(s) OI`);
+
+            const box = document.getElementById('resumen-pack-box');
+            if (parts.length > 0) {
+                document.getElementById('resumen-pack-texto').innerText = parts.join(', ');
+                box.classList.remove('d-none');
             } else {
-                rowCajas.classList.add('d-none');
-                document.getElementById('pack_cajas_pedidas').value = '';
-            }
-            if (tipo === 'blisters' || tipo === 'ambos') {
-                rowBlisters.classList.remove('d-none');
-            } else {
-                rowBlisters.classList.add('d-none');
-                document.getElementById('pack_blisters_pedidas').value = '';
+                box.classList.add('d-none');
             }
         }
 
-        document.getElementById('pack-options').addEventListener('click', function(event) {
-            const target = event.target.closest('.pack-tag, #btn-pack-ninguno');
-            if (!target) return;
+        function parsearViaJS(via) {
+            via = (via || '').trim();
+            if (!via) return { canal: '', detalle: '' };
 
-            // Desmarcar todos los radios
-            document.querySelectorAll('input[name="pack_tipo"]').forEach(radio => {
-                radio.checked = false;
-                document.getElementById(`label-${radio.id}`).classList.remove('active');
-            });
-
-            // Si se hizo clic en "Ninguno"
-            if (target.id === 'btn-pack-ninguno') {
-                actualizarCantidadesPack(null);
-            } else {
-                const inputId = target.closest('label').getAttribute('for');
-                const radio = document.getElementById(inputId);
-                if (radio) {
-                    radio.checked = true;
-                    target.classList.add('active');
-                    actualizarCantidadesPack(radio.value);
-                }
+            if (/^(web|portal|portar)/i.test(via)) {
+                const detalle = via.replace(/^(web|portal|portar)\s*/i, '').trim();
+                return { canal: 'Web', detalle: detalle };
             }
-        });
+            if (/^whatsapp/i.test(via)) {
+                const detalle = via.replace(/^whatsapp\s*/i, '').trim();
+                return { canal: 'WhatsApp', detalle: detalle };
+            }
+            if (/^(teléfono|telefono|telef|tel\.?|tf\.?|tf$)/i.test(via)) {
+                const detalle = via.replace(/^(teléfono|telefono|telef|tel\.?|tf\.?)\s*/i, '').trim();
+                return { canal: 'Teléfono', detalle: detalle };
+            }
+            if (/^(e-?mail|mail|correo)/i.test(via)) {
+                const detalle = via.replace(/^(e-?mail|mail|correo)\s*/i, '').trim();
+                return { canal: 'E-mail', detalle: detalle };
+            }
+            if (/^presencial/i.test(via)) {
+                return { canal: 'Presencial', detalle: '' };
+            }
+            return { canal: 'Otro', detalle: via };
+        }
+
+        document.getElementById('btn-add-rx-linea').addEventListener('click', () => addRxLine());
 
         // --- Vía de Pedido: selector + campo contextual ---
         const VIA_PLACEHOLDERS = {
@@ -588,15 +596,22 @@ try {
                 width: '100%'
             });
 
+            let ultimosPedidos = [];
+
             // Cargar sugerencias y datos históricos al cambiar el cliente
             $('#referencia_cliente').on('change', function() {
                 const ref = this.value;
+                const copiarSelect = document.getElementById('copiar_pedido_select');
+                const copiarWrapper = document.getElementById('wrapper-copiar-pedido');
+                
                 if (!ref) {
                     // Limpiar sugerencias y datalists si no hay cliente seleccionado
                     document.getElementById('lc-list').innerHTML = '';
                     document.getElementById('sug-lc').innerHTML = '';
                     document.getElementById('rx-lineas-container').innerHTML = '';
                     document.getElementById('sug-rx').innerHTML = '';
+                    copiarSelect.innerHTML = '<option value="">-- Seleccionar pedido para copiar --</option>';
+                    copiarWrapper.classList.add('d-none');
                     serializeRxLines(); // Limpiar JSON de RX
                     return;
                 }
@@ -604,6 +619,23 @@ try {
                 fetch(`../controllers/get_ultimos_pedidos.php?referencia=${encodeURIComponent(ref)}`)
                     .then(res => res.json())
                     .then(data => {
+                        ultimosPedidos = data;
+                        
+                        // Populate Copiar Pedido Select
+                        copiarSelect.innerHTML = '<option value="">-- Seleccionar pedido para copiar --</option>';
+                        if (data.length) {
+                            data.forEach((p, idx) => {
+                                const opt = document.createElement('option');
+                                opt.value = idx;
+                                const fecha = p.fecha_pedido ? p.fecha_pedido : 'Sin fecha';
+                                opt.innerText = `#${p.id} - ${fecha} - ${p.lc_gafa_recambio || 'Sin producto'}`;
+                                copiarSelect.appendChild(opt);
+                            });
+                            copiarWrapper.classList.remove('d-none');
+                        } else {
+                            copiarWrapper.classList.add('d-none');
+                        }
+
                         const lcList = document.getElementById('lc-list');
                         lcList.innerHTML = ''; // Limpiar datalist de LC
 
@@ -655,11 +687,7 @@ try {
                                 btnRx.className = 'btn btn-action btn-sm btn-outline-primary';
                                 btnRx.innerHTML = '<i class="fas fa-copy"></i> ' + ultimo.rx;
                                 btnRx.onclick = () => {
-                                    // Para el campo legado, simplemente se copia el texto
-                                    // Si se quiere convertir a multi-línea, se necesitaría una lógica de parseo
                                     document.getElementById('rx').value = ultimo.rx;
-                                    // Opcional: intentar parsear y añadir como línea si el formato es simple
-                                    // addRxLine({ ojo: 'N/A', esfera: ultimo.rx });
                                 };
                                 contRx.appendChild(btnRx);
                             }
@@ -682,6 +710,62 @@ try {
                         }
                     })
                     .catch(console.error);
+            });
+
+            // Escuchar el cambio en el selector de copiar pedido anterior
+            $('#copiar_pedido_select').on('change', function() {
+                const idx = this.value;
+                if (idx === '') return;
+                const p = ultimosPedidos[idx];
+                if (!p) return;
+
+                // Copiar producto
+                if (p.lc_gafa_recambio) {
+                    document.getElementById('lc_gafa_recambio').value = p.lc_gafa_recambio;
+                }
+
+                // Copiar Vía
+                if (p.via) {
+                    document.getElementById('via').value = p.via;
+                    const viaData = parsearViaJS(p.via);
+                    const canalSelect = document.getElementById('via_canal');
+                    canalSelect.value = viaData.canal;
+                    const detalleInput = document.getElementById('via_detalle');
+                    if (['Web', 'WhatsApp', 'Teléfono', 'E-mail', 'Otro'].includes(viaData.canal)) {
+                        detalleInput.classList.remove('d-none');
+                        detalleInput.value = viaData.detalle;
+                    } else {
+                        detalleInput.classList.add('d-none');
+                        detalleInput.value = '';
+                    }
+                }
+
+                // Copiar observaciones
+                if (p.observaciones) {
+                    document.getElementById('observaciones').value = p.observaciones;
+                }
+
+                // Copiar RX Lineas
+                const rxContainer = document.getElementById('rx-lineas-container');
+                rxContainer.innerHTML = '';
+                if (p.rx_lineas) {
+                    try {
+                        const rxLinesData = JSON.parse(p.rx_lineas);
+                        if (Array.isArray(rxLinesData) && rxLinesData.length > 0) {
+                            rxLinesData.forEach(line => addRxLine(line));
+                        } else {
+                            addRxLine();
+                        }
+                    } catch (e) {
+                        console.error(e);
+                        addRxLine();
+                    }
+                } else {
+                    addRxLine();
+                }
+                
+                // Limpiar selección para poder repetir
+                this.value = '';
             });
 
             // Asegurarse de que siempre haya al menos una línea RX vacía al cargar el formulario

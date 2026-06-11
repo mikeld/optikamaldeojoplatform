@@ -62,12 +62,25 @@ function formatearRX($rx, $rx_lineas_json = null) {
                         $html .= '<span class="badge bg-light text-danger border">' . htmlspecialchars($txt) . '</span>';
                     }
                 } 
-                // CASO 2: Formato Plano (Cada entrada es un ojo)
+                // CASO 2: Formato Plano (Cada entrada es un ojo, con soporte de tipo y cantidad)
                 else if (isset($l['ojo'])) {
                     $ojo = strtoupper($l['ojo']);
                     $class = (strpos($ojo, 'OD') !== false) ? 'text-primary' : 'text-danger';
                     $parts = array_filter([$l['esfera'] ?? $l['esf'] ?? '', $l['cilindro'] ?? $l['cil'] ?? '', $l['eje'] ?? '', $l['adicion'] ?? $l['add'] ?? '']);
                     $txt = $ojo . ' ' . implode(' ', $parts);
+                    
+                    $tipo = $l['tipo'] ?? null;
+                    $cant = isset($l['cantidad']) ? (int)$l['cantidad'] : 0;
+                    $rec = isset($l['cantidad_recibida']) ? (int)$l['cantidad_recibida'] : 0;
+                    if ($tipo && $tipo !== 'ninguno' && $cant > 0) {
+                        $tipoLabel = ($tipo === 'caja') ? 'caja' : (($tipo === 'blister') ? 'blister' : $tipo);
+                        if ($rec > 0 && $rec < $cant) {
+                            $txt .= " ({$rec}/{$cant} {$tipoLabel}s)";
+                        } else {
+                            $txt .= " ({$cant} {$tipoLabel}s)";
+                        }
+                    }
+                    
                     $html .= '<span class="badge bg-light ' . $class . ' border">' . htmlspecialchars($txt) . '</span>';
                 }
                 
@@ -350,7 +363,9 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
                     echo '<input type="hidden" name="recibido_val" value="1">';
                     echo '<button type="submit" title="Marcar recibido" class="btn btn-success btn-sm btn-action"><i class="fas fa-check"></i></button>';
                     echo '</form>';
-                    echo '<button type="button" title="Recibido parcial" class="btn btn-warning text-dark btn-sm btn-action open-parcial-btn"><i class="fas fa-box-open"></i></button>';
+                    if (!empty($p['pack_tipo'])) {
+                        echo '<button type="button" title="Recibido parcial" class="btn btn-warning text-dark btn-sm btn-action open-parcial-btn"><i class="fas fa-box-open"></i></button>';
+                    }
                     echo '<button type="button" title="Cancelar pedido" class="btn btn-outline-danger btn-sm btn-action btn-cancelar-pedido" data-pedido-id="'.htmlspecialchars($p['id']).'"><i class="fas fa-ban"></i></button>';
                     echo '</div>';
                 }
@@ -386,5 +401,68 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
     }
 
     echo '</tbody></table></div>';
+}
+
+/**
+ * Calcula automáticamente pack_tipo y pack_estado a partir de las líneas RX
+ */
+function calcularPackDesdeLineas($rx_lineas_json) {
+    if (!$rx_lineas_json) {
+        return ['pack_tipo' => null, 'pack_estado' => null];
+    }
+    $lineas = json_decode($rx_lineas_json, true);
+    if (!is_array($lineas)) {
+        return ['pack_tipo' => null, 'pack_estado' => null];
+    }
+
+    $cajas_pedidas = 0;
+    $cajas_recibidas = 0;
+    $blisters_pedidos = 0;
+    $blisters_recibidos = 0;
+    $has_cajas = false;
+    $has_blisters = false;
+
+    foreach ($lineas as $l) {
+        $tipo = $l['tipo'] ?? null;
+        $cant = (int)($l['cantidad'] ?? 0);
+        $rec = (int)($l['cantidad_recibida'] ?? 0);
+
+        if ($tipo === 'caja') {
+            $has_cajas = true;
+            $cajas_pedidas += $cant;
+            $cajas_recibidas += $rec;
+        } else if ($tipo === 'blister') {
+            $has_blisters = true;
+            $blisters_pedidos += $cant;
+            $blisters_recibidos += $rec;
+        }
+    }
+
+    $pack_tipo = null;
+    $pack_estado = null;
+
+    if ($has_cajas && $has_blisters) {
+        $pack_tipo = 'ambos';
+    } else if ($has_cajas) {
+        $pack_tipo = 'cajas';
+    } else if ($has_blisters) {
+        $pack_tipo = 'blisters';
+    }
+
+    if ($pack_tipo) {
+        $estadoArr = [];
+        if ($has_cajas) {
+            $estadoArr['cajas'] = ['pedidas' => $cajas_pedidas, 'recibidas' => $cajas_recibidas];
+        }
+        if ($has_blisters) {
+            $estadoArr['blisters'] = ['pedidas' => $blisters_pedidos, 'recibidas' => $blisters_recibidos];
+        }
+        $pack_estado = json_encode($estadoArr);
+    }
+
+    return [
+        'pack_tipo' => $pack_tipo,
+        'pack_estado' => $pack_estado
+    ];
 }
 

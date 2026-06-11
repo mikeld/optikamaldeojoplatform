@@ -196,85 +196,7 @@ include '../views/header.php';
                         </div>
                     </div>
 
-                    <!-- Gestión de Pack: cantidades pedidas y recibidas -->
-                    <?php
-                    $tipo        = $pedido['pack_tipo'] ?? '';
-                    $pack_estado = json_decode($pedido['pack_estado'] ?? '{}', true) ?: [];
 
-                    // Helper: leer qty con compat. formato legado (bool)
-                    $getQty = function($estado, $key) {
-                        $val = $estado[$key] ?? false;
-                        if (is_array($val)) {
-                            return [(int)($val['pedidas'] ?? 0), (int)($val['recibidas'] ?? 0)];
-                        }
-                        // Formato antiguo: bool
-                        return [0, (bool)$val ? 1 : 0];
-                    };
-
-                    if ($tipo):
-                        [$cajas_ped,    $cajas_rec]    = ($tipo==='cajas'   ||$tipo==='ambos')    ? $getQty($pack_estado,'cajas')    : [0,0];
-                        [$blisters_ped, $blisters_rec] = ($tipo==='blisters'||$tipo==='ambos')    ? $getQty($pack_estado,'blisters') : [0,0];
-                    ?>
-                    <div class="mb-4">
-                        <label class="form-label d-flex justify-content-between align-items-center">
-                            <span><i class="fas fa-box me-1 text-muted"></i>Pack</span>
-                            <span class="text-muted small">Tipo: <?= ucfirst($tipo) ?></span>
-                        </label>
-                        <input type="hidden" name="pack_tipo" value="<?= htmlspecialchars($tipo) ?>">
-
-                        <div class="d-flex flex-column gap-2">
-                            <?php if ($tipo === 'cajas' || $tipo === 'ambos'):
-                                $cajasComplete = $cajas_ped > 0 && $cajas_rec >= $cajas_ped;
-                                $cajasPartial  = $cajas_rec > 0 && !$cajasComplete;
-                                $cajasClass    = $cajasComplete ? 'complete' : ($cajasPartial ? 'partial' : '');
-                            ?>
-                            <div class="pack-qty-card <?= $cajasClass ?>">
-                                <span class="pack-qty-label text-primary"><i class="fas fa-box"></i> Cajas</span>
-                                <div class="pack-qty-group">
-                                    <label for="pack_cajas_pedidas">Pedidas</label>
-                                    <input type="number" id="pack_cajas_pedidas" name="pack_cajas_pedidas"
-                                           class="form-control form-control-sm" min="0"
-                                           value="<?= $cajas_ped ?>"
-                                           onchange="actualizarEstadoPack()">
-                                </div>
-                                <div class="pack-qty-group">
-                                    <label for="pack_cajas_recibidas">Recibidas</label>
-                                    <input type="number" id="pack_cajas_recibidas" name="pack_cajas_recibidas"
-                                           class="form-control form-control-sm" min="0"
-                                           value="<?= $cajas_rec ?>"
-                                           onchange="actualizarEstadoPack()">
-                                </div>
-                                <span id="pack-cajas-badge" class="ms-auto"></span>
-                            </div>
-                            <?php endif; ?>
-
-                            <?php if ($tipo === 'blisters' || $tipo === 'ambos'):
-                                $blistersComplete = $blisters_ped > 0 && $blisters_rec >= $blisters_ped;
-                                $blistersPartial  = $blisters_rec > 0 && !$blistersComplete;
-                                $blistersClass    = $blistersComplete ? 'complete' : ($blistersPartial ? 'partial' : '');
-                            ?>
-                            <div class="pack-qty-card <?= $blistersClass ?>">
-                                <span class="pack-qty-label" style="color:#6610f2;"><i class="fas fa-tablets"></i> Blisters</span>
-                                <div class="pack-qty-group">
-                                    <label for="pack_blisters_pedidas">Pedidos</label>
-                                    <input type="number" id="pack_blisters_pedidas" name="pack_blisters_pedidas"
-                                           class="form-control form-control-sm" min="0"
-                                           value="<?= $blisters_ped ?>"
-                                           onchange="actualizarEstadoPack()">
-                                </div>
-                                <div class="pack-qty-group">
-                                    <label for="pack_blisters_recibidas">Recibidos</label>
-                                    <input type="number" id="pack_blisters_recibidas" name="pack_blisters_recibidas"
-                                           class="form-control form-control-sm" min="0"
-                                           value="<?= $blisters_rec ?>"
-                                           onchange="actualizarEstadoPack()">
-                                </div>
-                                <span id="pack-blisters-badge" class="ms-auto"></span>
-                            </div>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                    <?php endif; ?>
 
                     <!-- RX Multi-línea OD/OI -->
                     <div class="mb-4">
@@ -287,6 +209,12 @@ include '../views/header.php';
                         <div id="rx-lineas-container">
                             <!-- Se inserta por JS -->
                         </div>
+                        
+                        <!-- Resumen del Pack en tiempo real -->
+                        <div id="resumen-pack-box" class="alert alert-info py-2 px-3 mt-3 d-none">
+                            <strong>Resumen de Pack:</strong> <span id="resumen-pack-texto"></span>
+                        </div>
+
                         <input type="hidden" name="rx_lineas" id="rx_lineas_json" value="<?= htmlspecialchars($pedido['rx_lineas'] ?? '[]', ENT_QUOTES, 'UTF-8') ?>">
                         <input type="hidden" name="rx" id="rx" value="<?= htmlspecialchars($pedido['rx'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
                     </div>
@@ -402,7 +330,7 @@ include '../views/header.php';
             document.getElementById('via').value = canal + (val ? ' ' + val : '');
         }
 
-        // --- Lógica RX Multi-línea (Anidada OD/OI) ---
+        // --- Lógica RX Multi-línea (Plana con Soporte de Pack) ---
         function addRxLine(data = null) {
             const container = document.getElementById('rx-lineas-container');
             const index = container.children.length + 1;
@@ -411,48 +339,99 @@ include '../views/header.php';
             div.innerHTML = `
                 <div class="rx-linea-numero">LINEA #${index}</div>
                 <button type="button" class="btn-remove-rx" onclick="removerLineaRX(this)"><i class="fas fa-times"></i></button>
-                <div class="row g-2 align-items-center mb-2">
-                    <div class="col-8">
-                        <input type="text" class="form-control form-control-sm rx-input-nota" placeholder="Notas / Tipo Lente (ej: Biofinity)" value="${data ? (data.nota || '') : ''}">
+                
+                <div class="row g-2 align-items-center mb-2 mt-2">
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">Tipo de Artículo</label>
+                        <select class="form-select form-select-sm rx-tipo" onchange="toggleRxFields(this)">
+                            <option value="ninguno" ${data && data.tipo === 'ninguno' ? 'selected' : ''}>Ninguno (Gafa)</option>
+                            <option value="caja" ${data && data.tipo === 'caja' ? 'selected' : ''}>Caja</option>
+                            <option value="blister" ${data && data.tipo === 'blister' ? 'selected' : ''}>Blister</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">Ojo</label>
+                        <select class="form-select form-select-sm rx-ojo" onchange="toggleRxFields(this)">
+                            <option value="ninguno" ${data && data.ojo === 'ninguno' ? 'selected' : ''}>Ninguno</option>
+                            <option value="OD" ${data && data.ojo === 'OD' ? 'selected' : ''}>Ojo Derecho (OD)</option>
+                            <option value="OI" ${data && data.ojo === 'OI' ? 'selected' : ''}>Ojo Izquierdo (OI)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 rx-cantidad-wrap d-none">
+                        <label class="form-label small mb-1">Cant. Pedida</label>
+                        <input type="number" class="form-control form-control-sm rx-cantidad" min="1" value="${data ? (data.cantidad || 1) : 1}" oninput="serializeRxLines(); actualizarResumenPack();">
+                    </div>
+                    <div class="col-md-2 rx-recibida-wrap d-none">
+                        <label class="form-label small mb-1">Cant. Recibida</label>
+                        <input type="number" class="form-control form-control-sm rx-recibida" min="0" value="${data ? (data.cantidad_recibida || 0) : 0}" oninput="serializeRxLines(); actualizarResumenPack();">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1">Notas / Tipo Lente</label>
+                        <input type="text" class="form-control form-control-sm rx-input-nota" placeholder="ej: Biofinity" value="${data ? (data.nota || '') : ''}" oninput="serializeRxLines();">
                     </div>
                 </div>
-                <div class="row g-2">
-                    <div class="col-6">
-                        <div class="d-flex align-items-center gap-2 mb-2">
-                            <span class="rx-ojo-label rx-od">OD</span>
-                            <div class="row g-1 flex-grow-1">
-                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-od-esf" placeholder="Esf" value="${data ? (data.od?.esf || '') : ''}"></div>
-                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-od-cil" placeholder="Cil" value="${data ? (data.od?.cil || '') : ''}"></div>
-                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-od-eje" placeholder="Eje" value="${data ? (data.od?.eje || '') : ''}"></div>
-                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-od-add" placeholder="Add" value="${data ? (data.od?.add || '') : ''}"></div>
-                            </div>
-                        </div>
+
+                <!-- Los 4 inputs de graduación, ocultos inicialmente -->
+                <div class="row g-2 rx-inputs-wrap d-none mb-1">
+                    <div class="col-3">
+                        <label class="form-label x-small text-muted mb-0">Esf</label>
+                        <input type="text" class="form-control form-control-sm rx-input rx-esf" placeholder="Esf" value="${data ? (data.esf || '') : ''}" oninput="serializeRxLines();">
                     </div>
-                    <div class="col-6">
-                        <div class="d-flex align-items-center gap-2 mb-2">
-                            <span class="rx-ojo-label rx-oi">OI</span>
-                            <div class="row g-1 flex-grow-1">
-                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-oi-esf" placeholder="Esf" value="${data ? (data.oi?.esf || '') : ''}"></div>
-                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-oi-cil" placeholder="Cil" value="${data ? (data.oi?.cil || '') : ''}"></div>
-                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-oi-eje" placeholder="Eje" value="${data ? (data.oi?.eje || '') : ''}"></div>
-                                <div class="col-3"><input type="text" class="form-control form-control-sm rx-input rx-oi-add" placeholder="Add" value="${data ? (data.oi?.add || '') : ''}"></div>
-                            </div>
-                        </div>
+                    <div class="col-3">
+                        <label class="form-label x-small text-muted mb-0">Cil</label>
+                        <input type="text" class="form-control form-control-sm rx-input rx-cil" placeholder="Cil" value="${data ? (data.cil || '') : ''}" oninput="serializeRxLines();">
+                    </div>
+                    <div class="col-3">
+                        <label class="form-label x-small text-muted mb-0">Eje</label>
+                        <input type="text" class="form-control form-control-sm rx-input rx-eje" placeholder="Eje" value="${data ? (data.eje || '') : ''}" oninput="serializeRxLines();">
+                    </div>
+                    <div class="col-3">
+                        <label class="form-label x-small text-muted mb-0">Add</label>
+                        <input type="text" class="form-control form-control-sm rx-input rx-add" placeholder="Add" value="${data ? (data.add || '') : ''}" oninput="serializeRxLines();">
                     </div>
                 </div>
             `;
             container.appendChild(div);
             
-            div.querySelectorAll('input').forEach(input => {
-                input.addEventListener('input', serializeRxLines);
-            });
+            // Inicializar visibilidad
+            const tipoSelect = div.querySelector('.rx-tipo');
+            toggleRxFields(tipoSelect);
+        }
+
+        function toggleRxFields(el) {
+            const card = el.closest('.rx-line-row');
+            const tipo = card.querySelector('.rx-tipo').value;
+            const ojo = card.querySelector('.rx-ojo').value;
+
+            const rxInputsWrap = card.querySelector('.rx-inputs-wrap');
+            const qtyWrap = card.querySelector('.rx-cantidad-wrap');
+            const recWrap = card.querySelector('.rx-recibida-wrap');
+
+            // 1. Mostrar/ocultar inputs RX
+            if (ojo === 'OD' || ojo === 'OI') {
+                rxInputsWrap.classList.remove('d-none');
+            } else {
+                rxInputsWrap.classList.add('d-none');
+            }
+
+            // 2. Mostrar/ocultar cantidad pedida y recibida si es pack
+            if ((tipo === 'caja' || tipo === 'blister') && (ojo === 'OD' || ojo === 'OI')) {
+                qtyWrap.classList.remove('d-none');
+                recWrap.classList.remove('d-none');
+            } else {
+                qtyWrap.classList.add('d-none');
+                recWrap.classList.add('d-none');
+            }
+
             serializeRxLines();
+            actualizarResumenPack();
         }
 
         function removerLineaRX(btn) {
             btn.closest('.rx-linea-card').remove();
             reordenarLineas();
             serializeRxLines();
+            actualizarResumenPack();
         }
 
         function reordenarLineas() {
@@ -464,108 +443,229 @@ include '../views/header.php';
         function serializeRxLines() {
             const rxLines = [];
             let textLegacy = "";
+            
             document.querySelectorAll('.rx-line-row').forEach((card, idx) => {
-                const row = {
-                    nota: card.querySelector('.rx-input-nota').value,
-                    od: {
-                        esf: card.querySelector('.rx-od-esf').value,
-                        cil: card.querySelector('.rx-od-cil').value,
-                        eje: card.querySelector('.rx-od-eje').value,
-                        add: card.querySelector('.rx-od-add').value
-                    },
-                    oi: {
-                        esf: card.querySelector('.rx-oi-esf').value,
-                        cil: card.querySelector('.rx-oi-cil').value,
-                        eje: card.querySelector('.rx-oi-eje').value,
-                        add: card.querySelector('.rx-oi-add').value
-                    }
-                };
+                const tipo = card.querySelector('.rx-tipo').value;
+                const ojo = card.querySelector('.rx-ojo').value;
+                const cantidad = parseInt(card.querySelector('.rx-cantidad').value) || 1;
+                const cantidad_recibida = parseInt(card.querySelector('.rx-recibida').value) || 0;
+                const nota = card.querySelector('.rx-input-nota').value.trim();
                 
-                if (row.nota || row.od.esf || row.od.cil || row.oi.esf || row.oi.cil) {
+                const esf = card.querySelector('.rx-esf').value.trim();
+                const cil = card.querySelector('.rx-cil').value.trim();
+                const eje = card.querySelector('.rx-eje').value.trim();
+                const add = card.querySelector('.rx-add').value.trim();
+
+                const row = {
+                    tipo: tipo,
+                    ojo: ojo,
+                    cantidad: (tipo !== 'ninguno' && ojo !== 'ninguno') ? cantidad : 0,
+                    cantidad_recibida: (tipo !== 'ninguno' && ojo !== 'ninguno') ? cantidad_recibida : 0,
+                    esf: esf,
+                    cil: cil,
+                    eje: eje,
+                    add: add,
+                    nota: nota
+                };
+
+                if (ojo !== 'ninguno' || tipo !== 'ninguno' || nota) {
                     rxLines.push(row);
-                    const label = row.nota ? `[${row.nota}] ` : `L#${idx+1}: `;
-                    textLegacy += `${label}OD(${row.od.esf || '0'} ${row.od.cil || ''}) OI(${row.oi.esf || '0'} ${row.oi.cil || ''}) | `;
+                    
+                    let lineText = "";
+                    if (ojo !== 'ninguno') {
+                        lineText += ojo + " ";
+                        if (esf) lineText += esf + " ";
+                        if (cil) lineText += cil + " ";
+                        if (eje) lineText += eje + " ";
+                        if (add) lineText += add + " ";
+                    }
+                    if (tipo !== 'ninguno' && ojo !== 'ninguno') {
+                        lineText += `(${cantidad} ${tipo}s)`;
+                    }
+                    if (nota) {
+                        lineText += ` [${nota}]`;
+                    }
+                    if (lineText.trim()) {
+                        textLegacy += lineText.trim() + " | ";
+                    }
                 }
             });
+
             document.getElementById('rx_lineas_json').value = JSON.stringify(rxLines);
             document.getElementById('rx').value = textLegacy.replace(/\|\s*$/, '');
         }
 
-        // --- Pack: actualizar estado general y estilos de tarjeta según cantidades ---
-        function actualizarEstadoPack() {
-            const tiposPresentes = [];
-            let todasCompletas = true;
-            let algunaRecibida = false;
+        function actualizarResumenPack() {
+            let totalCajasOD = 0;
+            let totalCajasOI = 0;
+            let totalBlistersOD = 0;
+            let totalBlistersOI = 0;
 
-            ['cajas', 'blisters'].forEach(t => {
-                const inpPed = document.getElementById('pack_' + t + '_pedidas');
-                const inpRec = document.getElementById('pack_' + t + '_recibidas');
-                const card   = inpPed ? inpPed.closest('.pack-qty-card') : null;
-                const badge  = document.getElementById('pack-' + t + '-badge');
-                if (!inpPed || !inpRec) return;
+            document.querySelectorAll('.rx-line-row').forEach(card => {
+                const tipo = card.querySelector('.rx-tipo').value;
+                const ojo = card.querySelector('.rx-ojo').value;
+                const cantidad = parseInt(card.querySelector('.rx-cantidad').value) || 0;
 
-                tiposPresentes.push(t);
-                const ped = parseInt(inpPed.value) || 0;
-                const rec = parseInt(inpRec.value) || 0;
-                const completo = ped > 0 && rec >= ped;
-                const parcial  = rec > 0 && !completo;
-
-                card.classList.remove('complete', 'partial');
-                if (completo) {
-                    card.classList.add('complete');
-                    if (badge) badge.innerHTML = '<span class="badge bg-success"><i class="fas fa-check me-1"></i>Completo</span>';
-                } else if (parcial) {
-                    card.classList.add('partial');
-                    if (badge) badge.innerHTML = '<span class="badge bg-warning text-dark"><i class="fas fa-clock me-1"></i>Parcial</span>';
-                } else {
-                    if (badge) badge.innerHTML = '';
+                if (ojo === 'OD') {
+                    if (tipo === 'caja') totalCajasOD += cantidad;
+                    else if (tipo === 'blister') totalBlistersOD += cantidad;
+                } else if (ojo === 'OI') {
+                    if (tipo === 'caja') totalCajasOI += cantidad;
+                    else if (tipo === 'blister') totalBlistersOI += cantidad;
                 }
-
-                if (!completo) todasCompletas = false;
-                if (rec > 0) algunaRecibida = true;
             });
 
-            if (tiposPresentes.length === 0) return;
-            const sel = document.getElementById('recibido');
-            if (!sel) return;
-            if (todasCompletas)      sel.value = "1";
-            else if (algunaRecibida) sel.value = "2";
-            else                     sel.value = "0";
+            const parts = [];
+            if (totalCajasOD > 0) parts.push(`${totalCajasOD} caja(s) OD`);
+            if (totalCajasOI > 0) parts.push(`${totalCajasOI} caja(s) OI`);
+            if (totalBlistersOD > 0) parts.push(`${totalBlistersOD} blister(s) OD`);
+            if (totalBlistersOI > 0) parts.push(`${totalBlistersOI} blister(s) OI`);
+
+            const box = document.getElementById('resumen-pack-box');
+            if (parts.length > 0) {
+                document.getElementById('resumen-pack-texto').innerText = parts.join(', ');
+                box.classList.remove('d-none');
+            } else {
+                box.classList.add('d-none');
+            }
+        }
+
+        function parsearViaJS(via) {
+            via = (via || '').trim();
+            if (!via) return { canal: '', detalle: '' };
+
+            if (/^(web|portal|portar)/i.test(via)) {
+                const detalle = via.replace(/^(web|portal|portar)\s*/i, '').trim();
+                return { canal: 'Web', detalle: detalle };
+            }
+            if (/^whatsapp/i.test(via)) {
+                const detalle = via.replace(/^whatsapp\s*/i, '').trim();
+                return { canal: 'WhatsApp', detalle: detalle };
+            }
+            if (/^(teléfono|telefono|telef|tel\.?|tf\.?|tf$)/i.test(via)) {
+                const detalle = via.replace(/^(teléfono|telefono|telef|tel\.?|tf\.?)\s*/i, '').trim();
+                return { canal: 'Teléfono', detalle: detalle };
+            }
+            if (/^(e-?mail|mail|correo)/i.test(via)) {
+                const detalle = via.replace(/^(e-?mail|mail|correo)\s*/i, '').trim();
+                return { canal: 'E-mail', detalle: detalle };
+            }
+            if (/^presencial/i.test(via)) {
+                return { canal: 'Presencial', detalle: '' };
+            }
+            return { canal: 'Otro', detalle: via };
         }
 
         document.addEventListener('DOMContentLoaded', function() {
-            // Inicializar badges de pack si existen
-            actualizarEstadoPack();
-
             const initialRx = document.getElementById('rx_lineas_json').value;
-            const legacyRx = document.getElementById('rx').value; // Capturar si hay RX en formato texto antiguo
+            const legacyRx = document.getElementById('rx').value; 
             try {
                 const data = JSON.parse(initialRx);
-                if(data && data.length > 0) {
+                if (data && data.length > 0) {
                     data.forEach(d => {
-                        // Soporte para formato JSON antiguo (plano con 'ojo')
+                        // CASO A: Formato plano nuevo (tiene 'ojo')
                         if (d.ojo && !d.od && !d.oi) {
-                            const isOD = d.ojo.includes('OD');
-                            addRxLine({
-                                nota: d.nota || '',
-                                od: isOD ? { esf: d.esfera, cil: d.cilindro, eje: d.eje, add: d.adicion } : {},
-                                oi: !isOD ? { esf: d.esfera, cil: d.cilindro, eje: d.eje, add: d.adicion } : {}
-                            });
-                        } else {
                             addRxLine(d);
+                        } 
+                        // CASO B: Formato anidado antiguo (tiene 'od' o 'oi')
+                        else if (d.od || d.oi) {
+                            const hasOD = d.od && (d.od.esf || d.od.cil || d.od.eje || d.od.add);
+                            const hasOI = d.oi && (d.oi.esf || d.oi.cil || d.oi.eje || d.oi.add);
+                            
+                            const packTipo = '<?= htmlspecialchars($pedido['pack_tipo'] ?? 'ninguno') ?>';
+                            
+                            let cantCajas = 0, recCajas = 0;
+                            let cantBlisters = 0, recBlisters = 0;
+                            <?php
+                            $tipo        = $pedido['pack_tipo'] ?? '';
+                            $pack_estado = json_decode($pedido['pack_estado'] ?? '{}', true) ?: [];
+                            $getQty = function($estado, $key) {
+                                $val = $estado[$key] ?? false;
+                                if (is_array($val)) {
+                                    return [(int)($val['pedidas'] ?? 0), (int)($val['recibidas'] ?? 0)];
+                                }
+                                return [0, (bool)$val ? 1 : 0];
+                            };
+                            if ($tipo) {
+                                [$c_ped, $c_rec] = ($tipo==='cajas' || $tipo==='ambos') ? $getQty($pack_estado,'cajas') : [0,0];
+                                [$b_ped, $b_rec] = ($tipo==='blisters' || $tipo==='ambos') ? $getQty($pack_estado,'blisters') : [0,0];
+                                echo "cantCajas = $c_ped; recCajas = $c_rec;\n";
+                                echo "cantBlisters = $b_ped; recBlisters = $b_rec;\n";
+                            }
+                            ?>
+
+                            if (hasOD) {
+                                let t = 'ninguno';
+                                let c = 1;
+                                let r = 0;
+                                if (packTipo === 'cajas' || packTipo === 'ambos') {
+                                    t = 'caja';
+                                    c = hasOI ? Math.ceil(cantCajas / 2) : cantCajas;
+                                    r = hasOI ? Math.ceil(recCajas / 2) : recCajas;
+                                } else if (packTipo === 'blisters' || packTipo === 'ambos') {
+                                    t = 'blister';
+                                    c = hasOI ? Math.ceil(cantBlisters / 2) : cantBlisters;
+                                    r = hasOI ? Math.ceil(recBlisters / 2) : recBlisters;
+                                }
+                                addRxLine({
+                                    tipo: t,
+                                    ojo: 'OD',
+                                    cantidad: c || 1,
+                                    cantidad_recibida: r || 0,
+                                    esf: d.od.esf || '',
+                                    cil: d.od.cil || '',
+                                    eje: d.od.eje || '',
+                                    add: d.od.add || '',
+                                    nota: d.nota || d.notas || ''
+                                });
+                            }
+                            if (hasOI) {
+                                let t = 'ninguno';
+                                let c = 1;
+                                let r = 0;
+                                if (packTipo === 'cajas' || packTipo === 'ambos') {
+                                    t = 'caja';
+                                    c = hasOD ? Math.floor(cantCajas / 2) : cantCajas;
+                                    r = hasOD ? Math.floor(recCajas / 2) : recCajas;
+                                } else if (packTipo === 'blisters' || packTipo === 'ambos') {
+                                    t = 'blister';
+                                    c = hasOD ? Math.floor(cantBlisters / 2) : cantBlisters;
+                                    r = hasOD ? Math.floor(recBlisters / 2) : recBlisters;
+                                }
+                                addRxLine({
+                                    tipo: t,
+                                    ojo: 'OI',
+                                    cantidad: c || 1,
+                                    cantidad_recibida: r || 0,
+                                    esf: d.oi.esf || '',
+                                    cil: d.oi.cil || '',
+                                    eje: d.oi.eje || '',
+                                    add: d.oi.add || '',
+                                    nota: d.nota || d.notas || ''
+                                });
+                            }
+                            
+                            if (!hasOD && !hasOI) {
+                                addRxLine({
+                                    tipo: 'ninguno',
+                                    ojo: 'ninguno',
+                                    cantidad: 0,
+                                    cantidad_recibida: 0,
+                                    nota: d.nota || d.notas || ''
+                                });
+                            }
                         }
                     });
                 } else if (legacyRx && legacyRx.trim() !== '') {
-                    // Si no hay lineas JSON pero sí RX legado de texto
-                    addRxLine({ nota: legacyRx });
+                    addRxLine({ tipo: 'ninguno', ojo: 'ninguno', cantidad: 0, cantidad_recibida: 0, nota: legacyRx });
                 } else {
                     addRxLine();
                 }
-            } catch(e) { 
+            } catch (e) {
                 if (legacyRx && legacyRx.trim() !== '') {
-                    addRxLine({ nota: legacyRx });
+                    addRxLine({ tipo: 'ninguno', ojo: 'ninguno', cantidad: 0, cantidad_recibida: 0, nota: legacyRx });
                 } else {
-                    addRxLine(); 
+                    addRxLine();
                 }
             }
 

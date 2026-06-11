@@ -10,26 +10,12 @@ $referencia_cliente  = $_POST['referencia_cliente'];
 $lc_gafa_recambio    = trim($_POST['lc_gafa_recambio']);
 $rx                  = trim($_POST['rx'] ?? '');
 $rx_lineas           = $_POST['rx_lineas'] ?? null;
-$pack_tipo           = $_POST['pack_tipo'] ?? null;
 
-// Reconstruir pack_estado desde los campos individuales de cantidad
-$pack_estado = null;
-if ($pack_tipo) {
-    $estadoArr = [];
-    if ($pack_tipo === 'cajas' || $pack_tipo === 'ambos') {
-        $estadoArr['cajas'] = [
-            'pedidas'   => max(0, (int)($_POST['pack_cajas_pedidas']    ?? 0)),
-            'recibidas' => max(0, (int)($_POST['pack_cajas_recibidas']  ?? 0)),
-        ];
-    }
-    if ($pack_tipo === 'blisters' || $pack_tipo === 'ambos') {
-        $estadoArr['blisters'] = [
-            'pedidas'   => max(0, (int)($_POST['pack_blisters_pedidas']    ?? 0)),
-            'recibidas' => max(0, (int)($_POST['pack_blisters_recibidas']  ?? 0)),
-        ];
-    }
-    $pack_estado = json_encode($estadoArr);
-}
+// Calcular de forma automática pack_tipo y pack_estado a partir de las líneas RX
+require_once '../includes/funciones.php';
+$packInfo = calcularPackDesdeLineas($rx_lineas);
+$pack_tipo = $packInfo['pack_tipo'];
+$pack_estado = $packInfo['pack_estado'];
 $via                 = trim($_POST['via'] ?? '');
 $recibido            = isset($_POST['recibido']) ? (int)$_POST['recibido'] : 0;
 $observaciones       = trim($_POST['observaciones'] ?? '');

@@ -16,25 +16,16 @@ try {
         $lc_gafa_recambio      = trim($_POST['lc_gafa_recambio']  ?? '');
         $rx                    = trim($_POST['rx']                ?? '');
         $rx_lineas             = $_POST['rx_lineas'] ?? null;
-        $pack_tipo             = $_POST['pack_tipo'] ?? null;
-        $pack_cajas_pedidas    = max(0, (int)($_POST['pack_cajas_pedidas']    ?? 0));
-        $pack_blisters_pedidas = max(0, (int)($_POST['pack_blisters_pedidas'] ?? 0));
+
+        // Calcular de forma automática pack_tipo y pack_estado a partir de las líneas RX
+        require_once '../includes/funciones.php';
+        $packInfo = calcularPackDesdeLineas($rx_lineas);
+        $pack_tipo = $packInfo['pack_tipo'];
+        $pack_estado = $packInfo['pack_estado'];
+
         $via                   = trim($_POST['via']               ?? '');
         $observaciones         = trim($_POST['observaciones']     ?? '');
         $proveedor_id          = $_POST['proveedor_id'] !== '' ? (int)$_POST['proveedor_id'] : null;
-
-        // Construir pack_estado inicial con cantidades pedidas y recibidas = 0
-        $pack_estado = null;
-        if ($pack_tipo) {
-            $estadoArr = [];
-            if ($pack_tipo === 'cajas' || $pack_tipo === 'ambos') {
-                $estadoArr['cajas'] = ['pedidas' => $pack_cajas_pedidas, 'recibidas' => 0];
-            }
-            if ($pack_tipo === 'blisters' || $pack_tipo === 'ambos') {
-                $estadoArr['blisters'] = ['pedidas' => $pack_blisters_pedidas, 'recibidas' => 0];
-            }
-            $pack_estado = json_encode($estadoArr);
-        }
 
         // Convertir fechas vacías a NULL
         $fecha_pedido  = trim($_POST['fecha_pedido'] )  !== '' ? $_POST['fecha_pedido']  : null;
