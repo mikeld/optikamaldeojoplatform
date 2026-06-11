@@ -88,35 +88,82 @@ try {
     $tableCheck = $pdo->query("SHOW TABLES LIKE 'facturas_providers'")->fetchColumn();
     echo "Table facturas_providers exists: " . ($tableCheck ? "YES" : "NO") . "\n";
     
-    // 3. Obtener una factura para pruebas
-    $audit = $pdo->query("SELECT `id`, `provider`, LENGTH(`ocr_text`) as ocr_len FROM `facturas_audits` WHERE `provider` IS NOT NULL AND `provider` != '' LIMIT 1")->fetch(PDO::FETCH_ASSOC);
-    if (!$audit) {
-        echo "No audits found in database to use as reference.\n";
+    // 3. Obtener todas las facturas del proveedor ALCON HEALTHCARE, S.A.
+    $stmt = $pdo->prepare("SELECT `id`, `provider`, `invoice_number`, LENGTH(`ocr_text`) as ocr_len, `pdf_path` FROM `facturas_audits` WHERE `provider` LIKE ?");
+    $stmt->execute(['%ALCON%']);
+    $audits = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    echo "Found " . count($audits) . " audits matching '%ALCON%':\n";
+    foreach ($audits as $a) {
+        // Verificar páginas asociadas
+        $pageStmt = $pdo->prepare("SELECT COUNT(*) FROM `facturas_pages` WHERE `audit_id` = ?");
+        $pageStmt->execute([$a['id']]);
+        $pageCount = $pageStmt->fetchColumn();
+        
+        echo " - Audit ID: " . $a['id'] . ", Provider: " . $a['provider'] . ", Invoice: " . $a['invoice_number'] . ", OCR Len: " . ($a['ocr_len'] ?? 'NULL') . ", Pages in DB: " . $pageCount . ", PDF Path: " . $a['pdf_path'] . "\n";
+    }
+    
+    if (empty($audits)) {
+        echo "No audits found for ALCON.\n";
         exit;
     }
     
-    echo "Using reference audit ID: " . $audit['id'] . " (" . $audit['provider'] . "), OCR Length: " . $audit['ocr_len'] . "\n";
+    // Probar el proceso de estudio con el primer audit de ALCON
+    $testAudit = $audits[0];
+    $auditId = $testAudit['id'];
+    echo "\n--- RUNNING DIAGNOSTIC STUDY FOR AUDIT ID: $auditId ---\n";
     
-    // 4. Probar llamada a Gemini
-    $auditId = $audit['id'];
     $stmt = $pdo->prepare("SELECT `ocr_text`, `provider` FROM `facturas_audits` WHERE `id` = ?");
     $stmt->execute([$auditId]);
-    $fullAudit = $stmt->fetch(PDO::FETCH_ASSOC);
+    $audit = $stmt->fetch(PDO::FETCH_ASSOC);
     
-    $providerName = trim($fullAudit['provider']);
-    $textContext = trim($fullAudit['ocr_text']);
-    
+    $providerName = trim($audit['provider']);
+    $textContext = trim($audit['ocr_text']);
     $parts = [];
+    
     if ($textContext !== '') {
-        $parts[] = ['text' => "OCR text of the invoice:\n" . substr($textContext, 0, 1000)];
+        echo "OCR text is present, using text context.\n";
+        $textForGemini = function_exists('mb_substr') ? mb_substr($textContext, 0, 40000) : substr($textContext, 0, 40000);
+        $parts[] = ['text' => "OCR text of the invoice:\n" . $textForGemini];
     } else {
-        $parts[] = ['text' => "OCR text of the invoice is empty."];
+        echo "OCR text is empty, trying to read page image...\n";
+        $pageStmt = $pdo->prepare("SELECT `image_path` FROM `facturas_pages` WHERE `audit_id` = ? AND `page_number` = 1");
+        $pageStmt->execute([$auditId]);
+        $imageRelPath = $pageStmt->fetchColumn();
+        
+        if ($imageRelPath) {
+            echo "Image path in DB: $imageRelPath\n";
+            // Construir ruta absoluta
+            $prefix = 'facturas_uploads/';
+            $path = dirname(__DIR__, 2) . '/' . $imageRelPath;
+            $imagePath = realpath($path);
+            echo "Absolute image path resolved: " . ($imagePath ?: 'FALSE') . "\n";
+            if ($imagePath && is_file($imagePath)) {
+                echo "Image file exists on disk. Size: " . filesize($imagePath) . " bytes\n";
+                $mimeType = mime_content_type($imagePath) ?: 'image/jpeg';
+                $base64 = base64_encode(file_get_contents($imagePath));
+                $parts[] = [
+                    'inlineData' => [
+                        'data' => $base64,
+                        'mimeType' => $mimeType,
+                    ],
+                ];
+            } else {
+                echo "Image file does NOT exist on disk at: $path\n";
+            }
+        } else {
+            echo "No page image found in DB for this audit ID.\n";
+        }
+    }
+    
+    if (empty($parts)) {
+        throw new Exception('No hay texto OCR ni imagen de página disponible para esta factura');
     }
     
     $prompt = "Analyze the layout and format of this invoice from the provider '{$providerName}'.
 Based on this, return a JSON object with:
-1. 'system_description': A clear summary in Spanish (max 150 words) explaining the invoice format.
-2. 'extraction_rules': A concise set of extraction instructions in English (2-3 sentences).
+1. 'system_description': A clear summary in Spanish.
+2. 'extraction_rules': A concise set of extraction instructions in English.
 
 Return ONLY the raw JSON object conforming to this schema:
 {
@@ -145,15 +192,26 @@ Return ONLY the raw JSON object conforming to this schema:
     ];
     
     echo "Calling Gemini...\n";
-    if (!defined('GEMINI_API_KEY') || trim(GEMINI_API_KEY) === '') {
-        echo "GEMINI_API_KEY is not defined or empty!\n";
-    } else {
-        echo "GEMINI_API_KEY defined. Model defined: " . (defined('GEMINI_MODEL') ? GEMINI_MODEL : 'NOT DEFINED') . "\n";
-    }
-    
     $rawResponse = geminiGenerateContent($payload);
     echo "Gemini Response successful!\n";
-    print_r($rawResponse);
+    $responseText = geminiResponseText($rawResponse);
+    echo "Response Text:\n" . $responseText . "\n";
+    
+    $result = json_decode(trim($responseText), true);
+    if (!is_array($result)) {
+        echo "Failed to decode response as JSON directly. Cleaning up...\n";
+        // Intentar limpiar
+        $responseTextClean = preg_replace('/^```(?:json)?\s*/i', '', $responseText);
+        $responseTextClean = preg_replace('/\s*```$/', '', trim($responseTextClean));
+        $result = json_decode($responseTextClean, true);
+    }
+    
+    if (is_array($result)) {
+        echo "Decoded JSON successfully:\n";
+        print_r($result);
+    } else {
+        echo "ERROR: Gemini response could not be parsed as JSON.\n";
+    }
     
 } catch (Exception $e) {
     echo "\nEXCEPTION CAUGHT:\n";
