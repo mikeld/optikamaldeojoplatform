@@ -39,6 +39,7 @@ Rutas clave:
 
 Docs largas:
 
+- `docs/index.md` (Índice de documentación técnica y funcional detallada)
 - `pedidos/DOCUMENTACION.md`
 - `pedidos/GUIA_INSTALACION.md`
 
