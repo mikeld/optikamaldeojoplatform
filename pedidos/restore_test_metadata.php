@@ -1,5 +1,9 @@
 <?php
-require 'includes/conexion.php';
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
+require_once __DIR__ . '/includes/conexion.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -10,7 +14,7 @@ $pdo = $conexion->pdo;
 
 try {
     $currentDb = $pdo->query("SELECT DATABASE()")->fetchColumn();
-} catch (Exception $e) {
+} catch (Throwable $e) {
     $currentDb = 'desconocida';
 }
 
@@ -40,6 +44,9 @@ if ($isTestDb) {
         }
     }
     
+    $debugMsg .= "Ruta actual: " . __DIR__;
+    $debugMsg .= " | Config Prod: " . ($foundPath ? basename(dirname($foundPath)) . '/' . basename($foundPath) : 'Ninguno');
+    
     if ($foundPath) {
         $content = file_get_contents($foundPath);
         
@@ -56,18 +63,21 @@ if ($isTestDb) {
         $prodPass = $matchConstant($content, 'DB_PASS');
         $prodCharset = $matchConstant($content, 'DB_CHARSET', 'utf8mb4');
         
+        $debugMsg .= " | DB Prod Detectada: " . $prodDbName;
+        
         if ($prodHost && $prodDbName && $prodUser && $prodPass) {
             try {
                 $prodPdo = new PDO("mysql:host=$prodHost;dbname=$prodDbName;charset=$prodCharset", $prodUser, $prodPass);
                 $prodPdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-            } catch (PDOException $e) {
-                $debugMsg = "Error conectando a BD producción: " . $e->getMessage();
+                $debugMsg .= " | Conexión Prod: Exitosa";
+            } catch (Throwable $e) {
+                $debugMsg .= " | Error Conexión Prod: " . $e->getMessage();
             }
         } else {
-            $debugMsg = "No se pudieron extraer todas las credenciales de producción del archivo configurado.";
+            $debugMsg .= " | Error: Credenciales incompletas en config.";
         }
     } else {
-        $debugMsg = "No se encontró el archivo db_config.php de producción en los directorios esperados.";
+        $debugMsg .= " | Rutas probadas: " . implode(', ', array_map(function($p) { return basename(dirname($p, 2)) . '/' . basename(dirname($p)) . '/' . basename($p); }, $possiblePaths));
     }
 }
 
@@ -76,7 +86,7 @@ if ($isTestDb) {
     try {
         $testCounts['clientes'] = (int)$pdo->query("SELECT COUNT(*) FROM `clientes`")->fetchColumn();
         $testCounts['proveedores'] = (int)$pdo->query("SELECT COUNT(*) FROM `proveedores`")->fetchColumn();
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         $debugMsg .= ($debugMsg ? ' | ' : '') . "Error al contar tablas de test: " . $e->getMessage();
     }
     
@@ -84,7 +94,7 @@ if ($isTestDb) {
         try {
             $prodCounts['clientes'] = (int)$prodPdo->query("SELECT COUNT(*) FROM `clientes`")->fetchColumn();
             $prodCounts['proveedores'] = (int)$prodPdo->query("SELECT COUNT(*) FROM `proveedores`")->fetchColumn();
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             $debugMsg .= ($debugMsg ? ' | ' : '') . "Error al contar tablas de producción: " . $e->getMessage();
         }
     }
