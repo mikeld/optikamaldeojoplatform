@@ -27,9 +27,9 @@ include('header.php');
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <style>
     .select2-container--bootstrap-5 .select2-selection { border-radius: 12px; height: calc(3.5rem + 2px); padding: 1rem 0.75rem; }
-    .select2-container .select2-selection--single { height: 50px !important; border-radius: 10px !important; border: 1px solid #dee2e6 !important; }
-    .select2-container--default .select2-selection--single .select2-selection__rendered { line-height: 48px !important; padding-left: 15px !important; }
-    .select2-container--default .select2-selection--single .select2-selection__arrow { height: 48px !important; }
+    .select2-container .select2-selection--single { height: 38px !important; border-radius: 0.375rem !important; border: 1px solid #dee2e6 !important; }
+    .select2-container--default .select2-selection--single .select2-selection__rendered { line-height: 36px !important; padding-left: 12px !important; font-size: 0.875rem; }
+    .select2-container--default .select2-selection--single .select2-selection__arrow { height: 36px !important; }
 
     /* --- RX Multi-línea --- */
     .rx-linea-card {
@@ -402,6 +402,110 @@ try {
             const index = container.children.length + 1;
             const div = document.createElement('div');
             div.className = 'rx-linea-card mb-3 rx-line-row'; // Clase para identificar filas
+
+            const normalizeEsf = (val) => {
+                if (!val) return '';
+                const parsed = parseFloat(val);
+                if (isNaN(parsed)) return val.toString().trim();
+                if (parsed === 0) return '0.00';
+                if (parsed > 0) return '+' + parsed.toFixed(2);
+                return parsed.toFixed(2);
+            };
+
+            const normalizeCil = (val) => {
+                if (!val) return '';
+                const parsed = parseFloat(val);
+                if (isNaN(parsed)) return val.toString().trim();
+                return parsed.toFixed(2);
+            };
+
+            const normalizeEje = (val) => {
+                if (!val) return '';
+                const parsed = parseInt(val, 10);
+                if (isNaN(parsed)) return val.toString().trim();
+                return parsed.toString();
+            };
+
+            const currentEsf = data && data.esf ? normalizeEsf(data.esf) : '';
+            const currentCil = data && data.cil ? normalizeCil(data.cil) : '';
+            const currentEje = data && data.eje ? normalizeEje(data.eje) : '';
+
+            // Generate Esf Options
+            const standardEsfValues = new Set();
+            for (let val = -20.00; val <= -0.25; val += 0.25) standardEsfValues.add(val.toFixed(2));
+            standardEsfValues.add('0.00');
+            for (let val = 0.25; val <= 20.00; val += 0.25) standardEsfValues.add('+' + val.toFixed(2));
+
+            let esfSelectHtml = `<select class="form-select form-select-sm rx-input rx-esf" onchange="serializeRxLines();">`;
+            esfSelectHtml += `<option value="">Esf</option>`;
+            
+            let esfCustomOption = '';
+            if (currentEsf && !standardEsfValues.has(currentEsf)) {
+                esfCustomOption = `<option value="${currentEsf}" selected>${currentEsf}</option>`;
+            }
+
+            if (esfCustomOption && parseFloat(currentEsf) < -20.00) {
+                esfSelectHtml += esfCustomOption;
+                esfCustomOption = '';
+            }
+
+            for (let val = -20.00; val <= -0.25; val += 0.25) {
+                const valStr = val.toFixed(2);
+                const isSel = (currentEsf === valStr) ? 'selected' : '';
+                esfSelectHtml += `<option value="${valStr}" ${isSel}>${valStr}</option>`;
+            }
+
+            const is0Sel = (currentEsf === '0.00') ? 'selected' : '';
+            esfSelectHtml += `<option value="0.00" ${is0Sel}>0.00</option>`;
+
+            for (let val = 0.25; val <= 20.00; val += 0.25) {
+                const valStr = '+' + val.toFixed(2);
+                const isSel = (currentEsf === valStr) ? 'selected' : '';
+                esfSelectHtml += `<option value="${valStr}" ${isSel}>${valStr}</option>`;
+            }
+
+            if (esfCustomOption) {
+                esfSelectHtml += esfCustomOption;
+            }
+            esfSelectHtml += `</select>`;
+
+            // Generate Cil Options
+            const standardCilValues = new Set();
+            for (let val = -0.75; val >= -6.00; val -= 0.25) standardCilValues.add(val.toFixed(2));
+
+            let cilSelectHtml = `<select class="form-select form-select-sm rx-input rx-cil" onchange="serializeRxLines();">`;
+            cilSelectHtml += `<option value="">Cil</option>`;
+
+            let cilCustomOption = '';
+            if (currentCil && !standardCilValues.has(currentCil)) {
+                cilCustomOption = `<option value="${currentCil}" selected>${currentCil}</option>`;
+                cilSelectHtml += cilCustomOption;
+            }
+
+            for (let val = -0.75; val >= -6.00; val -= 0.25) {
+                const valStr = val.toFixed(2);
+                const isSel = (currentCil === valStr) ? 'selected' : '';
+                cilSelectHtml += `<option value="${valStr}" ${isSel}>${valStr}</option>`;
+            }
+            cilSelectHtml += `</select>`;
+
+            // Generate Eje Options
+            let ejeSelectHtml = `<select class="form-select form-select-sm rx-input rx-eje" onchange="serializeRxLines();">`;
+            ejeSelectHtml += `<option value="">Eje</option>`;
+            
+            const ejeInt = parseInt(currentEje, 10);
+            const isStandardEje = !isNaN(ejeInt) && ejeInt >= 0 && ejeInt <= 180;
+            if (currentEje && !isStandardEje) {
+                ejeSelectHtml += `<option value="${currentEje}" selected>${currentEje}</option>`;
+            }
+
+            for (let val = 0; val <= 180; val++) {
+                const valStr = val.toString();
+                const isSel = (currentEje === valStr) ? 'selected' : '';
+                ejeSelectHtml += `<option value="${valStr}" ${isSel}>${valStr}</option>`;
+            }
+            ejeSelectHtml += `</select>`;
+
             div.innerHTML = `
                 <div class="rx-linea-numero">LINEA #${index}</div>
                 <button type="button" class="btn-remove-rx" onclick="removerLineaRX(this)"><i class="fas fa-times"></i></button>
@@ -428,34 +532,42 @@ try {
                         <label class="form-label small mb-1">Cantidad</label>
                         <input type="number" class="form-control form-control-sm rx-cantidad" min="1" value="${data ? (data.cantidad || 1) : 1}" oninput="serializeRxLines(); actualizarResumenPack();">
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md rx-nota-column">
                         <label class="form-label small mb-1">Notas / Tipo Lente</label>
-                        <div class="input-group input-group-sm">
+                        <div class="d-flex rx-nota-container gap-1">
                             <input type="text" list="productos-list" class="form-control form-control-sm rx-input-nota" placeholder="ej: Biofinity" value="${data ? (data.nota || '') : ''}" oninput="serializeRxLines();">
-                            <button class="btn btn-outline-success" type="button" title="Crear nuevo producto" onclick="abrirModalNuevoProducto(this)">
+                            <button class="btn btn-sm btn-outline-primary" type="button" title="Crear nuevo producto" onclick="abrirModalNuevoProducto(this)" style="flex-shrink: 0; width: 31px; height: 31px; display: flex; align-items: center; justify-content: center; border-radius: 6px !important;">
                                 <i class="fas fa-plus"></i>
                             </button>
                         </div>
                     </div>
                 </div>
 
-                <!-- Los 4 inputs de graduación, ocultos inicialmente -->
+                <!-- Los 6 inputs de graduación, ocultos inicialmente -->
                 <div class="row g-2 rx-inputs-wrap d-none mb-1">
-                    <div class="col-3">
+                    <div class="col-2">
                         <label class="form-label x-small text-muted mb-0">Esf</label>
-                        <input type="text" class="form-control form-control-sm rx-input rx-esf" placeholder="Esf" value="${data ? (data.esf || '') : ''}" oninput="serializeRxLines();">
+                        ${esfSelectHtml}
                     </div>
-                    <div class="col-3">
+                    <div class="col-2">
                         <label class="form-label x-small text-muted mb-0">Cil</label>
-                        <input type="text" class="form-control form-control-sm rx-input rx-cil" placeholder="Cil" value="${data ? (data.cil || '') : ''}" oninput="serializeRxLines();">
+                        ${cilSelectHtml}
                     </div>
-                    <div class="col-3">
+                    <div class="col-2">
                         <label class="form-label x-small text-muted mb-0">Eje</label>
-                        <input type="text" class="form-control form-control-sm rx-input rx-eje" placeholder="Eje" value="${data ? (data.eje || '') : ''}" oninput="serializeRxLines();">
+                        ${ejeSelectHtml}
                     </div>
-                    <div class="col-3">
+                    <div class="col-2">
                         <label class="form-label x-small text-muted mb-0">Add</label>
                         <input type="text" class="form-control form-control-sm rx-input rx-add" placeholder="Add" value="${data ? (data.add || '') : ''}" oninput="serializeRxLines();">
+                    </div>
+                    <div class="col-2">
+                        <label class="form-label x-small text-muted mb-0">Rad</label>
+                        <input type="text" class="form-control form-control-sm rx-input rx-rad" placeholder="Rad" value="${data ? (data.rad || '') : ''}" oninput="serializeRxLines();">
+                    </div>
+                    <div class="col-2">
+                        <label class="form-label x-small text-muted mb-0">Dia</label>
+                        <input type="text" class="form-control form-control-sm rx-input rx-dia" placeholder="Dia" value="${data ? (data.dia || '') : ''}" oninput="serializeRxLines();">
                     </div>
                 </div>
             `;
@@ -519,6 +631,8 @@ try {
                 const cil = card.querySelector('.rx-cil').value.trim();
                 const eje = card.querySelector('.rx-eje').value.trim();
                 const add = card.querySelector('.rx-add').value.trim();
+                const rad = card.querySelector('.rx-rad').value.trim();
+                const dia = card.querySelector('.rx-dia').value.trim();
 
                 const row = {
                     tipo: tipo,
@@ -529,6 +643,8 @@ try {
                     cil: cil,
                     eje: eje,
                     add: add,
+                    rad: rad,
+                    dia: dia,
                     nota: note
                 };
 
@@ -542,6 +658,8 @@ try {
                         if (cil) lineText += cil + " ";
                         if (eje) lineText += eje + " ";
                         if (add) lineText += add + " ";
+                        if (rad) lineText += "R:" + rad + " ";
+                        if (dia) lineText += "D:" + dia + " ";
                     }
                     if (tipo !== 'ninguno' && ojo !== 'ninguno') {
                         lineText += `(${cantidad} ${tipo}s)`;
@@ -968,7 +1086,7 @@ try {
             // Lógica para guardar nuevo producto vía AJAX
             let activeProductInput = null;
             window.abrirModalNuevoProducto = function(button) {
-                const group = button.closest('.input-group');
+                const group = button.closest('.rx-nota-container') || button.closest('.input-group') || button.closest('.d-flex');
                 activeProductInput = group.querySelector('.rx-input-nota');
                 
                 const modalEl = document.getElementById('modalNuevoProducto');

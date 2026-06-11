@@ -72,6 +72,12 @@ function formatearRX($rx, $rx_lineas_json = null) {
                         $class = 'text-danger';
                     }
                     $parts = array_filter([$l['esfera'] ?? $l['esf'] ?? '', $l['cilindro'] ?? $l['cil'] ?? '', $l['eje'] ?? '', $l['adicion'] ?? $l['add'] ?? '']);
+                    if (!empty($l['rad'])) {
+                        $parts[] = 'R: ' . $l['rad'];
+                    }
+                    if (!empty($l['dia'])) {
+                        $parts[] = 'D: ' . $l['dia'];
+                    }
                     $txt = ($ojo === 'OTRO' ? 'OTRO' : $ojo) . ' ' . implode(' ', $parts);
                     
                     $tipo = $l['tipo'] ?? null;

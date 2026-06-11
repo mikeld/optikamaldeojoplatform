@@ -745,7 +745,10 @@ document.addEventListener('DOMContentLoaded', function() {
                             rxHtml += `</div>`;
                         } else if (l.ojo) {
                             const eyeClass = l.ojo.includes('OD') ? 'text-primary' : 'text-danger';
-                            const parts = [l.esfera || l.esf, l.cilindro || l.cil, l.eje, l.adicion || l.add].filter(Boolean).join(' ');
+                            const partsArray = [l.esfera || l.esf, l.cilindro || l.cil, l.eje, l.adicion || l.add];
+                            if (l.rad) partsArray.push('R: ' + l.rad);
+                            if (l.dia) partsArray.push('D: ' + l.dia);
+                            const parts = partsArray.filter(Boolean).join(' ');
                             rxHtml += `<span class="badge bg-light ${eyeClass} border me-1">${l.ojo} ${parts}</span>`;
                         }
                         
@@ -869,7 +872,10 @@ document.addEventListener('DOMContentLoaded', function() {
                                 const tipoIcon = l.tipo === 'caja' ? 'fa-box text-primary' : 'fa-tablets text-purple';
                                 const noteText = l.nota ? ` <span class="small text-muted">[${l.nota}]</span>` : '';
                                 
-                                const rxParts = [l.esf, l.cil, l.eje, l.add].filter(Boolean).join(' ');
+                                const rxPartsArray = [l.esf, l.cil, l.eje, l.add];
+                                if (l.rad) rxPartsArray.push('R: ' + l.rad);
+                                if (l.dia) rxPartsArray.push('D: ' + l.dia);
+                                const rxParts = rxPartsArray.filter(Boolean).join(' ');
                                 const rxLabel = rxParts ? ` (${rxParts})` : '';
 
                                 const rowHtml = `
