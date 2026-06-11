@@ -60,18 +60,32 @@ const ProvidersPage: React.FC = () => {
     }
   };
 
-  // Filtrar facturas asociadas al proveedor seleccionado
+  // Obtener cantidad de facturas con contenido válido (texto OCR o imágenes de página)
+  const getValidInvoiceCount = (providerName: string) => {
+    return audits.filter(a => 
+      a.provider.trim().toLowerCase() === providerName.trim().toLowerCase() &&
+      ((a.ocrText && a.ocrText.trim() !== '') || (a.pages && a.pages.length > 0))
+    ).length;
+  };
+
+  // Filtrar facturas asociadas al proveedor seleccionado que tengan contenido
   const referenceAudits = useMemo(() => {
     if (!selectedProvider) return [];
-    return audits.filter(a => a.provider.trim().toLowerCase() === selectedProvider.name.trim().toLowerCase());
+    return audits.filter(a => 
+      a.provider.trim().toLowerCase() === selectedProvider.name.trim().toLowerCase() &&
+      ((a.ocrText && a.ocrText.trim() !== '') || (a.pages && a.pages.length > 0))
+    );
   }, [selectedProvider, audits]);
 
   // Iniciar estudio de layout
   const handleOpenStudy = (provider: Provider) => {
     setSelectedProvider(provider);
-    const providerInvoices = audits.filter(a => a.provider.trim().toLowerCase() === provider.name.trim().toLowerCase());
-    if (providerInvoices.length > 0) {
-      setSelectedAuditId(providerInvoices[0].id);
+    const validInvoices = audits.filter(a => 
+      a.provider.trim().toLowerCase() === provider.name.trim().toLowerCase() &&
+      ((a.ocrText && a.ocrText.trim() !== '') || (a.pages && a.pages.length > 0))
+    );
+    if (validInvoices.length > 0) {
+      setSelectedAuditId(validInvoices[0].id);
     } else {
       setSelectedAuditId('');
     }
@@ -287,11 +301,11 @@ const ProvidersPage: React.FC = () => {
                     <Edit3 className="w-3.5 h-3.5" />
                     Editar Reglas
                   </button>
-                  <button
+                   <button
                     onClick={() => handleOpenStudy(provider)}
-                    disabled={provider.invoiceCount === 0}
+                    disabled={getValidInvoiceCount(provider.name) === 0}
                     className="px-4 py-2.5 rounded-xl bg-slate-900 text-white hover:bg-indigo-600 disabled:bg-slate-200 disabled:text-slate-400 font-bold text-xs flex items-center gap-1.5 transition-colors shadow-lg shadow-slate-100"
-                    title={provider.invoiceCount === 0 ? "Sube al menos una factura de este proveedor antes para usarla de muestra" : "Estudiar formato"}
+                    title={getValidInvoiceCount(provider.name) === 0 ? "Sube al menos una factura con contenido de este proveedor antes para usarla de muestra" : "Estudiar formato"}
                   >
                     <Sparkles className="w-3.5 h-3.5" />
                     {hasConfig ? 'Volver a Estudiar' : 'Estudiar Formato'}

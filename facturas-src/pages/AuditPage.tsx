@@ -437,6 +437,7 @@ const AuditPage: React.FC = () => {
         globalStatus: 'in_review',
         pdfPath: uploadedFile.path,
         pages: uploadedPages,
+        ocrText: usableTextPages.map(p => p.text).join('\n\n') || null,
         notes: `Archivo original: ${uploadedFile.filename}. Modelo: ${selectedModel}. Extracción: ${extractionMethod}. Páginas IA: ${extractionMethod === 'texto_pdf_gemini' ? Math.min(usableTextPages.length, selectedExtractionMode.aiPages) : extractionMethod === 'imagen_pdf' ? pagesForAiRender.length : extractionMethod === 'imagen' ? 1 : 0}. Páginas texto: ${usableTextPages.length}. Fuentes visuales: ${saveVisualSources ? uploadedPages.length : 0}.`
       });
       setProcessingStep({
