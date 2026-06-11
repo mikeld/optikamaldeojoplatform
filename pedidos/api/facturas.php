@@ -167,6 +167,14 @@ function asegurarColumnasNuevasProveedores($pdo) {
         $pdo->exec("ALTER TABLE `facturas_providers` ADD INDEX `idx_pedidos_provider_id` (`pedidos_provider_id`)");
     }
 
+    if (!in_array('importance', $columnsProviders, true)) {
+        $pdo->exec("ALTER TABLE `facturas_providers` ADD COLUMN `importance` VARCHAR(20) DEFAULT 'puntual' AFTER `extraction_rules`");
+    }
+
+    if (!in_array('expected_monthly_invoices', $columnsProviders, true)) {
+        $pdo->exec("ALTER TABLE `facturas_providers` ADD COLUMN `expected_monthly_invoices` INT DEFAULT 0 AFTER `importance`");
+    }
+
     // facturas_audits
     $stmt2 = $pdo->prepare("SELECT COLUMN_NAME
         FROM INFORMATION_SCHEMA.COLUMNS
@@ -592,7 +600,7 @@ try {
    p=providerName, d=date, n=invoiceNumber, t=invoice total, l=line array.
    Each line: de=description, b=baseProductName, g=graduation, q=quantity, u=unitPrice, lt=line total.
 3. Keep product identity separate from graduation. b must be the same for the same lens family regardless of graduation/power. Remove powers, sphere/cylinder, BC, DIA and eye-specific numeric noise from b.
-4. unitPrice is the price per unit/box from the invoice line. Preserve decimals exactly.
+4. unitPrice must be the final net unit price (price per unit/box after any line discounts are applied). If the invoice only shows gross unit price and a discount percentage, compute the net unit price as (line total / quantity). Preserve decimals exactly.
 5. Group only when b, g and u are the same. Do not merge different graduations, but keep b equal.
 6. Date Format: MUST be in YYYY-MM-DD. If this page has no header/date/total, use empty strings and 0 for missing header values.
 7. Return JSON only. No markdown. Keep descriptions concise but identifiable.";
@@ -1822,6 +1830,8 @@ Pregunta:
             $list = [];
             $processedOfficialIds = [];
             $processedNames = [];
+            
+            $principals = ['visionis', 'menicon', 'bausch', 'alcon', 'prats'];
 
             // Primero, añadir los proveedores oficiales
             foreach ($officialProviders as $op) {
@@ -1841,6 +1851,20 @@ Pregunta:
 
                 $invoiceCount = (int)($countsById[$opId] ?? ($countsByName[$op['nombre']] ?? 0));
 
+                $normalizedName = mb_strtolower($op['nombre']);
+                $isPrincipal = false;
+                foreach ($principals as $p) {
+                    if (str_contains($normalizedName, $p)) {
+                        $isPrincipal = true;
+                        break;
+                    }
+                }
+                $defaultImportance = $isPrincipal ? 'principal' : 'puntual';
+                $defaultExpected = 0;
+                if ($isPrincipal) {
+                    $defaultExpected = str_contains($normalizedName, 'visionis') ? 2 : 1;
+                }
+
                 $list[] = [
                     'id' => $saved ? $saved['id'] : null,
                     'pedidosProviderId' => $opId,
@@ -1851,7 +1875,9 @@ Pregunta:
                     'updatedAt' => $saved ? $saved['updated_at'] : null,
                     'invoiceCount' => $invoiceCount,
                     'active' => (bool)$op['activo'],
-                    'isOfficial' => true
+                    'isOfficial' => true,
+                    'importance' => $saved && isset($saved['importance']) ? $saved['importance'] : $defaultImportance,
+                    'expectedMonthlyInvoices' => $saved && isset($saved['expected_monthly_invoices']) ? (int)$saved['expected_monthly_invoices'] : $defaultExpected
                 ];
             }
 
@@ -1884,6 +1910,20 @@ Pregunta:
 
                 $invoiceCount = (int)($countsByName[$p['name']] ?? 0);
 
+                $normalizedName = mb_strtolower($p['name']);
+                $isPrincipal = false;
+                foreach ($principals as $pr) {
+                    if (str_contains($normalizedName, $pr)) {
+                        $isPrincipal = true;
+                        break;
+                    }
+                }
+                $defaultImportance = $isPrincipal ? 'principal' : 'puntual';
+                $defaultExpected = 0;
+                if ($isPrincipal) {
+                    $defaultExpected = str_contains($normalizedName, 'visionis') ? 2 : 1;
+                }
+
                 $list[] = [
                     'id' => $p['id'],
                     'pedidosProviderId' => null,
@@ -1894,7 +1934,9 @@ Pregunta:
                     'updatedAt' => $p['updated_at'],
                     'invoiceCount' => $invoiceCount,
                     'active' => true,
-                    'isOfficial' => false
+                    'isOfficial' => false,
+                    'importance' => $p['importance'] ?? $defaultImportance,
+                    'expectedMonthlyInvoices' => isset($p['expected_monthly_invoices']) ? (int)$p['expected_monthly_invoices'] : $defaultExpected
                 ];
             }
 
@@ -1916,6 +1958,20 @@ Pregunta:
                 $processedNames[] = $name;
                 $invoiceCount = (int)($countsByName[$name] ?? 0);
 
+                $normalizedName = mb_strtolower($name);
+                $isPrincipal = false;
+                foreach ($principals as $pr) {
+                    if (str_contains($normalizedName, $pr)) {
+                        $isPrincipal = true;
+                        break;
+                    }
+                }
+                $defaultImportance = $isPrincipal ? 'principal' : 'puntual';
+                $defaultExpected = 0;
+                if ($isPrincipal) {
+                    $defaultExpected = str_contains($normalizedName, 'visionis') ? 2 : 1;
+                }
+
                 $list[] = [
                     'id' => null,
                     'pedidosProviderId' => null,
@@ -1926,7 +1982,9 @@ Pregunta:
                     'updatedAt' => null,
                     'invoiceCount' => $invoiceCount,
                     'active' => true,
-                    'isOfficial' => false
+                    'isOfficial' => false,
+                    'importance' => $defaultImportance,
+                    'expectedMonthlyInvoices' => $defaultExpected
                 ];
             }
 
@@ -1999,13 +2057,13 @@ Pregunta:
 Your goal is to study how this document is structured so that we can accurately extract data from it in the future.
 Analyze:
 1. The overall structure of the document (header, lines table, footer).
-2. The format of the line items. Do they have a code/SKU? Is it in brackets like [MBR001] or somewhere else? Where are quantities and prices?
+2. The format of the line items. Do they have a code/SKU? Where are quantities and prices? Make sure to identify how discounts are applied and where the final net unit price (after discounts) is located or how it can be calculated (net line total / quantity).
 3. How patient names, order IDs, or delivery note numbers (albaranes) are embedded inside or near the line descriptions, so we know how to isolate the actual product description.
 4. The number and date formats used.
 
 Based on this, return a JSON object with:
 1. 'system_description': A clear summary in Spanish (max 150 words) explaining the invoice format, how lines are structured, how SKUs are represented, and what patterns are used for dynamic customer or patient information.
-2. 'extraction_rules': A concise set of extraction instructions in English (2-3 sentences) detailing how to identify items, extract SKUs, clean descriptions, and locate unit prices specifically for this provider.
+2. 'extraction_rules': A concise set of extraction instructions in English (2-3 sentences) detailing how to identify items, extract SKUs, clean descriptions, and locate or calculate the net unit price (after discounts) specifically for this provider.
 
 Return ONLY the raw JSON object conforming to this schema (no markdown formatting):
 {
@@ -2067,6 +2125,8 @@ Return ONLY the raw JSON object conforming to this schema (no markdown formattin
             $name = trim($data['name'] ?? '');
             $systemDescription = trim($data['systemDescription'] ?? '');
             $extractionRules = trim($data['extractionRules'] ?? '');
+            $importance = trim($data['importance'] ?? 'puntual');
+            $expectedMonthlyInvoices = isset($data['expectedMonthlyInvoices']) ? (int)$data['expectedMonthlyInvoices'] : 0;
 
             if ($name === '') {
                 throw new Exception('Falta el nombre del proveedor');
@@ -2083,13 +2143,15 @@ Return ONLY the raw JSON object conforming to this schema (no markdown formattin
             }
 
             $id = !empty($data['id']) ? $data['id'] : uniqid('prov_');
-            $stmt = $pdo->prepare("INSERT INTO `facturas_providers` (`id`, `name`, `pedidos_provider_id`, `system_description`, `extraction_rules`)
-                VALUES (?, ?, ?, ?, ?)
+            $stmt = $pdo->prepare("INSERT INTO `facturas_providers` (`id`, `name`, `pedidos_provider_id`, `system_description`, `extraction_rules`, `importance`, `expected_monthly_invoices`)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
                     `pedidos_provider_id` = VALUES(`pedidos_provider_id`),
                     `system_description` = VALUES(`system_description`),
-                    `extraction_rules` = VALUES(`extraction_rules`)");
-            $stmt->execute([$id, $name, $pedidosProviderId, $systemDescription, $extractionRules]);
+                    `extraction_rules` = VALUES(`extraction_rules`),
+                    `importance` = VALUES(`importance`),
+                    `expected_monthly_invoices` = VALUES(`expected_monthly_invoices`)");
+            $stmt->execute([$id, $name, $pedidosProviderId, $systemDescription, $extractionRules, $importance, $expectedMonthlyInvoices]);
 
             // Propagar el enlace de pedidosProviderId a todas las facturas de este proveedor en facturas_audits
             if ($pedidosProviderId !== null) {

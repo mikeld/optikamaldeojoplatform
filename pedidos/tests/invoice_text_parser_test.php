@@ -23,7 +23,7 @@ assertInvoiceValue($invoice['taxTotal'], 58.06, 'tax total');
 assertInvoiceValue($invoice['total'], 488.13, 'invoice total');
 assertInvoiceValue($invoice['hasFiscalSummary'], true, 'fiscal summary');
 assertInvoiceValue(count($invoice['items']), 1, 'line count');
-assertInvoiceValue($invoice['items'][0]['unitPrice'], 4.35, 'unit price');
+assertInvoiceValue($invoice['items'][0]['unitPrice'], 1.71, 'unit price');
 assertInvoiceValue($invoice['items'][0]['total'], 1.71, 'line total');
 
 $intermediateSubtotal = extractInvoiceFromPlainText('Subtotal: 149,57 € Albarán: 31/05/2026', 2);

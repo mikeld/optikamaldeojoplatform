@@ -38,6 +38,8 @@ const ProvidersPage: React.FC = () => {
   const [tempDescription, setTempDescription] = useState('');
   const [tempRules, setTempRules] = useState('');
   const [selectedPedidosProviderId, setSelectedPedidosProviderId] = useState<number | null>(null);
+  const [tempImportance, setTempImportance] = useState<'principal' | 'puntual'>('puntual');
+  const [tempExpectedInvoices, setTempExpectedInvoices] = useState<number>(0);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -135,6 +137,8 @@ const ProvidersPage: React.FC = () => {
     setTempDescription(provider.systemDescription || '');
     setTempRules(provider.extractionRules || '');
     setSelectedPedidosProviderId(provider.pedidosProviderId || null);
+    setTempImportance(provider.importance || 'puntual');
+    setTempExpectedInvoices(provider.expectedMonthlyInvoices || 0);
     setShowEditModal(true);
   };
 
@@ -147,7 +151,9 @@ const ProvidersPage: React.FC = () => {
         pedidosProviderId: selectedPedidosProviderId,
         name: selectedProvider.name,
         systemDescription: tempDescription,
-        extractionRules: tempRules
+        extractionRules: tempRules,
+        importance: tempImportance,
+        expectedMonthlyInvoices: tempExpectedInvoices
       });
       setShowEditModal(false);
       setSelectedProvider(null);
@@ -261,6 +267,12 @@ const ProvidersPage: React.FC = () => {
                       <div className="flex items-center gap-2 mt-1.5 text-xs text-slate-400 font-bold uppercase">
                         <History className="w-3.5 h-3.5" />
                         <span>{provider.invoiceCount} facturas subidas</span>
+                        <span className="text-slate-300">•</span>
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${
+                          provider.importance === 'principal' ? 'bg-rose-50 text-rose-600 border border-rose-100/50' : 'bg-slate-100 text-slate-500 border border-slate-200'
+                        }`}>
+                          {provider.importance === 'principal' ? `Principal (${provider.expectedMonthlyInvoices}/mes)` : 'Puntual'}
+                        </span>
                       </div>
                     </div>
                     <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
@@ -433,6 +445,42 @@ const ProvidersPage: React.FC = () => {
                   ))}
                 </select>
                 <p className="text-[10px] text-slate-400 font-medium mt-1">Vincula este formato de factura con un proveedor oficial del listado de pedidos.</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Importancia</label>
+                  <select
+                    value={tempImportance}
+                    onChange={(e) => {
+                      const val = e.target.value as 'principal' | 'puntual';
+                      setTempImportance(val);
+                      if (val === 'principal' && tempExpectedInvoices === 0) {
+                        setTempExpectedInvoices(selectedProvider?.name.toLowerCase().includes('visionis') ? 2 : 1);
+                      } else if (val === 'puntual') {
+                        setTempExpectedInvoices(0);
+                      }
+                    }}
+                    disabled={isSaving}
+                    className="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none font-bold bg-white text-xs text-slate-700"
+                  >
+                    <option value="principal">Principal (Mensual)</option>
+                    <option value="puntual">Puntual (Ocasional)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Facturas esperadas / mes</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="10"
+                    value={tempExpectedInvoices}
+                    onChange={(e) => setTempExpectedInvoices(Number(e.target.value))}
+                    disabled={isSaving}
+                    className="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none font-bold bg-white text-xs text-slate-700"
+                  />
+                </div>
               </div>
 
               <div>

@@ -193,4 +193,7 @@ export interface Provider {
   invoiceCount: number;
   active?: boolean;
   isOfficial?: boolean;
+  importance?: 'principal' | 'puntual';
+  expectedMonthlyInvoices?: number;
 }
+

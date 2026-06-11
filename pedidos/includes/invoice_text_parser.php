@@ -142,14 +142,19 @@ function extractInvoiceFromPlainText($textContent, $pageNumber = null) {
             if ($description === '' || ($invoice['providerName'] !== '' && stripos($description, $invoice['providerName']) !== false)) {
                 continue;
             }
+            $quantity = invoiceTextNumber($match[2]);
+            $total = invoiceTextNumber($match[5]);
+            // Calculate net unit price (line total / quantity) rounded to 4 decimals
+            $unitPrice = $quantity > 0 ? round($total / $quantity, 4) : invoiceTextNumber($match[3]);
+
             $invoice['items'][] = [
                 'id' => 'text-' . ($pageNumber ?: 'p') . '-' . ($idx + 1),
                 'description' => $description,
                 'baseProductName' => invoiceTextBaseProduct($description),
                 'graduation' => invoiceTextGraduation($description),
-                'quantity' => invoiceTextNumber($match[2]),
-                'unitPrice' => invoiceTextNumber($match[3]),
-                'total' => invoiceTextNumber($match[5]),
+                'quantity' => $quantity,
+                'unitPrice' => $unitPrice,
+                'total' => $total,
             ];
         }
     }

@@ -1,7 +1,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { HashRouter, Routes, Route, NavLink } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, ShieldCheck, History, Cloud, HardDrive, Package, AlertTriangle, Bot, ServerCog, Building2 } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, ShieldCheck, History, Cloud, HardDrive, Package, AlertTriangle, Bot, ServerCog, Building2, Calendar } from 'lucide-react';
 import DashboardPage from './pages/DashboardPage';
 import InventoryPage from './pages/InventoryPage';
 import AuditPage from './pages/AuditPage';
@@ -11,6 +11,7 @@ import AlertsPage from './pages/AlertsPage';
 import AssistantPage from './pages/AssistantPage';
 import SystemPage from './pages/SystemPage';
 import ProvidersPage from './pages/ProvidersPage';
+import MonthlyControlPage from './pages/MonthlyControlPage';
 import { db } from './db';
 import { SchemaStatus } from './types';
 
@@ -80,6 +81,13 @@ const App: React.FC = () => {
             >
               <History className="w-5 h-5" />
               Historial
+            </NavLink>
+            <NavLink
+              to="/monthly-control"
+              className={({ isActive }) => `flex items-center gap-3 p-3 rounded-lg transition-colors ${isActive ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-50'}`}
+            >
+              <Calendar className="w-5 h-5" />
+              Control Mensual
             </NavLink>
             <NavLink
               to="/families"
@@ -166,6 +174,7 @@ const App: React.FC = () => {
             <Route path="/assistant" element={<AssistantPage />} />
             <Route path="/system" element={<SystemPage />} />
             <Route path="/providers" element={<ProvidersPage />} />
+            <Route path="/monthly-control" element={<MonthlyControlPage />} />
           </Routes>
         </main>
       </div>
