@@ -61,20 +61,56 @@ En GitHub:
 Settings > Secrets and variables > Actions > New repository secret
 ```
 
-Crea estos secretos:
+Secretos necesarios:
 
 ```text
-HOSTINGER_FTP_HOST
-HOSTINGER_FTP_USER
-HOSTINGER_FTP_PASSWORD
-HOSTINGER_TEST_DIR
-HOSTINGER_PROD_DIR
 TEST_DB_USER
 TEST_DB_PASS
 PROD_DB_USER
 PROD_DB_PASS
 GEMINI_API_KEY
+DEPLOY_UPLOAD_TOKEN   ← nuevo, ver sección "Deploy via HTTP" abajo
 ```
+
+Los secretos FTP ya no son necesarios (deploy via HTTP).
+
+## Deploy via HTTP (sin FTP)
+
+El deploy usa HTTP en vez de FTP porque GitHub Actions tiene el puerto 21
+bloqueado hacia Hostinger de forma sistemática.
+
+### Paso 1 — subir upload_receiver.php al servidor (una sola vez)
+
+Sube manualmente `deploy/upload_receiver.php` via el gestor de archivos de Hostinger (hPanel):
+
+```
+public_html/upload_receiver.php       ← producción
+public_html/test/upload_receiver.php  ← test
+```
+
+Edita cada copia y reemplaza la línea:
+
+```php
+$secret = getenv('DEPLOY_UPLOAD_TOKEN') ?: 'REPLACE_WITH_STATIC_TOKEN';
+```
+
+por el token que generaste (ver paso 2). Hostinger shared hosting no pasa
+variables de entorno a PHP, así que el token va hardcodeado en el archivo del servidor.
+
+### Paso 2 — crear secreto DEPLOY_UPLOAD_TOKEN (una sola vez)
+
+```bash
+openssl rand -hex 32
+```
+
+Guarda ese valor como secreto de GitHub `DEPLOY_UPLOAD_TOKEN` Y ponlo en
+`upload_receiver.php` en el servidor (paso 1).
+
+### Seguridad
+
+- Solo acepta POST con token correcto y extensiones `.zip` / `.php`
+- `unzip.php` usa token de un solo uso y se auto-elimina tras extraer
+- `upload_receiver.php` permanece en el servidor entre deploys (no se auto-elimina)
 
 Valores esperados:
 
