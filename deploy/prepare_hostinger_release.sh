@@ -62,6 +62,7 @@ rsync -a \
   "$ROOT_DIR/home.php" \
   "$ROOT_DIR/index.php" \
   "$ROOT_DIR/logout.php" \
+  "$ROOT_DIR/debug.php" \
   "$ROOT_DIR/manifest.json" \
   "$ROOT_DIR/offline.html" \
   "$ROOT_DIR/sw.js" \
