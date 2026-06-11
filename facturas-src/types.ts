@@ -84,6 +84,7 @@ export type InvoiceAiModel = 'gemini-2.5-flash' | 'gemini-2.5-flash-lite';
 
 export interface InvoiceExtractionOptions {
   model: InvoiceAiModel;
+  providerId?: number | null;
 }
 
 export enum LineStatus {
@@ -119,6 +120,7 @@ export interface AuditRecord {
   createdAt: string;
   invoiceDate: string;
   provider: string;
+  pedidosProviderId?: number | null;
   invoiceNumber: string;
   lines: AuditLine[];
   totalInvoice: number;
@@ -182,10 +184,13 @@ export interface SchemaStatus {
 
 export interface Provider {
   id: string | null;
+  pedidosProviderId?: number | null;
   name: string;
   systemDescription: string | null;
   extractionRules: string | null;
   createdAt: string | null;
   updatedAt: string | null;
   invoiceCount: number;
+  active?: boolean;
+  isOfficial?: boolean;
 }

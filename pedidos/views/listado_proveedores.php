@@ -27,11 +27,16 @@ if (!in_array($orden, $valid)) $orden = 'nombre';
 $cond = '';
 $params = [];
 if ($filtro) {
-    $cond = "WHERE nombre LIKE :f OR contacto LIKE :f2 OR email LIKE :f3";
+    $cond = "WHERE p.nombre LIKE :f OR p.contacto LIKE :f2 OR p.email LIKE :f3";
     $params = [':f' => "%$filtro%", ':f2' => "%$filtro%", ':f3' => "%$filtro%"];
 }
 
-$stmt = $pdo->prepare("SELECT * FROM proveedores $cond ORDER BY $orden $dir");
+$stmt = $pdo->prepare("SELECT p.*, COUNT(fa.id) as total_facturas 
+                       FROM proveedores p 
+                       LEFT JOIN facturas_audits fa ON p.id = fa.pedidos_provider_id 
+                       $cond 
+                       GROUP BY p.id 
+                       ORDER BY p.$orden $dir");
 $stmt->execute($params);
 $proveedores = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -84,13 +89,14 @@ function sortLink($col, $label, $currentSort, $currentDir) {
                         <th><?= sortLink('contacto', 'Contacto', $orden, $dir) ?></th>
                         <th><?= sortLink('telefono', 'Teléfono', $orden, $dir) ?></th>
                         <th><?= sortLink('email', 'Email', $orden, $dir) ?></th>
+                        <th class="text-center">Facturas</th>
                         <th class="text-center"><?= sortLink('activo', 'Estado', $orden, $dir) ?></th>
                         <th class="text-center" style="width:120px">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php if (empty($proveedores)): ?>
-                        <tr><td colspan="7" class="text-center text-muted py-5">
+                        <tr><td colspan="8" class="text-center text-muted py-5">
                             <i class="fas fa-building fa-2x mb-2 opacity-25"></i><br>No hay proveedores registrados.
                         </td></tr>
                     <?php else: ?>
@@ -101,6 +107,15 @@ function sortLink($col, $label, $currentSort, $currentDir) {
                             <td><small><?= htmlspecialchars($p['contacto'] ?? '') ?></small></td>
                             <td><?= htmlspecialchars($p['telefono'] ?? '') ?></td>
                             <td><small><?= htmlspecialchars($p['email'] ?? '') ?></small></td>
+                            <td class="text-center">
+                                <?php if ($p['total_facturas'] > 0): ?>
+                                    <a href="/test/facturas/index.html#/history?provider=<?= urlencode($p['nombre']) ?>" class="badge bg-info text-white text-decoration-none" title="Ver facturas en gestor de auditoría" style="font-size: 0.85em; padding: 0.4em 0.6em;">
+                                        <i class="fas fa-file-invoice me-1"></i> <?= $p['total_facturas'] ?>
+                                    </a>
+                                <?php else: ?>
+                                    <span class="text-muted opacity-50 font-bold">-</span>
+                                <?php endif; ?>
+                            </td>
                             <td class="text-center">
                                 <?php if ($p['activo']): ?>
                                     <span class="badge bg-success">Activo</span>

@@ -37,6 +37,7 @@ const ProvidersPage: React.FC = () => {
   // Manual Edit state
   const [tempDescription, setTempDescription] = useState('');
   const [tempRules, setTempRules] = useState('');
+  const [selectedPedidosProviderId, setSelectedPedidosProviderId] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -133,6 +134,7 @@ const ProvidersPage: React.FC = () => {
     setSelectedProvider(provider);
     setTempDescription(provider.systemDescription || '');
     setTempRules(provider.extractionRules || '');
+    setSelectedPedidosProviderId(provider.pedidosProviderId || null);
     setShowEditModal(true);
   };
 
@@ -142,6 +144,7 @@ const ProvidersPage: React.FC = () => {
     try {
       await db.saveProviderConfig({
         id: selectedProvider.id,
+        pedidosProviderId: selectedPedidosProviderId,
         name: selectedProvider.name,
         systemDescription: tempDescription,
         extractionRules: tempRules
@@ -243,7 +246,18 @@ const ProvidersPage: React.FC = () => {
                 <div>
                   <div className="flex items-start justify-between gap-4 mb-4">
                     <div>
-                      <h3 className="text-lg font-black text-slate-800 leading-tight">{provider.name}</h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-black text-slate-800 leading-tight">{provider.name}</h3>
+                        {provider.isOfficial ? (
+                          <span className="px-2 py-0.5 rounded-md text-[9px] font-black bg-indigo-50 text-indigo-700 border border-indigo-100/50">
+                            Oficial
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-md text-[9px] font-black bg-slate-100 text-slate-500 border border-slate-200">
+                            Temporal
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-2 mt-1.5 text-xs text-slate-400 font-bold uppercase">
                         <History className="w-3.5 h-3.5" />
                         <span>{provider.invoiceCount} facturas subidas</span>
@@ -400,6 +414,27 @@ const ProvidersPage: React.FC = () => {
             <p className="text-slate-400 text-sm mb-6 font-medium">Refina de forma manual lo aprendido por Gemini para el proveedor <strong>{selectedProvider.name}</strong>.</p>
 
             <div className="space-y-5">
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Vincular con Proveedor Oficial (/pedidos)</label>
+                <select
+                  value={selectedPedidosProviderId || ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSelectedPedidosProviderId(val ? Number(val) : null);
+                  }}
+                  disabled={isSaving}
+                  className="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none font-bold bg-white text-xs text-slate-700"
+                >
+                  <option value="">-- Sin vincular --</option>
+                  {providers.filter(p => p.isOfficial).map(p => (
+                    <option key={p.pedidosProviderId} value={p.pedidosProviderId || ''}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-slate-400 font-medium mt-1">Vincula este formato de factura con un proveedor oficial del listado de pedidos.</p>
+              </div>
+
               <div>
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Descripción del Sistema (En Español)</label>
                 <textarea

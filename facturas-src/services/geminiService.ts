@@ -18,7 +18,7 @@ export const extractInvoiceData = async (base64Image: string, mimeType: string, 
   const response = await fetch(`${API_URL}?action=extractInvoiceData`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ base64Image, mimeType, model: options?.model })
+    body: JSON.stringify({ base64Image, mimeType, model: options?.model, providerId: options?.providerId })
   });
 
   const data = await readJsonResponse(response, 'No se ha podido extraer la factura con Gemini');
@@ -33,7 +33,7 @@ export const extractInvoiceText = async (text: string, options?: InvoiceExtracti
   const response = await fetch(`${API_URL}?action=extractInvoiceData`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, model: options?.model, pageNumber: options?.pageNumber, parserOnly: options?.parserOnly })
+    body: JSON.stringify({ text, model: options?.model, pageNumber: options?.pageNumber, parserOnly: options?.parserOnly, providerId: options?.providerId })
   });
 
   const data = await readJsonResponse(response, 'No se ha podido extraer la factura con Gemini');
@@ -49,6 +49,9 @@ export const extractInvoiceFile = async (file: File, options?: InvoiceExtraction
   formData.append('file', file);
   if (options?.model) {
     formData.append('model', options.model);
+  }
+  if (options?.providerId) {
+    formData.append('providerId', options.providerId.toString());
   }
 
   const response = await fetch(`${API_URL}?action=extractInvoiceData`, {

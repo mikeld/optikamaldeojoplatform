@@ -20,6 +20,12 @@ const HistoryPage: React.FC = () => {
 
   useEffect(() => {
     fetchHistory();
+    // Parse provider parameter from URL hash (e.g. #/history?provider=Alcon)
+    const hash = window.location.hash;
+    const match = hash.match(/[?&]provider=([^&]+)/);
+    if (match) {
+      setProviderFilter(decodeURIComponent(match[1]));
+    }
   }, []);
 
   const fetchHistory = async () => {

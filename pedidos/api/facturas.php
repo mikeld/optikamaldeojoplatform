@@ -73,11 +73,11 @@ function facturasSchemaRequerido() {
     return [
         'facturas_product_families' => ['id', 'family_name', 'base_price', 'regex_pattern', 'product_type', 'provider', 'notes', 'created_at', 'updated_at'],
         'facturas_products' => ['id', 'sku', 'name', 'family_id', 'graduation', 'expected_price', 'vat', 'provider', 'last_updated'],
-        'facturas_audits' => ['id', 'created_at', 'invoice_date', 'provider', 'invoice_number', 'invoice_subtotal', 'tax_total', 'total_invoice', 'global_status', 'lines', 'pdf_path', 'ocr_text', 'alert_count', 'critical_alert_count', 'reviewed_by', 'reviewed_at', 'notes'],
+        'facturas_audits' => ['id', 'created_at', 'invoice_date', 'provider', 'pedidos_provider_id', 'invoice_number', 'invoice_subtotal', 'tax_total', 'total_invoice', 'global_status', 'lines', 'pdf_path', 'ocr_text', 'alert_count', 'critical_alert_count', 'reviewed_by', 'reviewed_at', 'notes'],
         'facturas_pages' => ['id', 'audit_id', 'page_number', 'image_path', 'mime_type', 'width', 'height', 'created_at'],
         'facturas_price_history' => ['id', 'product_id', 'old_price', 'new_price', 'change_date', 'reason', 'changed_by', 'invoice_id'],
         'facturas_alerts' => ['id', 'audit_id', 'line_number', 'alert_type', 'severity', 'product_sku', 'product_name', 'expected_value', 'actual_value', 'difference', 'difference_percent', 'status', 'resolution_action', 'resolved_at', 'created_at'],
-        'facturas_providers' => ['id', 'name', 'system_description', 'extraction_rules', 'created_at', 'updated_at']
+        'facturas_providers' => ['id', 'name', 'pedidos_provider_id', 'system_description', 'extraction_rules', 'created_at', 'updated_at']
     ];
 }
 
@@ -151,6 +151,35 @@ function asegurarColumnasResumenFacturas($pdo) {
         $pdo->exec("ALTER TABLE `facturas_audits` ADD COLUMN `tax_total` DECIMAL(10, 2) DEFAULT 0.00 AFTER `invoice_subtotal`");
     }
 }
+
+function asegurarColumnasNuevasProveedores($pdo) {
+    $database = $pdo->query('SELECT DATABASE()')->fetchColumn();
+
+    // facturas_providers
+    $stmt = $pdo->prepare("SELECT COLUMN_NAME
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'facturas_providers'");
+    $stmt->execute([$database]);
+    $columnsProviders = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+    if (!in_array('pedidos_provider_id', $columnsProviders, true)) {
+        $pdo->exec("ALTER TABLE `facturas_providers` ADD COLUMN `pedidos_provider_id` INT UNSIGNED DEFAULT NULL AFTER `name`");
+        $pdo->exec("ALTER TABLE `facturas_providers` ADD INDEX `idx_pedidos_provider_id` (`pedidos_provider_id`)");
+    }
+
+    // facturas_audits
+    $stmt2 = $pdo->prepare("SELECT COLUMN_NAME
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'facturas_audits'");
+    $stmt2->execute([$database]);
+    $columnsAudits = $stmt2->fetchAll(PDO::FETCH_COLUMN);
+
+    if (!in_array('pedidos_provider_id', $columnsAudits, true)) {
+        $pdo->exec("ALTER TABLE `facturas_audits` ADD COLUMN `pedidos_provider_id` INT UNSIGNED DEFAULT NULL AFTER `provider`");
+        $pdo->exec("ALTER TABLE `facturas_audits` ADD INDEX `idx_pedidos_provider_audit` (`pedidos_provider_id`)");
+    }
+}
+
 
 function nombreSeguroFactura($name) {
     $name = basename((string)$name);
@@ -417,6 +446,7 @@ try {
             asegurarTablaFacturasPages($pdo);
             asegurarTablaFacturasProviders($pdo);
             asegurarColumnasResumenFacturas($pdo);
+            asegurarColumnasNuevasProveedores($pdo);
             echo json_encode(diagnosticarSchemaFacturas($pdo));
             break;
 
@@ -431,10 +461,12 @@ try {
             $pageNumber = null;
             $parserOnly = false;
             $preferredModel = null;
+            $providerId = null;
 
             if (!empty($_FILES['file']) && is_uploaded_file($_FILES['file']['tmp_name'])) {
                 $file = $_FILES['file'];
                 $preferredModel = modeloGeminiPermitido($_POST['model'] ?? null);
+                $providerId = isset($_POST['providerId']) && $_POST['providerId'] !== '' ? (int)$_POST['providerId'] : null;
                 if (($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
                     throw new Exception('Error recibiendo la factura para extraer datos');
                 }
@@ -459,6 +491,7 @@ try {
                 $pageNumber = isset($data['pageNumber']) ? (int)$data['pageNumber'] : null;
                 $parserOnly = !empty($data['parserOnly']);
                 $preferredModel = modeloGeminiPermitido($data['model'] ?? null);
+                $providerId = isset($data['providerId']) && $data['providerId'] !== '' ? (int)$data['providerId'] : null;
             }
 
             if ($base64Image === '' && $textContent === '') {
@@ -488,15 +521,70 @@ try {
             }
             // Cargar reglas específicas de proveedores conocidos
             asegurarTablaFacturasProviders($pdo);
-            $providersRulesStmt = $pdo->query("SELECT `name`, `extraction_rules` FROM `facturas_providers` WHERE `extraction_rules` IS NOT NULL AND `extraction_rules` != ''");
+            asegurarColumnasNuevasProveedores($pdo);
+
+            $detectedProvider = null;
+
+            // 1. Si viene un providerId específico
+            if ($providerId !== null && $providerId > 0) {
+                $stmt = $pdo->prepare("SELECT * FROM `facturas_providers` WHERE `pedidos_provider_id` = ? AND `extraction_rules` IS NOT NULL AND `extraction_rules` != '' LIMIT 1");
+                $stmt->execute([$providerId]);
+                $detectedProvider = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                // Si no tiene reglas asociadas por id en facturas_providers, buscar por nombre
+                if (!$detectedProvider) {
+                    $stmt2 = $pdo->prepare("SELECT p.nombre FROM `proveedores` p WHERE p.id = ?");
+                    $stmt2->execute([$providerId]);
+                    $provNombre = $stmt2->fetchColumn();
+                    if ($provNombre) {
+                        $stmt = $pdo->prepare("SELECT * FROM `facturas_providers` WHERE `name` = ? AND `extraction_rules` IS NOT NULL AND `extraction_rules` != '' LIMIT 1");
+                        $stmt->execute([$provNombre]);
+                        $detectedProvider = $stmt->fetch(PDO::FETCH_ASSOC);
+                    }
+                }
+            }
+
+            // 2. Si no viene providerId pero tenemos textContent, intentar autodetectar
+            if ($detectedProvider === null && $textContent !== '') {
+                // Obtener todos los proveedores oficiales y cruzarlos con sus reglas
+                $providersStmt = $pdo->query("
+                    SELECT fp.*, p.id as p_id, p.nombre as p_nombre 
+                    FROM `facturas_providers` fp
+                    LEFT JOIN `proveedores` p ON fp.pedidos_provider_id = p.id
+                    WHERE fp.extraction_rules IS NOT NULL AND fp.extraction_rules != ''
+                ");
+                $allProviders = $providersStmt->fetchAll(PDO::FETCH_ASSOC);
+
+                $normalizedText = strtolower(preg_replace('/[^a-z0-9]/', '', $textContent));
+                foreach ($allProviders as $prov) {
+                    $namesToCheck = array_unique([$prov['name'], $prov['p_nombre'] ?? '']);
+                    foreach ($namesToCheck as $name) {
+                        if (empty($name)) continue;
+                        $normalizedName = strtolower(preg_replace('/[^a-z0-9]/', '', $name));
+                        // Quitar sufijos comunes
+                        $cleanName = str_replace(['sa', 'sl', 'sociedadanonima', 'sociedadlimitada', 'healthcare', 'distribucion'], '', $normalizedName);
+                        if (strlen($cleanName) > 3 && str_contains($normalizedText, $cleanName)) {
+                            $detectedProvider = $prov;
+                            break 2;
+                        }
+                    }
+                }
+            }
+
             $providerRulesInjected = '';
-            foreach ($providersRulesStmt->fetchAll(PDO::FETCH_ASSOC) as $prov) {
-                $providerRulesInjected .= "\n* For provider '{$prov['name']}': {$prov['extraction_rules']}";
+            if ($detectedProvider) {
+                $providerRulesInjected = "\n* Detected provider: '{$detectedProvider['name']}'\n* Apply ONLY these specific rules for this provider:\n{$detectedProvider['extraction_rules']}\n";
+            } else {
+                // Fallback: inyectar todas las reglas si no se detectó (útil para imágenes o primera detección)
+                $providersRulesStmt = $pdo->query("SELECT `name`, `extraction_rules` FROM `facturas_providers` WHERE `extraction_rules` IS NOT NULL AND `extraction_rules` != ''");
+                foreach ($providersRulesStmt->fetchAll(PDO::FETCH_ASSOC) as $prov) {
+                    $providerRulesInjected .= "\n* For provider '{$prov['name']}': {$prov['extraction_rules']}";
+                }
             }
 
             $promptText = "Extract invoice data for an optical store invoice.\n";
             if ($providerRulesInjected !== '') {
-                $promptText .= "Specific rules for known providers:\n" . $providerRulesInjected . "\n\n";
+                $promptText .= "Specific rules to apply:\n" . $providerRulesInjected . "\n\n";
             }
             $promptText .= "IMPORTANT Rules for Item Extraction:
 1. Contact lenses are critical. Read lens powers/graduations exactly when present (examples: -1.50, +2.25, -03.00, ADD LOW, BC/DIA values), but do not treat different powers as different base products.
@@ -1160,6 +1248,7 @@ Pregunta:
         case 'saveAudit':
             if ($method === 'POST') {
                 asegurarColumnasResumenFacturas($pdo);
+                asegurarColumnasNuevasProveedores($pdo);
                 $data = json_decode(file_get_contents('php://input'), true);
                 $globalStatus = normalizarEstadoAuditoria($data['globalStatus'] ?? 'pending');
                 $reviewedBy = $data['reviewedBy'] ?? null;
@@ -1168,6 +1257,13 @@ Pregunta:
                 if (in_array($globalStatus, ['approved', 'rejected'], true)) {
                     $reviewedBy = $reviewedBy ?: usuarioAuditoria($usuarioActual);
                     $reviewedAtSql = date('Y-m-d H:i:s');
+                }
+
+                $pedidosProviderId = isset($data['pedidosProviderId']) && $data['pedidosProviderId'] !== '' ? (int)$data['pedidosProviderId'] : null;
+                if ($pedidosProviderId === null && !empty($data['provider'])) {
+                    $stmtSearch = $pdo->prepare("SELECT `id` FROM `proveedores` WHERE `nombre` = ? LIMIT 1");
+                    $stmtSearch->execute([$data['provider']]);
+                    $pedidosProviderId = $stmtSearch->fetchColumn() ?: null;
                 }
 
                 $oldPdfPath = null;
@@ -1180,10 +1276,11 @@ Pregunta:
                 }
 
                 $stmt = $pdo->prepare("INSERT INTO `facturas_audits` 
-                    (`id`, `invoice_date`, `provider`, `invoice_number`, `invoice_subtotal`, `tax_total`, `total_invoice`, `global_status`, `lines`,
+                    (`id`, `invoice_date`, `provider`, `pedidos_provider_id`, `invoice_number`, `invoice_subtotal`, `tax_total`, `total_invoice`, `global_status`, `lines`,
                      `pdf_path`, `ocr_text`, `alert_count`, `critical_alert_count`, `reviewed_by`, `reviewed_at`, `notes`)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON DUPLICATE KEY UPDATE 
+                        `pedidos_provider_id`=VALUES(`pedidos_provider_id`),
                         `invoice_subtotal`=VALUES(`invoice_subtotal`),
                         `tax_total`=VALUES(`tax_total`),
                         `total_invoice`=VALUES(`total_invoice`), 
@@ -1202,6 +1299,7 @@ Pregunta:
                     $auditId,
                     $data['invoiceDate'],
                     $data['provider'],
+                    $pedidosProviderId,
                     $data['invoiceNumber'],
                     $data['invoiceSubtotal'] ?? 0,
                     $data['taxTotal'] ?? 0,
@@ -1690,39 +1788,152 @@ Pregunta:
 
         case 'getProviders':
             asegurarTablaFacturasProviders($pdo);
-            // 1. Obtener proveedores con facturas
-            $auditsStmt = $pdo->query("SELECT DISTINCT `provider` FROM `facturas_audits` WHERE `provider` IS NOT NULL AND `provider` != ''");
-            $uploadedProviders = $auditsStmt->fetchAll(PDO::FETCH_COLUMN);
+            asegurarColumnasNuevasProveedores($pdo);
 
-            // 2. Obtener proveedores de la tabla config
+            // 1. Obtener todos los proveedores oficiales de pedidos
+            $officialStmt = $pdo->query("SELECT `id`, `nombre`, `activo` FROM `proveedores` ORDER BY `nombre` ASC");
+            $officialProviders = $officialStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // 2. Obtener la configuración de facturas_providers
             $providersStmt = $pdo->query("SELECT * FROM `facturas_providers`");
             $savedProviders = $providersStmt->fetchAll(PDO::FETCH_ASSOC);
 
-            $savedMap = [];
+            // 3. Obtener nombres de proveedores que tienen facturas pero tal vez no están registrados
+            $auditsStmt = $pdo->query("SELECT DISTINCT `provider` FROM `facturas_audits` WHERE `provider` IS NOT NULL AND `provider` != ''");
+            $uploadedNames = $auditsStmt->fetchAll(PDO::FETCH_COLUMN);
+
+            // Crear mapas para cruzar datos
+            $savedByPedidosId = [];
+            $savedByName = [];
             foreach ($savedProviders as $p) {
-                $savedMap[$p['name']] = $p;
+                if ($p['pedidos_provider_id'] !== null) {
+                    $savedByPedidosId[(int)$p['pedidos_provider_id']] = $p;
+                }
+                $savedByName[$p['name']] = $p;
             }
 
+            // Contar facturas por provider name e invoiceCount por pedidos_provider_id
+            $countsByNameStmt = $pdo->query("SELECT `provider`, COUNT(*) as count FROM `facturas_audits` GROUP BY `provider`");
+            $countsByName = $countsByNameStmt->fetchAll(PDO::FETCH_KEY_PAIR);
+
+            $countsByIdStmt = $pdo->query("SELECT `pedidos_provider_id`, COUNT(*) as count FROM `facturas_audits` WHERE `pedidos_provider_id` IS NOT NULL GROUP BY `pedidos_provider_id`");
+            $countsById = $countsByIdStmt->fetchAll(PDO::FETCH_KEY_PAIR);
+
             $list = [];
-            $allUniqueNames = array_unique(array_merge($uploadedProviders, array_keys($savedMap)));
-            sort($allUniqueNames);
+            $processedOfficialIds = [];
+            $processedNames = [];
 
-            // 3. Contar facturas por proveedor
-            $countsStmt = $pdo->query("SELECT `provider`, COUNT(*) as count FROM `facturas_audits` GROUP BY `provider`");
-            $counts = $countsStmt->fetchAll(PDO::FETCH_KEY_PAIR);
+            // Primero, añadir los proveedores oficiales
+            foreach ($officialProviders as $op) {
+                $opId = (int)$op['id'];
+                $processedOfficialIds[] = $opId;
+                
+                // Buscar si tenemos configuración de reglas para este proveedor
+                $saved = $savedByPedidosId[$opId] ?? ($savedByName[$op['nombre']] ?? null);
+                if ($saved) {
+                    $processedNames[] = $saved['name'];
+                    // Si se encontró por nombre pero no tenía el ID guardado, lo enlazamos automáticamente
+                    if ($saved['pedidos_provider_id'] === null) {
+                        $upStmt = $pdo->prepare("UPDATE `facturas_providers` SET `pedidos_provider_id` = ? WHERE `id` = ?");
+                        $upStmt->execute([$opId, $saved['id']]);
+                    }
+                }
 
-            foreach ($allUniqueNames as $name) {
-                $saved = $savedMap[$name] ?? null;
+                $invoiceCount = (int)($countsById[$opId] ?? ($countsByName[$op['nombre']] ?? 0));
+
                 $list[] = [
                     'id' => $saved ? $saved['id'] : null,
-                    'name' => $name,
+                    'pedidosProviderId' => $opId,
+                    'name' => $op['nombre'],
                     'systemDescription' => $saved ? $saved['system_description'] : null,
                     'extractionRules' => $saved ? $saved['extraction_rules'] : null,
                     'createdAt' => $saved ? $saved['created_at'] : null,
                     'updatedAt' => $saved ? $saved['updated_at'] : null,
-                    'invoiceCount' => (int)($counts[$name] ?? 0)
+                    'invoiceCount' => $invoiceCount,
+                    'active' => (bool)$op['activo'],
+                    'isOfficial' => true
                 ];
             }
+
+            // Segundo, añadir proveedores que están en facturas_providers o auditaron pero no existen en la tabla oficial de pedidos
+            foreach ($savedProviders as $p) {
+                if ($p['pedidos_provider_id'] !== null && in_array((int)$p['pedidos_provider_id'], $processedOfficialIds, true)) {
+                    continue;
+                }
+                if (in_array($p['name'], $processedNames, true)) {
+                    continue;
+                }
+                $processedNames[] = $p['name'];
+
+                // Intentar ver si coincide con algún proveedor oficial por nombre (búsqueda insensible)
+                $opMatch = null;
+                foreach ($officialProviders as $op) {
+                    if (strcasecmp($op['nombre'], $p['name']) === 0) {
+                        $opMatch = $op;
+                        break;
+                    }
+                }
+
+                if ($opMatch) {
+                    // Si coincide por nombre pero no estaba procesado por ID, enlazarlo ahora
+                    $opId = (int)$opMatch['id'];
+                    $upStmt = $pdo->prepare("UPDATE `facturas_providers` SET `pedidos_provider_id` = ? WHERE `id` = ?");
+                    $upStmt->execute([$opId, $p['id']]);
+                    continue; 
+                }
+
+                $invoiceCount = (int)($countsByName[$p['name']] ?? 0);
+
+                $list[] = [
+                    'id' => $p['id'],
+                    'pedidosProviderId' => null,
+                    'name' => $p['name'],
+                    'systemDescription' => $p['system_description'],
+                    'extractionRules' => $p['extraction_rules'],
+                    'createdAt' => $p['created_at'],
+                    'updatedAt' => $p['updated_at'],
+                    'invoiceCount' => $invoiceCount,
+                    'active' => true,
+                    'isOfficial' => false
+                ];
+            }
+
+            // Tercero, añadir proveedores de facturas_audits que no tienen reglas ni están en proveedores oficiales
+            foreach ($uploadedNames as $name) {
+                if (in_array($name, $processedNames, true)) {
+                    continue;
+                }
+                // Check if matches official
+                $officialMatch = false;
+                foreach ($officialProviders as $op) {
+                    if (strcasecmp($op['nombre'], $name) === 0) {
+                        $officialMatch = true;
+                        break;
+                    }
+                }
+                if ($officialMatch) continue;
+
+                $processedNames[] = $name;
+                $invoiceCount = (int)($countsByName[$name] ?? 0);
+
+                $list[] = [
+                    'id' => null,
+                    'pedidosProviderId' => null,
+                    'name' => $name,
+                    'systemDescription' => null,
+                    'extractionRules' => null,
+                    'createdAt' => null,
+                    'updatedAt' => null,
+                    'invoiceCount' => $invoiceCount,
+                    'active' => true,
+                    'isOfficial' => false
+                ];
+            }
+
+            // Ordenar la lista final por nombre
+            usort($list, function($a, $b) {
+                return strcasecmp($a['name'], $b['name']);
+            });
 
             echo json_encode($list);
             break;
@@ -1862,13 +2073,23 @@ Return ONLY the raw JSON object conforming to this schema (no markdown formattin
             }
 
             asegurarTablaFacturasProviders($pdo);
+            asegurarColumnasNuevasProveedores($pdo);
+
+            $pedidosProviderId = isset($data['pedidosProviderId']) && $data['pedidosProviderId'] !== '' ? (int)$data['pedidosProviderId'] : null;
+            if ($pedidosProviderId === null && $name !== '') {
+                $stmtSearch = $pdo->prepare("SELECT `id` FROM `proveedores` WHERE `nombre` = ? LIMIT 1");
+                $stmtSearch->execute([$name]);
+                $pedidosProviderId = $stmtSearch->fetchColumn() ?: null;
+            }
+
             $id = !empty($data['id']) ? $data['id'] : uniqid('prov_');
-            $stmt = $pdo->prepare("INSERT INTO `facturas_providers` (`id`, `name`, `system_description`, `extraction_rules`)
-                VALUES (?, ?, ?, ?)
+            $stmt = $pdo->prepare("INSERT INTO `facturas_providers` (`id`, `name`, `pedidos_provider_id`, `system_description`, `extraction_rules`)
+                VALUES (?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
+                    `pedidos_provider_id` = VALUES(`pedidos_provider_id`),
                     `system_description` = VALUES(`system_description`),
                     `extraction_rules` = VALUES(`extraction_rules`)");
-            $stmt->execute([$id, $name, $systemDescription, $extractionRules]);
+            $stmt->execute([$id, $name, $pedidosProviderId, $systemDescription, $extractionRules]);
 
             echo json_encode(['status' => 'success']);
             break;

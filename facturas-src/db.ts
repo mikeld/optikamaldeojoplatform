@@ -195,6 +195,7 @@ export const db = {
         createdAt: a.created_at,
         invoiceDate: a.invoice_date,
         provider: a.provider,
+        pedidosProviderId: a.pedidos_provider_id ? Number(a.pedidos_provider_id) : null,
         invoiceNumber: a.invoice_number,
         totalInvoice: parseFloat(a.total_invoice),
         invoiceSubtotal: parseFloat(a.invoice_subtotal || 0),

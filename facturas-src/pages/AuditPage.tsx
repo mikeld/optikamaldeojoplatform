@@ -40,6 +40,11 @@ const extractionModes = {
     description: 'Mayor coste. Solo para PDFs escaneados o facturas difíciles.',
     aiPages: 8,
   },
+  all: {
+    label: 'Todas las páginas · Respaldo IA',
+    description: 'Usa IA en todas las páginas detectadas del documento. Recomendado para facturas largas.',
+    aiPages: 999,
+  },
 };
 
 const formatSeconds = (startedAt: number | null) => {
@@ -211,8 +216,19 @@ const AuditPage: React.FC = () => {
   const [processingStartedAt, setProcessingStartedAt] = useState<number | null>(null);
   const [processingElapsedTick, setProcessingElapsedTick] = useState(0);
   const [selectedModel, setSelectedModel] = useState<InvoiceAiModel>('gemini-2.5-flash');
-  const [extractionMode, setExtractionMode] = useState<'disabled' | 'economy' | 'complete'>('disabled');
+  const [extractionMode, setExtractionMode] = useState<'disabled' | 'economy' | 'complete' | 'all'>('disabled');
   const [saveVisualSources, setSaveVisualSources] = useState(true);
+  const [providers, setProviders] = useState<Provider[]>([]);
+  const [selectedProviderId, setSelectedProviderId] = useState<number | null>(null);
+
+  useEffect(() => {
+    db.getProviders().then(list => {
+      setProviders(list);
+    }).catch(err => {
+      console.error('Error cargando proveedores:', err);
+    });
+  }, []);
+
   const [auditResult, setAuditResult] = useState<AuditRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -339,7 +355,7 @@ const AuditPage: React.FC = () => {
               percent: 38 + Math.round(((index + 1) / Math.min(usableTextPages.length, selectedExtractionMode.aiPages)) * 28),
               usesAi: true,
             });
-            return extractInvoiceText(page.text, { model: selectedModel, pageNumber: page.pageNumber });
+            return extractInvoiceText(page.text, { model: selectedModel, pageNumber: page.pageNumber, providerId: selectedProviderId });
           })).then(mergeInvoicePages);
           extractionMethod = 'texto_pdf_gemini';
         }
@@ -361,7 +377,7 @@ const AuditPage: React.FC = () => {
           });
           const { base64, mimeType } = await combineRenderedPagesAsJpeg([page]);
           const optimizedFile = await dataUrlToFile(base64, mimeType, `factura-pagina-${page.pageNumber}.jpg`);
-          return extractInvoiceFile(optimizedFile, { model: selectedModel });
+          return extractInvoiceFile(optimizedFile, { model: selectedModel, providerId: selectedProviderId });
         })).then(mergeInvoicePages);
       } else {
         setProcessingStep({
@@ -371,7 +387,7 @@ const AuditPage: React.FC = () => {
           percent: 42,
           usesAi: true,
         });
-        extracted = await extractInvoiceFile(file, { model: selectedModel });
+        extracted = await extractInvoiceFile(file, { model: selectedModel, providerId: selectedProviderId });
       }
       setProcessingStep({
         key: 'loading',
@@ -429,6 +445,7 @@ const AuditPage: React.FC = () => {
         createdAt: new Date().toISOString(),
         invoiceDate: extracted.date || new Date().toISOString().split('T')[0],
         provider: extracted.providerName,
+        pedidosProviderId: selectedProviderId || providers.find(p => p.name.toLowerCase() === (extracted.providerName || '').toLowerCase())?.pedidosProviderId || null,
         invoiceNumber: extracted.invoiceNumber || 'S/N',
         lines: auditLines,
         totalInvoice: extracted.total,
@@ -1090,18 +1107,42 @@ const AuditPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <label className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+            <span className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Proveedor (Opcional)</span>
+            <select
+              value={selectedProviderId || ''}
+              onChange={(event) => {
+                const val = event.target.value;
+                setSelectedProviderId(val ? Number(val) : null);
+              }}
+              disabled={isProcessing}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-black text-slate-700 outline-none focus:border-indigo-300"
+            >
+              <option value="">Autodetectar Proveedor</option>
+              {providers.map(p => (
+                <option key={p.pedidosProviderId || p.name} value={p.pedidosProviderId || ''}>
+                  {p.name} {p.isOfficial ? '' : '(No registrado)'}
+                </option>
+              ))}
+            </select>
+            <span className="mt-2 block text-xs font-semibold text-slate-500">
+              {selectedProviderId ? 'Forzar reglas del proveedor seleccionado.' : 'Intentar detectar automáticamente.'}
+            </span>
+          </label>
+
           <label className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
             <span className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Páginas con IA</span>
             <select
               value={extractionMode}
-              onChange={(event) => setExtractionMode(event.target.value as 'disabled' | 'economy' | 'complete')}
+              onChange={(event) => setExtractionMode(event.target.value as 'disabled' | 'economy' | 'complete' | 'all')}
               disabled={isProcessing}
               className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-black text-slate-700 outline-none focus:border-indigo-300"
             >
               <option value="disabled">{extractionModes.disabled.label}</option>
               <option value="economy">{extractionModes.economy.label}</option>
               <option value="complete">{extractionModes.complete.label}</option>
+              <option value="all">{extractionModes.all.label}</option>
             </select>
             <span className="mt-2 block text-xs font-semibold text-slate-500">{extractionModes[extractionMode].description}</span>
           </label>
