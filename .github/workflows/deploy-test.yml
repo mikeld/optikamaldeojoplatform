@@ -36,48 +36,21 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: ./deploy/prepare_hostinger_release.sh test deploy/dist/release
 
-      - name: Prepare incremental upload
-        env:
-          BEFORE_SHA: ${{ github.event.before }}
-          EVENT_NAME: ${{ github.event_name }}
+      - name: Create ZIP package and prepare unzip script
         run: |
           set -euo pipefail
-          rm -rf deploy/dist/upload
-          mkdir -p deploy/dist/upload
+          # Comprimir el release generado
+          cd deploy/dist/release
+          zip -qr ../release.zip .
+          cd ../../..
 
-          if [ "$EVENT_NAME" != "push" ] || [ -z "$BEFORE_SHA" ] || [[ "$BEFORE_SHA" =~ ^0+$ ]]; then
-            cp -a deploy/dist/release/. deploy/dist/upload/
-            exit 0
-          fi
+          # Generar un token dinámico de un solo uso
+          UNZIP_TOKEN=$(openssl rand -hex 16)
+          echo "UNZIP_TOKEN=$UNZIP_TOKEN" >> $GITHUB_ENV
 
-          git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA" > deploy/dist/changed_files.txt
-
-          if grep -Eq '^(facturas-src/|package.json|package-lock.json|vite.config|tsconfig|\.github/workflows/deploy-test\.yml)' deploy/dist/changed_files.txt; then
-            mkdir -p deploy/dist/upload/facturas
-            cp -a deploy/dist/release/facturas/. deploy/dist/upload/facturas/
-          fi
-
-          while IFS= read -r file; do
-            case "$file" in
-              assets/*|includes/*|pedidos/*|home.php|index.php|logout.php|debug.php|manifest.json|offline.html|sw.js)
-                if [ -f "deploy/dist/release/$file" ]; then
-                  mkdir -p "deploy/dist/upload/$(dirname "$file")"
-                  cp "deploy/dist/release/$file" "deploy/dist/upload/$file"
-                fi
-                ;;
-            esac
-          done < deploy/dist/changed_files.txt
-
-          for file in includes/db_config.php pedidos/api/facturas.php pedidos/views/header.php pedidos/assets/css/style.css; do
-            if [ -f "deploy/dist/release/$file" ]; then
-              mkdir -p "deploy/dist/upload/$(dirname "$file")"
-              cp "deploy/dist/release/$file" "deploy/dist/upload/$file"
-            fi
-          done
-
-          if ! find deploy/dist/upload -type f | grep -q .; then
-            cp -a deploy/dist/release/. deploy/dist/upload/
-          fi
+          # Copiar la plantilla unzip.php y reemplazar el token
+          cp deploy/unzip.php deploy/dist/unzip.php
+          sed -i "s/COMPARE_WITH_TOKEN/$UNZIP_TOKEN/g" deploy/dist/unzip.php
 
       - name: Upload to Hostinger test
         env:
@@ -94,17 +67,20 @@ jobs:
           FTP_USER_CLEAN="$(printf '%s' "$FTP_USER" | tr -d '\r\n')"
           FTP_PASS_CLEAN="$(printf '%s' "$FTP_PASS" | tr -d '\r\n')"
           FTP_DIR_CLEAN="$(printf '%s' "$FTP_DIR" | tr -d '\r\n')"
-          FILE_COUNT="$(find deploy/dist/upload -type f | wc -l | tr -d ' ')"
-          echo "Uploading $FILE_COUNT file(s) to Hostinger test"
 
-          while IFS= read -r file; do
-            rel="${file#deploy/dist/upload/}"
-            remote_path="$FTP_DIR_CLEAN/$rel"
-            remote_url="ftp://$FTP_HOST_CLEAN/$remote_path"
-            echo "Uploading $rel"
-            if ! curl --fail --silent --show-error --ftp-create-dirs --retry 4 --retry-delay 8 --connect-timeout 60 --max-time 600 --user "$FTP_USER_CLEAN:$FTP_PASS_CLEAN" -T "$file" "$remote_url"; then
-              echo "Failed uploading $rel"
-              exit 1
-            fi
-            sleep 2
-          done < <(find deploy/dist/upload -type f | sort)
+          echo "Uploading release.zip..."
+          curl --fail --silent --show-error --ftp-create-dirs --retry 3 --connect-timeout 60 --max-time 600 --user "$FTP_USER_CLEAN:$FTP_PASS_CLEAN" -T "deploy/dist/release.zip" "ftp://$FTP_HOST_CLEAN/$FTP_DIR_CLEAN/release.zip"
+
+          echo "Uploading unzip.php..."
+          curl --fail --silent --show-error --ftp-create-dirs --retry 3 --connect-timeout 60 --max-time 600 --user "$FTP_USER_CLEAN:$FTP_PASS_CLEAN" -T "deploy/dist/unzip.php" "ftp://$FTP_HOST_CLEAN/$FTP_DIR_CLEAN/unzip.php"
+
+      - name: Trigger Remote Unzip
+        run: |
+          echo "Triggering unzip..."
+          # Realizar curl llamando al script de descompresión con el token dinámico
+          RESPONSE=$(curl --fail --silent --show-error --retry 3 --retry-delay 5 "https://sienna-woodpecker-278479.hostingersite.com/test/unzip.php?token=${{ env.UNZIP_TOKEN }}")
+          echo "Server response: $RESPONSE"
+          if [[ $(echo "$RESPONSE" | jq -r '.status') != "success" ]]; then
+            echo "Unzip failed!"
+            exit 1
+          fi

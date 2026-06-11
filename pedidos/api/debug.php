@@ -15,7 +15,7 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
 }
 
 echo "=== LATEST AUDITS ===\n";
-$stmt = $pdo->query("SELECT id, provider, invoice_number, invoice_date, total_invoice, lines FROM facturas_audits ORDER BY created_at DESC LIMIT 5");
+$stmt = $pdo->query("SELECT id, provider, invoice_number, invoice_date, total_invoice, `lines` FROM facturas_audits ORDER BY created_at DESC LIMIT 5");
 while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
     echo "ID: " . $row['id'] . "\n";
     echo "Provider: " . $row['provider'] . "\n";
