@@ -31,14 +31,44 @@ if ($filtro) {
     $params = [':f' => "%$filtro%", ':f2' => "%$filtro%", ':f3' => "%$filtro%"];
 }
 
-$stmt = $pdo->prepare("SELECT p.*, COUNT(fa.id) as total_facturas 
-                       FROM proveedores p 
-                       LEFT JOIN facturas_audits fa ON p.id = fa.pedidos_provider_id 
-                       $cond 
-                       GROUP BY p.id 
-                       ORDER BY p.$orden $dir");
-$stmt->execute($params);
-$proveedores = $stmt->fetchAll(PDO::FETCH_ASSOC);
+try {
+    $stmt = $pdo->prepare("SELECT p.*, COUNT(fa.id) as total_facturas 
+                           FROM proveedores p 
+                           LEFT JOIN facturas_audits fa ON p.id = fa.pedidos_provider_id 
+                           $cond 
+                           GROUP BY p.id 
+                           ORDER BY p.$orden $dir");
+    $stmt->execute($params);
+    $proveedores = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    try {
+        $database = $pdo->query('SELECT DATABASE()')->fetchColumn();
+        $colCheck = $pdo->prepare("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'facturas_audits' AND COLUMN_NAME = 'pedidos_provider_id'");
+        $colCheck->execute([$database]);
+        if (!$colCheck->fetchColumn()) {
+            // Crear columna si falta
+            $pdo->exec("ALTER TABLE `facturas_audits` ADD COLUMN `pedidos_provider_id` INT UNSIGNED DEFAULT NULL AFTER `provider`");
+            $pdo->exec("ALTER TABLE `facturas_audits` ADD INDEX `idx_pedidos_provider_audit` (`pedidos_provider_id`)");
+            
+            // Reintentar consulta
+            $stmt = $pdo->prepare("SELECT p.*, COUNT(fa.id) as total_facturas 
+                                   FROM proveedores p 
+                                   LEFT JOIN facturas_audits fa ON p.id = fa.pedidos_provider_id 
+                                   $cond 
+                                   GROUP BY p.id 
+                                   ORDER BY p.$orden $dir");
+            $stmt->execute($params);
+            $proveedores = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } else {
+            throw $e;
+        }
+    } catch (Exception $ex) {
+        // Fallback absoluto si la tabla facturas_audits no existe o falla la migración
+        $stmt = $pdo->prepare("SELECT p.*, 0 as total_facturas FROM proveedores p $cond ORDER BY p.$orden $dir");
+        $stmt->execute($params);
+        $proveedores = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+}
 
 // Helper para links de ordenación
 function sortLink($col, $label, $currentSort, $currentDir) {
