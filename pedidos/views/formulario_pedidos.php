@@ -117,15 +117,15 @@ try {
                 <form action="../controllers/insertar_pedido.php" method="POST" onsubmit="return validarFormulario()" class="modern-form">
                     <div class="row">
                         <div class="col-md-6 mb-4">
-                            <label for="fecha_cliente" class="form-label">Fecha Cliente</label>
+                            <label for="fecha_cliente" class="form-label d-flex align-items-center" style="min-height: 31px;">Fecha Cliente</label>
                             <input type="date" id="fecha_cliente" name="fecha_cliente" class="form-control" required>
                         </div>
 
                         <!-- Campo SELECT para seleccionar cliente -->
                         <div class="col-md-6 mb-4">
-                            <label for="referencia_cliente" class="form-label d-flex justify-content-between align-items-center">
+                            <label for="referencia_cliente" class="form-label d-flex justify-content-between align-items-center" style="min-height: 31px;">
                                 <span>Cliente</span>
-                                <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalNuevoCliente">
+                                <button type="button" class="btn btn-sm btn-outline-primary" style="padding: 2px 8px; font-size: 0.75rem;" data-bs-toggle="modal" data-bs-target="#modalNuevoCliente">
                                     <i class="fas fa-plus"></i> Crear Cliente
                                 </button>
                             </label>
@@ -197,13 +197,13 @@ try {
 
                     <div class="row">
                         <div class="col-md-4 mb-4">
-                            <label for="fecha_pedido" class="form-label">Fecha Pedido</label>
+                            <label for="fecha_pedido" class="form-label d-flex align-items-center" style="min-height: 31px;">Fecha Pedido</label>
                             <input type="date" id="fecha_pedido" name="fecha_pedido" class="form-control">
                         </div>
                         <div class="col-md-4 mb-4">
-                            <label for="proveedor_id" class="form-label d-flex justify-content-between align-items-center">
+                            <label for="proveedor_id" class="form-label d-flex justify-content-between align-items-center" style="min-height: 31px;">
                                 <span>Proveedor</span>
-                                <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalNuevoProveedor">
+                                <button type="button" class="btn btn-sm btn-outline-primary" style="padding: 2px 8px; font-size: 0.75rem;" data-bs-toggle="modal" data-bs-target="#modalNuevoProveedor">
                                     <i class="fas fa-plus"></i> Crear Proveedor
                                 </button>
                             </label>
@@ -215,7 +215,7 @@ try {
                             </select>
                         </div>
                         <div class="col-md-4 mb-4">
-                            <label class="form-label">Vía de Pedido</label>
+                            <label class="form-label d-flex align-items-center" style="min-height: 31px;">Vía de Pedido</label>
                             <div class="d-flex gap-2">
                                 <select id="via_canal" class="form-select" onchange="actualizarVia()" style="min-width:0; flex:0 0 auto; width:auto;">
                                     <option value="">— Canal —</option>
@@ -406,7 +406,7 @@ try {
                 <div class="rx-linea-numero">LINEA #${index}</div>
                 <button type="button" class="btn-remove-rx" onclick="removerLineaRX(this)"><i class="fas fa-times"></i></button>
                 
-                <div class="row g-2 align-items-center mb-2 mt-2">
+                <div class="row g-2 mb-2 mt-2">
                     <div class="col-md-3">
                         <label class="form-label small mb-1">Tipo de Artículo</label>
                         <select class="form-select form-select-sm rx-tipo" onchange="toggleRxFields(this)">
@@ -431,7 +431,7 @@ try {
                     <div class="col-md-4">
                         <label class="form-label small mb-1">Notas / Tipo Lente</label>
                         <div class="input-group input-group-sm">
-                            <input type="text" list="productos-list" class="form-control rx-input-nota" placeholder="ej: Biofinity" value="${data ? (data.nota || '') : ''}" oninput="serializeRxLines();">
+                            <input type="text" list="productos-list" class="form-control form-control-sm rx-input-nota" placeholder="ej: Biofinity" value="${data ? (data.nota || '') : ''}" oninput="serializeRxLines();">
                             <button class="btn btn-outline-success" type="button" title="Crear nuevo producto" onclick="abrirModalNuevoProducto(this)">
                                 <i class="fas fa-plus"></i>
                             </button>

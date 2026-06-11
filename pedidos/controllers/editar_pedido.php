@@ -389,7 +389,7 @@ include '../views/header.php';
                 <div class="rx-linea-numero">LINEA #${index}</div>
                 <button type="button" class="btn-remove-rx" onclick="removerLineaRX(this)"><i class="fas fa-times"></i></button>
                 
-                <div class="row g-2 align-items-center mb-2 mt-2">
+                <div class="row g-2 mb-2 mt-2">
                     <div class="col-md-3">
                         <label class="form-label small mb-1">Tipo de Artículo</label>
                         <select class="form-select form-select-sm rx-tipo" onchange="toggleRxFields(this)">
@@ -418,7 +418,7 @@ include '../views/header.php';
                     <div class="col-md-2">
                         <label class="form-label small mb-1">Notas / Tipo Lente</label>
                         <div class="input-group input-group-sm">
-                            <input type="text" list="productos-list" class="form-control rx-input-nota" placeholder="ej: Biofinity" value="${data ? (data.nota || '') : ''}" oninput="serializeRxLines();">
+                            <input type="text" list="productos-list" class="form-control form-control-sm rx-input-nota" placeholder="ej: Biofinity" value="${data ? (data.nota || '') : ''}" oninput="serializeRxLines();">
                             <button class="btn btn-outline-success" type="button" title="Crear nuevo producto" onclick="abrirModalNuevoProducto(this)">
                                 <i class="fas fa-plus"></i>
                             </button>
