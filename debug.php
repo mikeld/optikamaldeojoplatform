@@ -1,4 +1,5 @@
 <?php
+// Trigger deploy change detection
 header('Content-Type: text/plain; charset=utf-8');
 require_once __DIR__ . '/includes/conexion.php';
 $conexion = new Conexion();
