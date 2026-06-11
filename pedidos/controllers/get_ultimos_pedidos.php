@@ -12,13 +12,13 @@ if (!$referencia) {
 }
 
 $pdo = (new Conexion())->pdo;
-// Trae últimos 5 pedidos de ese cliente, ordenados por fecha de pedido descendente
-$sql = "SELECT id, lc_gafa_recambio, rx, rx_lineas, pack_tipo, via, observaciones, fecha_pedido 
+// Trae últimos 5 pedidos de ese cliente, ordenados por fecha_cliente descendente
+$sql = "SELECT id, lc_gafa_recambio, rx, rx_lineas, pack_tipo, via, observaciones, fecha_pedido, fecha_cliente 
         FROM pedidos 
         WHERE referencia_cliente = :ref 
           AND deleted_at IS NULL
           AND recibido != 3
-        ORDER BY fecha_pedido DESC 
+        ORDER BY fecha_cliente DESC 
         LIMIT 5";
 $stmt = $pdo->prepare($sql);
 $stmt->bindValue(':ref', $referencia, PDO::PARAM_STR);
@@ -26,4 +26,4 @@ $stmt->execute();
 
 $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 echo json_encode($rows);
-// force deploy
+?>

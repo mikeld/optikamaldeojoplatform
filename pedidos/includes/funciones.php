@@ -65,9 +65,14 @@ function formatearRX($rx, $rx_lineas_json = null) {
                 // CASO 2: Formato Plano (Cada entrada es un ojo, con soporte de tipo y cantidad)
                 else if (isset($l['ojo'])) {
                     $ojo = strtoupper($l['ojo']);
-                    $class = (strpos($ojo, 'OD') !== false) ? 'text-primary' : 'text-danger';
+                    $class = 'text-muted';
+                    if (strpos($ojo, 'OD') !== false) {
+                        $class = 'text-primary';
+                    } elseif (strpos($ojo, 'OI') !== false) {
+                        $class = 'text-danger';
+                    }
                     $parts = array_filter([$l['esfera'] ?? $l['esf'] ?? '', $l['cilindro'] ?? $l['cil'] ?? '', $l['eje'] ?? '', $l['adicion'] ?? $l['add'] ?? '']);
-                    $txt = $ojo . ' ' . implode(' ', $parts);
+                    $txt = ($ojo === 'OTRO' ? 'OTRO' : $ojo) . ' ' . implode(' ', $parts);
                     
                     $tipo = $l['tipo'] ?? null;
                     $cant = isset($l['cantidad']) ? (int)$l['cantidad'] : 0;
@@ -465,5 +470,3 @@ function calcularPackDesdeLineas($rx_lineas_json) {
         'pack_estado' => $pack_estado
     ];
 }
-
-// force deploy

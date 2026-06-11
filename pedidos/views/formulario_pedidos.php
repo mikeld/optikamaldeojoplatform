@@ -369,6 +369,7 @@ try {
                             <option value="ninguno" ${data && data.ojo === 'ninguno' ? 'selected' : ''}>Ninguno</option>
                             <option value="OD" ${data && data.ojo === 'OD' ? 'selected' : ''}>Ojo Derecho (OD)</option>
                             <option value="OI" ${data && data.ojo === 'OI' ? 'selected' : ''}>Ojo Izquierdo (OI)</option>
+                            <option value="OTRO" ${data && data.ojo === 'OTRO' ? 'selected' : ''}>Otro / Sin Especificar</option>
                         </select>
                     </div>
                     <div class="col-md-2 rx-cantidad-wrap d-none">
@@ -417,14 +418,14 @@ try {
             const qtyWrap = card.querySelector('.rx-cantidad-wrap');
 
             // 1. Mostrar/ocultar inputs RX si se selecciona un ojo
-            if (ojo === 'OD' || ojo === 'OI') {
+            if (ojo === 'OD' || ojo === 'OI' || ojo === 'OTRO') {
                 rxInputsWrap.classList.remove('d-none');
             } else {
                 rxInputsWrap.classList.add('d-none');
             }
 
             // 2. Mostrar/ocultar cantidad si es pack y ojo
-            if ((tipo === 'caja' || tipo === 'blister') && (ojo === 'OD' || ojo === 'OI')) {
+            if ((tipo === 'caja' || tipo === 'blister') && (ojo === 'OD' || ojo === 'OI' || ojo === 'OTRO')) {
                 qtyWrap.classList.remove('d-none');
             } else {
                 qtyWrap.classList.add('d-none');
@@ -455,7 +456,7 @@ try {
                 const tipo = card.querySelector('.rx-tipo').value;
                 const ojo = card.querySelector('.rx-ojo').value;
                 const cantidad = parseInt(card.querySelector('.rx-cantidad').value) || 1;
-                const nota = card.querySelector('.rx-input-nota').value.trim();
+                const note = card.querySelector('.rx-input-nota').value.trim();
                 
                 const esf = card.querySelector('.rx-esf').value.trim();
                 const cil = card.querySelector('.rx-cil').value.trim();
@@ -471,15 +472,15 @@ try {
                     cil: cil,
                     eje: eje,
                     add: add,
-                    nota: nota
+                    nota: note
                 };
 
-                if (ojo !== 'ninguno' || tipo !== 'ninguno' || nota) {
+                if (ojo !== 'ninguno' || tipo !== 'ninguno' || note) {
                     rxLines.push(row);
                     
                     let lineText = "";
                     if (ojo !== 'ninguno') {
-                        lineText += ojo + " ";
+                        lineText += (ojo === 'OTRO' ? 'OTRO' : ojo) + " ";
                         if (esf) lineText += esf + " ";
                         if (cil) lineText += cil + " ";
                         if (eje) lineText += eje + " ";
@@ -488,8 +489,8 @@ try {
                     if (tipo !== 'ninguno' && ojo !== 'ninguno') {
                         lineText += `(${cantidad} ${tipo}s)`;
                     }
-                    if (nota) {
-                        lineText += ` [${nota}]`;
+                    if (note) {
+                        lineText += ` [${note}]`;
                     }
                     if (lineText.trim()) {
                         textLegacy += lineText.trim() + " | ";
@@ -504,8 +505,10 @@ try {
         function actualizarResumenPack() {
             let totalCajasOD = 0;
             let totalCajasOI = 0;
+            let totalCajasOTRO = 0;
             let totalBlistersOD = 0;
             let totalBlistersOI = 0;
+            let totalBlistersOTRO = 0;
 
             document.querySelectorAll('.rx-line-row').forEach(card => {
                 const tipo = card.querySelector('.rx-tipo').value;
@@ -518,14 +521,19 @@ try {
                 } else if (ojo === 'OI') {
                     if (tipo === 'caja') totalCajasOI += cantidad;
                     else if (tipo === 'blister') totalBlistersOI += cantidad;
+                } else if (ojo === 'OTRO') {
+                    if (tipo === 'caja') totalCajasOTRO += cantidad;
+                    else if (tipo === 'blister') totalBlistersOTRO += cantidad;
                 }
             });
 
             const parts = [];
             if (totalCajasOD > 0) parts.push(`${totalCajasOD} caja(s) OD`);
             if (totalCajasOI > 0) parts.push(`${totalCajasOI} caja(s) OI`);
+            if (totalCajasOTRO > 0) parts.push(`${totalCajasOTRO} caja(s) (Sin Especificar)`);
             if (totalBlistersOD > 0) parts.push(`${totalBlistersOD} blister(s) OD`);
             if (totalBlistersOI > 0) parts.push(`${totalBlistersOI} blister(s) OI`);
+            if (totalBlistersOTRO > 0) parts.push(`${totalBlistersOTRO} blister(s) (Sin Especificar)`);
 
             const box = document.getElementById('resumen-pack-box');
             if (parts.length > 0) {
@@ -627,7 +635,7 @@ try {
                             data.forEach((p, idx) => {
                                 const opt = document.createElement('option');
                                 opt.value = idx;
-                                const fecha = p.fecha_pedido ? p.fecha_pedido : 'Sin fecha';
+                                const fecha = p.fecha_cliente ? p.fecha_cliente : 'Sin fecha';
                                 opt.innerText = `#${p.id} - ${fecha} - ${p.lc_gafa_recambio || 'Sin producto'}`;
                                 copiarSelect.appendChild(opt);
                             });
@@ -672,11 +680,20 @@ try {
                                         btnRx.type = 'button';
                                         btnRx.className = 'btn btn-action btn-sm btn-outline-primary';
                                         btnRx.innerHTML = '<i class="fas fa-copy"></i> Última RX';
+                                        btnRx.title = "Cargar RX anterior: " + (ultimo.rx || "");
                                         btnRx.onclick = () => {
                                             rxContainer.innerHTML = ''; // Limpiar antes de cargar
                                             rxLinesData.forEach(line => addRxLine(line));
                                         };
                                         contRx.appendChild(btnRx);
+
+                                        // Mostrar una previsualización corta del RX en texto al lado del botón
+                                        const previewText = document.createElement('span');
+                                        previewText.className = 'small text-muted ms-2 align-middle d-inline-block text-truncate';
+                                        previewText.style.maxWidth = '250px';
+                                        previewText.innerText = `(${ultimo.rx || ""})`;
+                                        previewText.title = ultimo.rx || "";
+                                        contRx.appendChild(previewText);
                                     }
                                 } catch (e) {
                                     console.error("Error parsing rx_lineas from last order:", e);
@@ -897,4 +914,3 @@ try {
 
 </body>
 </html>
-// force deploy

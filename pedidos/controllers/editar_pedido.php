@@ -355,6 +355,7 @@ include '../views/header.php';
                             <option value="ninguno" ${data && data.ojo === 'ninguno' ? 'selected' : ''}>Ninguno</option>
                             <option value="OD" ${data && data.ojo === 'OD' ? 'selected' : ''}>Ojo Derecho (OD)</option>
                             <option value="OI" ${data && data.ojo === 'OI' ? 'selected' : ''}>Ojo Izquierdo (OI)</option>
+                            <option value="OTRO" ${data && data.ojo === 'OTRO' ? 'selected' : ''}>Otro / Sin Especificar</option>
                         </select>
                     </div>
                     <div class="col-md-2 rx-cantidad-wrap d-none">
@@ -408,14 +409,14 @@ include '../views/header.php';
             const recWrap = card.querySelector('.rx-recibida-wrap');
 
             // 1. Mostrar/ocultar inputs RX
-            if (ojo === 'OD' || ojo === 'OI') {
+            if (ojo === 'OD' || ojo === 'OI' || ojo === 'OTRO') {
                 rxInputsWrap.classList.remove('d-none');
             } else {
                 rxInputsWrap.classList.add('d-none');
             }
 
             // 2. Mostrar/ocultar cantidad pedida y recibida si es pack
-            if ((tipo === 'caja' || tipo === 'blister') && (ojo === 'OD' || ojo === 'OI')) {
+            if ((tipo === 'caja' || tipo === 'blister') && (ojo === 'OD' || ojo === 'OI' || ojo === 'OTRO')) {
                 qtyWrap.classList.remove('d-none');
                 recWrap.classList.remove('d-none');
             } else {
@@ -473,7 +474,7 @@ include '../views/header.php';
                     
                     let lineText = "";
                     if (ojo !== 'ninguno') {
-                        lineText += ojo + " ";
+                        lineText += (ojo === 'OTRO' ? 'OTRO' : ojo) + " ";
                         if (esf) lineText += esf + " ";
                         if (cil) lineText += cil + " ";
                         if (eje) lineText += eje + " ";
@@ -498,8 +499,10 @@ include '../views/header.php';
         function actualizarResumenPack() {
             let totalCajasOD = 0;
             let totalCajasOI = 0;
+            let totalCajasOTRO = 0;
             let totalBlistersOD = 0;
             let totalBlistersOI = 0;
+            let totalBlistersOTRO = 0;
 
             document.querySelectorAll('.rx-line-row').forEach(card => {
                 const tipo = card.querySelector('.rx-tipo').value;
@@ -512,14 +515,19 @@ include '../views/header.php';
                 } else if (ojo === 'OI') {
                     if (tipo === 'caja') totalCajasOI += cantidad;
                     else if (tipo === 'blister') totalBlistersOI += cantidad;
+                } else if (ojo === 'OTRO') {
+                    if (tipo === 'caja') totalCajasOTRO += cantidad;
+                    else if (tipo === 'blister') totalBlistersOTRO += cantidad;
                 }
             });
 
             const parts = [];
             if (totalCajasOD > 0) parts.push(`${totalCajasOD} caja(s) OD`);
             if (totalCajasOI > 0) parts.push(`${totalCajasOI} caja(s) OI`);
+            if (totalCajasOTRO > 0) parts.push(`${totalCajasOTRO} caja(s) (Sin Especificar)`);
             if (totalBlistersOD > 0) parts.push(`${totalBlistersOD} blister(s) OD`);
             if (totalBlistersOI > 0) parts.push(`${totalBlistersOI} blister(s) OI`);
+            if (totalBlistersOTRO > 0) parts.push(`${totalBlistersOTRO} blister(s) (Sin Especificar)`);
 
             const box = document.getElementById('resumen-pack-box');
             if (parts.length > 0) {

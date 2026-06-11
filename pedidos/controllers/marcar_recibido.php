@@ -105,7 +105,7 @@ try {
         header('Location: ../views/listado_pedidos.php?success=1');
         exit;
     }
-} catch (Exception $e) {
+} catch (Throwable $e) {
     echo 'Error: ' . $e->getMessage();
 }
-// force deploy
+?>

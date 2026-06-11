@@ -24,7 +24,7 @@ Para los pedidos de lentillas, la graduación (RX) y la información del empaque
 ### Estructura de RX
 Cada línea añadida contiene:
 - **Empaque**: Selector entre `Blíster` o `Caja`.
-- **Ojo**: Selector entre `Ojo Derecho (OD)` u `Ojo Izquierdo (OI)`.
+- **Ojo**: Selector entre `Ojo Derecho (OD)`, `Ojo Izquierdo (OI)` u `Otro / Sin Especificar`.
 - **Valores Ópticos**: Inputs específicos para:
   - **Esfera (ESF)**: Potencia esférica.
   - **Cilindro (CIL)**: Astigmatismo (si aplica).

@@ -865,7 +865,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             if (l.tipo === 'caja' || l.tipo === 'blister') {
                                 hasPackLines = true;
                                 
-                                const eyeBadgeClass = l.ojo === 'OD' ? 'text-primary bg-primary bg-opacity-10' : 'text-danger bg-danger bg-opacity-10';
+                                const eyeBadgeClass = l.ojo === 'OD' ? 'text-primary bg-primary bg-opacity-10' : (l.ojo === 'OI' ? 'text-danger bg-danger bg-opacity-10' : 'text-muted bg-secondary bg-opacity-10');
                                 const tipoIcon = l.tipo === 'caja' ? 'fa-box text-primary' : 'fa-tablets text-purple';
                                 const noteText = l.nota ? ` <span class="small text-muted">[${l.nota}]</span>` : '';
                                 
@@ -1098,4 +1098,4 @@ function toggleTable(id, btnId) {
 
 <?php
 include 'footer.php';
-// force deploy
+?>
