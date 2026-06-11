@@ -1,13 +1,14 @@
 <?php
-// Receptor permanente de ZIPs de deploy via HTTP POST
-// Colocar en el servidor UNA SOLA VEZ (manualmente o en el primer deploy funcional).
-// Protegido con DEPLOY_UPLOAD_TOKEN (secreto de GitHub, no cambia entre deploys).
+// Receptor permanente de ZIPs de deploy via HTTP POST.
+// El token se lee de .deploy_token (fichero en el mismo directorio, nunca sobreescrito por el deploy).
 header('Content-Type: application/json');
 
-$secret = getenv('DEPLOY_UPLOAD_TOKEN') ?: 'REPLACE_WITH_STATIC_TOKEN';
-$token  = $_GET['token'] ?? '';
+$tokenFile = __DIR__ . '/.deploy_token';
+$secret    = file_exists($tokenFile) ? trim(file_get_contents($tokenFile)) : '';
 
-if (empty($token) || !hash_equals($secret, $token)) {
+$token = $_GET['token'] ?? '';
+
+if (empty($secret) || empty($token) || !hash_equals($secret, $token)) {
     http_response_code(403);
     echo json_encode(['status' => 'error', 'message' => 'Unauthorized']);
     exit;
