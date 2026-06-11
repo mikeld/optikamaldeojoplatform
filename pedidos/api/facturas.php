@@ -314,6 +314,7 @@ function geminiModelosCandidatos($preferredModel = null) {
         'gemini-2.5-flash',
         'gemini-2.5-flash-lite',
         'gemini-2.0-flash',
+        'gemini-1.5-flash',
     ];
 
     return array_values(array_unique(array_filter($candidates)));
@@ -321,7 +322,7 @@ function geminiModelosCandidatos($preferredModel = null) {
 
 function modeloGeminiPermitido($model) {
     $model = trim((string)$model);
-    $allowed = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+    $allowed = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash', 'gemini-1.5-flash'];
     return in_array($model, $allowed, true) ? $model : null;
 }
 
@@ -366,11 +367,8 @@ function geminiGenerateContent($payload, $preferredModel = null) {
             return geminiGenerateContentWithModel($payload, $model);
         } catch (Exception $e) {
             $lastError = $e;
-            $message = $e->getMessage();
-            $isModelError = str_contains($message, 'not found') || str_contains($message, 'not supported for generateContent');
-            if (!$isModelError) {
-                throw $e;
-            }
+            // Registrar error y continuar con el siguiente candidato
+            error_log("Fallo en modelo Gemini '$model': " . $e->getMessage());
         }
     }
 

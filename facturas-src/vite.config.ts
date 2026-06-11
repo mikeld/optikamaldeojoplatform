@@ -14,6 +14,7 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [react()],
     build: {
+      target: 'es2022',
       rollupOptions: {
         output: {
           assetFileNames: (assetInfo) => {
