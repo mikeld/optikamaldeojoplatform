@@ -1,10 +1,81 @@
 <?php
-// debug.php - Script temporal para diagnosticar el error 500 en studyProviderLayout
-header("Content-Type: application/json");
+// debug.php - Script temporal para diagnosticar el error 500 en studyProviderLayout (Autocontenido)
+header("Content-Type: text/plain"); // Usar plain text para ver el output directamente
 
-require_once '../../includes/auth_class.php';
 require_once '../includes/conexion.php';
-require_once '../includes/invoice_text_parser.php';
+
+function geminiApiKey() {
+    $key = defined('GEMINI_API_KEY') ? trim((string)GEMINI_API_KEY) : '';
+    if ($key === '') {
+        throw new Exception('No se ha configurado la clave de API de Gemini en el servidor');
+    }
+    return $key;
+}
+
+function geminiModelosCandidatos($preferredModel = null) {
+    $configured = defined('GEMINI_MODEL') ? trim((string)GEMINI_MODEL) : '';
+    $candidates = [
+        $preferredModel,
+        $configured,
+        'gemini-2.5-flash',
+        'gemini-2.5-flash-lite',
+        'gemini-2.0-flash',
+    ];
+
+    return array_values(array_unique(array_filter($candidates)));
+}
+
+function geminiGenerateContentWithModel($payload, $model) {
+    if (!function_exists('curl_init')) {
+        throw new Exception('El servidor no tiene cURL habilitado para conectar con Gemini');
+    }
+
+    $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent?key=' . urlencode(geminiApiKey());
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_POSTFIELDS => json_encode($payload),
+        CURLOPT_TIMEOUT => 60,
+    ]);
+
+    $raw = curl_exec($ch);
+    $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if ($raw === false || $curlError) {
+        throw new Exception('No se ha podido conectar con Gemini: ' . $curlError);
+    }
+
+    $response = json_decode($raw, true);
+    if ($httpCode < 200 || $httpCode >= 300) {
+        $message = $response['error']['message'] ?? ('HTTP ' . $httpCode);
+        throw new Exception('Gemini ha devuelto un error: ' . $message);
+    }
+
+    return $response;
+}
+
+function geminiGenerateContent($payload, $preferredModel = null) {
+    $lastError = null;
+
+    foreach (geminiModelosCandidatos($preferredModel) as $model) {
+        try {
+            return geminiGenerateContentWithModel($payload, $model);
+        } catch (Exception $e) {
+            $lastError = $e;
+            $message = $e->getMessage();
+            $isModelError = str_contains($message, 'not found') || str_contains($message, 'not supported for generateContent');
+            if (!$isModelError) {
+                throw $e;
+            }
+        }
+    }
+
+    throw new Exception('Gemini no tiene disponible ninguno de los modelos configurados para generateContent. Último error: ' . ($lastError ? $lastError->getMessage() : 'sin detalle'));
+}
 
 try {
     $pdo = (new Conexion())->pdo;
@@ -37,7 +108,9 @@ try {
     
     $parts = [];
     if ($textContext !== '') {
-        $parts[] = ['text' => "OCR text of the invoice:\n" . substr($textContext, 0, 10000)];
+        $parts[] = ['text' => "OCR text of the invoice:\n" . substr($textContext, 0, 1000)];
+    } else {
+        $parts[] = ['text' => "OCR text of the invoice is empty."];
     }
     
     $prompt = "Analyze the layout and format of this invoice from the provider '{$providerName}'.
@@ -77,8 +150,6 @@ Return ONLY the raw JSON object conforming to this schema:
     } else {
         echo "GEMINI_API_KEY defined. Model defined: " . (defined('GEMINI_MODEL') ? GEMINI_MODEL : 'NOT DEFINED') . "\n";
     }
-    
-    require_once 'facturas.php'; // Para usar las funciones auxiliares de facturas.php
     
     $rawResponse = geminiGenerateContent($payload);
     echo "Gemini Response successful!\n";
