@@ -442,36 +442,37 @@ try {
             standardEsfValues.add('0.00');
             for (let val = 0.25; val <= 20.00; val += 0.25) standardEsfValues.add('+' + val.toFixed(2));
 
+            // Si no hay valor guardado, preseleccionar 0.00 para que el dropdown
+            // abra posicionado en el centro (negativos arriba, positivos abajo).
+            const esfDefault = (!currentEsf) ? '0.00' : currentEsf;
+
             let esfSelectHtml = `<select class="form-select form-select-sm rx-input rx-esf" onchange="serializeRxLines();">`;
-            esfSelectHtml += `<option value="">Esf</option>`;
 
-            // Valor 0 primero (más común como punto de partida)
-            const is0Sel = (currentEsf === '0.00') ? 'selected' : '';
-            esfSelectHtml += `<option value="0.00" ${is0Sel}>0.00</option>`;
-
-            // Negativos (de -0.25 a -20.00)
-            let esfCustomNeg = '';
-            if (currentEsf && !standardEsfValues.has(currentEsf) && parseFloat(currentEsf) < 0) {
-                esfCustomNeg = `<option value="${currentEsf}" selected>${currentEsf}</option>`;
-                esfSelectHtml += esfCustomNeg;
+            // Negativos de -20.00 a -0.25
+            let esfCustomOption = '';
+            if (currentEsf && !standardEsfValues.has(currentEsf)) {
+                esfCustomOption = `<option value="${currentEsf}" selected>${currentEsf}</option>`;
             }
-            for (let val = -0.25; val >= -20.00; val -= 0.25) {
+            if (esfCustomOption && parseFloat(currentEsf) < -20.00) {
+                esfSelectHtml += esfCustomOption;
+                esfCustomOption = '';
+            }
+            for (let val = -20.00; val <= -0.25; val += 0.25) {
                 const valStr = val.toFixed(2);
-                const isSel = (currentEsf === valStr) ? 'selected' : '';
+                const isSel = (esfDefault === valStr) ? 'selected' : '';
                 esfSelectHtml += `<option value="${valStr}" ${isSel}>${valStr}</option>`;
             }
 
-            // Positivos (de +0.25 a +20.00)
-            let esfCustomPos = '';
-            if (currentEsf && !standardEsfValues.has(currentEsf) && parseFloat(currentEsf) > 0) {
-                esfCustomPos = `<option value="${currentEsf}" selected>${currentEsf}</option>`;
-                esfSelectHtml += esfCustomPos;
-            }
+            // Cero
+            esfSelectHtml += `<option value="0.00" ${esfDefault === '0.00' ? 'selected' : ''}>0.00</option>`;
+
+            // Positivos de +0.25 a +20.00
             for (let val = 0.25; val <= 20.00; val += 0.25) {
                 const valStr = '+' + val.toFixed(2);
-                const isSel = (currentEsf === valStr) ? 'selected' : '';
+                const isSel = (esfDefault === valStr) ? 'selected' : '';
                 esfSelectHtml += `<option value="${valStr}" ${isSel}>${valStr}</option>`;
             }
+            if (esfCustomOption) esfSelectHtml += esfCustomOption;
 
             esfSelectHtml += `</select>`;
 
