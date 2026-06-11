@@ -106,4 +106,5 @@ jobs:
               echo "Failed uploading $rel"
               exit 1
             fi
+            sleep 2
           done < <(find deploy/dist/upload -type f | sort)
