@@ -27,9 +27,9 @@ include 'header.php';
 // Conexión y parámetros comunes
 $pdo = (new Conexion())->pdo;
 
-// Filtro de fechas para "Finalizados" (por defecto: últimos 90 días)
+// Filtro de fechas para "Finalizados" (por defecto: últimos 90 días, sin fecha fin)
 $rec_fecha_desde = $_GET['rec_fecha_desde'] ?? date('Y-m-d', strtotime('-90 days'));
-$rec_fecha_hasta = $_GET['rec_fecha_hasta'] ?? date('Y-m-d');
+$rec_fecha_hasta = $_GET['rec_fecha_hasta'] ?? '2099-12-31';
 
 // Helper para parámetros de tabla
 function getTableParams($prefix, $default_sort = 'id') {
@@ -55,7 +55,7 @@ $p_recibidos  = getTableParams('recibidos_');
 
 // Validar fechas del filtro de finalizados
 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $rec_fecha_desde)) $rec_fecha_desde = date('Y-m-d', strtotime('-90 days'));
-if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $rec_fecha_hasta)) $rec_fecha_hasta = date('Y-m-d');
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $rec_fecha_hasta)) $rec_fecha_hasta = '2099-12-31';
 
 $fecha_hoy              = date('Y-m-d');
 
@@ -528,13 +528,12 @@ $proveedor_mas_atrasos = $proveedor_mas_atrasos_stmt->fetch(PDO::FETCH_ASSOC);
             <div class="d-flex flex-wrap align-items-center gap-2">
                 <form method="GET" class="d-flex align-items-center gap-1">
                     <?php foreach ($_GET as $k => $v): ?>
-                        <?php if (!in_array($k, ['rec_fecha_desde', 'rec_fecha_hasta'])): ?>
+                        <?php if (!in_array($k, ['rec_fecha_desde'])): ?>
                             <input type="hidden" name="<?= htmlspecialchars($k) ?>" value="<?= htmlspecialchars($v) ?>">
                         <?php endif; ?>
                     <?php endforeach; ?>
+                    <label class="small text-muted mb-0">Desde:</label>
                     <input type="date" name="rec_fecha_desde" class="form-control form-control-sm" style="width:140px;" value="<?= htmlspecialchars($rec_fecha_desde) ?>">
-                    <span class="text-muted small">—</span>
-                    <input type="date" name="rec_fecha_hasta" class="form-control form-control-sm" style="width:140px;" value="<?= htmlspecialchars($rec_fecha_hasta) ?>">
                     <button type="submit" class="btn btn-sm btn-success"><i class="fas fa-filter"></i></button>
                 </form>
                 <button id="btn-finalizados" class="btn btn-action btn-outline-secondary"

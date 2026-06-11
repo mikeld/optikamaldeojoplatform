@@ -275,7 +275,7 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
         if ($avisado) {
             echo ' <span class="badge badge-avisado ms-1" title="Cliente avisado"><i class="fas fa-phone-volume"></i></span>';
         }
-        if ($en_carrito) {
+        if ($en_carrito && empty($p['fecha_pedido'])) {
             echo '<div class="mt-1 badge-en-carrito"><span class="badge bg-info" style="font-size:.65rem;"><i class="fas fa-cart-plus me-1"></i>En carrito</span></div>';
         }
         if (!empty($p['notas_recepcion'])) {
@@ -360,6 +360,7 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
                 if ($recibido_val === 2) {
                     echo '<div class="d-flex flex-column gap-1">';
                     echo '<span class="badge bg-warning text-dark" style="font-size:.65rem;"><i class="fas fa-box-open"></i> PARCIAL</span>';
+                    echo '<button type="button" title="Recibido parcial" class="btn btn-warning text-dark btn-sm btn-action open-parcial-btn w-100"><i class="fas fa-box-open"></i></button>';
                     echo '<form action="../controllers/marcar_recibido.php" method="POST" class="m-0">';
                     echo '<input type="hidden" name="pedido_id" value="'.htmlspecialchars($p['id']).'">';
                     echo '<input type="hidden" name="recibido_val" value="1">';
