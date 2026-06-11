@@ -26,6 +26,17 @@ $anio          = (int)($_GET['anio']         ?? date('Y'));
 if ($mes  < 1 || $mes  > 12) $mes  = (int)date('n');
 if ($anio < 2020 || $anio > 2099) $anio = (int)date('Y');
 
+// Rango de fechas personalizado: por defecto, primer y último día del mes seleccionado
+$fecha_defecto_desde = sprintf('%04d-%02d-01', $anio, $mes);
+$fecha_defecto_hasta = date('Y-m-t', mktime(0, 0, 0, $mes, 1, $anio));
+$fecha_desde = $_GET['fecha_desde'] ?? $fecha_defecto_desde;
+$fecha_hasta = $_GET['fecha_hasta'] ?? $fecha_defecto_hasta;
+// Sanear
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha_desde)) $fecha_desde = $fecha_defecto_desde;
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha_hasta)) $fecha_hasta = $fecha_defecto_hasta;
+// Asegurar desde <= hasta
+if ($fecha_desde > $fecha_hasta) [$fecha_desde, $fecha_hasta] = [$fecha_hasta, $fecha_desde];
+
 $proveedor     = null;
 $pedidos_mes   = [];
 $facturas_mes  = [];
@@ -35,30 +46,28 @@ if ($proveedor_id) {
     $stmt->execute([':id' => $proveedor_id]);
     $proveedor = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    // Pedidos del mes a este proveedor
+    // Pedidos del rango de fechas a este proveedor
     $stmt = $pdo->prepare("
         SELECT p.*, c.telefono
         FROM pedidos p
         LEFT JOIN clientes c ON p.referencia_cliente = c.referencia
         WHERE p.proveedor_id = :prov
-          AND YEAR(p.fecha_pedido)  = :anio
-          AND MONTH(p.fecha_pedido) = :mes
+          AND p.fecha_pedido BETWEEN :desde AND :hasta
           AND p.deleted_at IS NULL
         ORDER BY p.fecha_pedido ASC, p.id ASC
     ");
-    $stmt->execute([':prov' => $proveedor_id, ':anio' => $anio, ':mes' => $mes]);
+    $stmt->execute([':prov' => $proveedor_id, ':desde' => $fecha_desde, ':hasta' => $fecha_hasta]);
     $pedidos_mes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Facturas del mes de este proveedor
+    // Facturas del rango de fechas de este proveedor
     $stmt = $pdo->prepare("
         SELECT *
         FROM facturas_audits
         WHERE pedidos_provider_id = :prov
-          AND YEAR(invoice_date)  = :anio
-          AND MONTH(invoice_date) = :mes
+          AND invoice_date BETWEEN :desde AND :hasta
         ORDER BY invoice_date ASC
     ");
-    $stmt->execute([':prov' => $proveedor_id, ':anio' => $anio, ':mes' => $mes]);
+    $stmt->execute([':prov' => $proveedor_id, ':desde' => $fecha_desde, ':hasta' => $fecha_hasta]);
     $facturas_mes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     foreach ($facturas_mes as &$f) {
@@ -149,7 +158,7 @@ $api_facturas_url = $app_base . '/pedidos/api/facturas.php';
 
     <!-- ── Selector ──────────────────────────────────────────────────────────── -->
     <div class="modern-card mb-4">
-        <form method="GET" class="row g-3 align-items-end">
+        <form method="GET" class="row g-3 align-items-end" id="form-resumen">
             <div class="col-md-4">
                 <label class="form-label fw-semibold">Proveedor</label>
                 <select name="proveedor_id" class="form-select" required>
@@ -163,7 +172,7 @@ $api_facturas_url = $app_base . '/pedidos/api/facturas.php';
             </div>
             <div class="col-md-2">
                 <label class="form-label fw-semibold">Mes</label>
-                <select name="mes" class="form-select">
+                <select name="mes" class="form-select" id="sel-mes" onchange="actualizarRangoFechas()">
                     <?php foreach ($meses_es as $n => $nombre): ?>
                         <option value="<?= $n ?>" <?= $mes == $n ? 'selected' : '' ?>><?= $nombre ?></option>
                     <?php endforeach; ?>
@@ -171,11 +180,19 @@ $api_facturas_url = $app_base . '/pedidos/api/facturas.php';
             </div>
             <div class="col-md-2">
                 <label class="form-label fw-semibold">Año</label>
-                <select name="anio" class="form-select">
+                <select name="anio" class="form-select" id="sel-anio" onchange="actualizarRangoFechas()">
                     <?php for ($y = date('Y'); $y >= 2023; $y--): ?>
                         <option value="<?= $y ?>" <?= $anio == $y ? 'selected' : '' ?>><?= $y ?></option>
                     <?php endfor; ?>
                 </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-semibold">Desde</label>
+                <input type="date" name="fecha_desde" id="inp-fecha-desde" class="form-control" value="<?= htmlspecialchars($fecha_desde) ?>">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-semibold">Hasta</label>
+                <input type="date" name="fecha_hasta" id="inp-fecha-hasta" class="form-control" value="<?= htmlspecialchars($fecha_hasta) ?>">
             </div>
             <div class="col-md-auto">
                 <button type="submit" class="btn btn-primary btn-action">
@@ -189,6 +206,17 @@ $api_facturas_url = $app_base . '/pedidos/api/facturas.php';
             </div>
         </form>
     </div>
+    <script>
+    function actualizarRangoFechas() {
+        const mes  = parseInt(document.getElementById('sel-mes').value);
+        const anio = parseInt(document.getElementById('sel-anio').value);
+        if (!mes || !anio) return;
+        const pad = (n) => String(n).padStart(2, '0');
+        const diasMes = new Date(anio, mes, 0).getDate();
+        document.getElementById('inp-fecha-desde').value = `${anio}-${pad(mes)}-01`;
+        document.getElementById('inp-fecha-hasta').value = `${anio}-${pad(mes)}-${diasMes}`;
+    }
+    </script>
 
     <?php if (!$proveedor_id): ?>
     <div class="text-center text-muted py-5">
@@ -204,7 +232,7 @@ $api_facturas_url = $app_base . '/pedidos/api/facturas.php';
             <i class="fas fa-building text-primary"></i>
             <?= htmlspecialchars($proveedor['nombre']) ?>
         </h2>
-        <span class="text-muted fs-5">— <?= $nombre_mes ?> <?= $anio ?></span>
+        <span class="text-muted fs-5">— <?= $fecha_desde === $fecha_defecto_desde && $fecha_hasta === $fecha_defecto_hasta ? $nombre_mes . ' ' . $anio : htmlspecialchars($fecha_desde) . ' → ' . htmlspecialchars($fecha_hasta) ?></span>
     </div>
 
     <div class="row g-3 mb-4">

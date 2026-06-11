@@ -64,13 +64,19 @@ include('header.php');
     }
     .rx-od { background: #e3f0ff; color: #0d6efd; }
     .rx-oi { background: #fdecea; color: #dc3545; }
-    .btn-remove-rx {
-        position: absolute; top: 8px; right: 12px;
-        background: none; border: none; color: #adb5bd; font-size: 1.1rem;
-        cursor: pointer; line-height: 1; padding: 2px;
-        transition: color .2s;
+    .rx-linea-actions {
+        position: absolute; top: 8px; right: 10px;
+        display: flex; gap: 4px; align-items: center;
     }
+    .btn-remove-rx, .btn-duplicate-rx {
+        background: none; border: none; font-size: 1rem;
+        cursor: pointer; line-height: 1; padding: 2px 4px;
+        transition: color .2s; border-radius: 4px;
+    }
+    .btn-remove-rx { color: #adb5bd; }
     .btn-remove-rx:hover { color: #dc3545; }
+    .btn-duplicate-rx { color: #adb5bd; }
+    .btn-duplicate-rx:hover { color: #0d6efd; }
 
     /* --- Vía de Pedido --- */
     .via-detalle-wrap { transition: opacity .2s; }
@@ -438,35 +444,35 @@ try {
 
             let esfSelectHtml = `<select class="form-select form-select-sm rx-input rx-esf" onchange="serializeRxLines();">`;
             esfSelectHtml += `<option value="">Esf</option>`;
-            
-            let esfCustomOption = '';
-            if (currentEsf && !standardEsfValues.has(currentEsf)) {
-                esfCustomOption = `<option value="${currentEsf}" selected>${currentEsf}</option>`;
-            }
 
-            if (esfCustomOption && parseFloat(currentEsf) < -20.00) {
-                esfSelectHtml += esfCustomOption;
-                esfCustomOption = '';
-            }
+            // Valor 0 primero (más común como punto de partida)
+            const is0Sel = (currentEsf === '0.00') ? 'selected' : '';
+            esfSelectHtml += `<option value="0.00" ${is0Sel}>0.00</option>`;
 
-            for (let val = -20.00; val <= -0.25; val += 0.25) {
+            // Negativos (de -0.25 a -20.00)
+            let esfCustomNeg = '';
+            if (currentEsf && !standardEsfValues.has(currentEsf) && parseFloat(currentEsf) < 0) {
+                esfCustomNeg = `<option value="${currentEsf}" selected>${currentEsf}</option>`;
+                esfSelectHtml += esfCustomNeg;
+            }
+            for (let val = -0.25; val >= -20.00; val -= 0.25) {
                 const valStr = val.toFixed(2);
                 const isSel = (currentEsf === valStr) ? 'selected' : '';
                 esfSelectHtml += `<option value="${valStr}" ${isSel}>${valStr}</option>`;
             }
 
-            const is0Sel = (currentEsf === '0.00') ? 'selected' : '';
-            esfSelectHtml += `<option value="0.00" ${is0Sel}>0.00</option>`;
-
+            // Positivos (de +0.25 a +20.00)
+            let esfCustomPos = '';
+            if (currentEsf && !standardEsfValues.has(currentEsf) && parseFloat(currentEsf) > 0) {
+                esfCustomPos = `<option value="${currentEsf}" selected>${currentEsf}</option>`;
+                esfSelectHtml += esfCustomPos;
+            }
             for (let val = 0.25; val <= 20.00; val += 0.25) {
                 const valStr = '+' + val.toFixed(2);
                 const isSel = (currentEsf === valStr) ? 'selected' : '';
                 esfSelectHtml += `<option value="${valStr}" ${isSel}>${valStr}</option>`;
             }
 
-            if (esfCustomOption) {
-                esfSelectHtml += esfCustomOption;
-            }
             esfSelectHtml += `</select>`;
 
             // Generate Cil Options
@@ -508,7 +514,10 @@ try {
 
             div.innerHTML = `
                 <div class="rx-linea-numero">LINEA #${index}</div>
-                <button type="button" class="btn-remove-rx" onclick="removerLineaRX(this)"><i class="fas fa-times"></i></button>
+                <div class="rx-linea-actions">
+                    <button type="button" class="btn-duplicate-rx" onclick="duplicarLineaRX(this)" title="Duplicar línea"><i class="fas fa-copy"></i></button>
+                    <button type="button" class="btn-remove-rx" onclick="removerLineaRX(this)" title="Eliminar línea"><i class="fas fa-times"></i></button>
+                </div>
                 
                 <div class="row g-2 mb-2 mt-2">
                     <div class="col-6 col-md-3">
@@ -609,6 +618,25 @@ try {
         function removerLineaRX(btn) {
             btn.closest('.rx-linea-card').remove();
             reordenarLineas();
+            serializeRxLines();
+            actualizarResumenPack();
+        }
+
+        function duplicarLineaRX(btn) {
+            const card = btn.closest('.rx-linea-card');
+            const data = {
+                tipo:     card.querySelector('.rx-tipo').value,
+                ojo:      card.querySelector('.rx-ojo').value,
+                cantidad: parseInt(card.querySelector('.rx-cantidad').value) || 1,
+                nota:     card.querySelector('.rx-input-nota').value,
+                esf:      card.querySelector('.rx-esf').value,
+                cil:      card.querySelector('.rx-cil').value,
+                eje:      card.querySelector('.rx-eje').value,
+                add:      card.querySelector('.rx-add').value,
+                rad:      card.querySelector('.rx-rad').value,
+                dia:      card.querySelector('.rx-dia').value,
+            };
+            addRxLine(data);
             serializeRxLines();
             actualizarResumenPack();
         }
@@ -1090,11 +1118,23 @@ try {
             window.abrirModalNuevoProducto = function(button) {
                 const group = button.closest('.rx-nota-container') || button.closest('.input-group') || button.closest('.d-flex');
                 activeProductInput = group.querySelector('.rx-input-nota');
-                
+
+                // Pre-rellenar el código con lo que haya escrito en el campo de notas
+                const textoNota = activeProductInput ? activeProductInput.value.trim() : '';
+                const codigoInput = document.getElementById('modal_prod_codigo');
+                if (codigoInput && textoNota) {
+                    codigoInput.value = textoNota;
+                }
+
                 const modalEl = document.getElementById('modalNuevoProducto');
                 const modal = new bootstrap.Modal(modalEl);
                 modal.show();
             };
+
+            document.getElementById('modalNuevoProducto').addEventListener('hidden.bs.modal', function() {
+                document.getElementById('formNuevoProducto').reset();
+                activeProductInput = null;
+            });
 
             document.getElementById('btnGuardarProducto').addEventListener('click', function() {
                 const form = document.getElementById('formNuevoProducto');
