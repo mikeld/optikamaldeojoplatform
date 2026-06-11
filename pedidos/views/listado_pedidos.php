@@ -31,11 +31,15 @@ $pdo = (new Conexion())->pdo;
 $rec_fecha_desde = $_GET['rec_fecha_desde'] ?? date('Y-m-d', strtotime('-90 days'));
 $rec_fecha_hasta = $_GET['rec_fecha_hasta'] ?? '2099-12-31';
 
+// Filtro global por cliente (desde ficha_cliente u otras páginas)
+$cliente_global = trim($_GET['cliente'] ?? '');
+
 // Helper para parámetros de tabla
 function getTableParams($prefix, $default_sort = 'id') {
+    global $cliente_global;
     $sort       = $_GET[$prefix . 'orden_columna']    ?? $default_sort;
     $dir        = strtoupper($_GET[$prefix . 'orden_direccion'] ?? 'ASC') === 'DESC' ? 'DESC' : 'ASC';
-    $filter     = $_GET[$prefix . 'filtro'] ?? '';
+    $filter     = $cliente_global ?: ($_GET[$prefix . 'filtro'] ?? '');
     $valid_cols = ['id', 'referencia_cliente', 'lc_gafa_recambio', 'rx', 'fecha_pedido', 'via', 'fecha_llegada'];
     if (!in_array($sort, $valid_cols)) $sort = $default_sort;
 
@@ -232,6 +236,14 @@ $proveedor_mas_atrasos = $proveedor_mas_atrasos_stmt->fetch(PDO::FETCH_ASSOC);
 ?>
 
 <div class="container-fluid py-4">
+
+    <?php if ($cliente_global): ?>
+    <div class="alert alert-info d-flex align-items-center justify-content-between py-2 mb-3">
+        <span><i class="fas fa-filter me-2"></i> Mostrando pedidos de <strong><?= htmlspecialchars($cliente_global) ?></strong></span>
+        <a href="listado_pedidos.php" class="btn btn-sm btn-outline-secondary"><i class="fas fa-times me-1"></i> Quitar filtro</a>
+    </div>
+    <?php endif; ?>
+
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="mb-0 section-title">
             <i class="fas fa-boxes-stacked"></i> Listado de Pedidos

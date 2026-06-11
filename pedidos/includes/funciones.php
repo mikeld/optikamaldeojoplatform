@@ -267,6 +267,10 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
         // Color de fila
         $row_class = 'clickable-row';
         if ($recibido_val === 2) $row_class .= ' tr-parcial';
+        if ($mostrar_carrito && !empty($p['fecha_cliente'])) {
+            $dias_fila = (int)(new DateTime($p['fecha_cliente']))->diff($hoy)->days;
+            if ($dias_fila >= 5) $row_class .= ' tr-urgente';
+        }
 
         echo '<tr class="'.$row_class.'" data-pedido=\''.$p_json.'\'>';
 
