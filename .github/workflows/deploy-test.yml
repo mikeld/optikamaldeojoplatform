@@ -59,7 +59,7 @@ jobs:
 
           while IFS= read -r file; do
             case "$file" in
-              assets/*|includes/*|pedidos/*|home.php|index.php|logout.php|manifest.json|offline.html|sw.js)
+              assets/*|includes/*|pedidos/*|home.php|index.php|logout.php|debug.php|manifest.json|offline.html|sw.js)
                 if [ -f "deploy/dist/release/$file" ]; then
                   mkdir -p "deploy/dist/upload/$(dirname "$file")"
                   cp "deploy/dist/release/$file" "deploy/dist/upload/$file"
