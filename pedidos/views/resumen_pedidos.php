@@ -112,8 +112,14 @@ $tot_facturas       = count($facturas_mes);
 $tot_fact_subtotal  = 0.0;
 $tot_fact_iva       = 0.0;
 $tot_fact_total     = 0.0;
-$tot_fact_uds       = 0;
-$por_linea_factura  = []; // baseProductName|description => [qty, total]
+$tot_fact_uds       = 0;   // excluye portes
+$tot_fact_portes    = 0.0; // importe total de portes
+$por_linea_factura  = []; // baseProductName => [qty, total, desc]
+
+function esPorte($linea): bool {
+    $base = strtolower(trim($linea['baseProductName'] ?? $linea['invoiceDescription'] ?? ''));
+    return str_contains($base, 'porte') || str_contains($base, 'envío') || str_contains($base, 'flete');
+}
 
 foreach ($facturas_mes as $f) {
     $tot_fact_subtotal += (float)($f['invoice_subtotal'] ?? 0);
@@ -121,6 +127,10 @@ foreach ($facturas_mes as $f) {
     $tot_fact_total    += (float)($f['total_invoice']    ?? 0);
     foreach ($f['lines_parsed'] as $l) {
         $qty  = (int)($l['quantity'] ?? 0);
+        if (esPorte($l)) {
+            $tot_fact_portes += (float)($l['invoiceLineTotal'] ?? 0);
+            continue; // no contar portes como unidades
+        }
         $tot_fact_uds += $qty;
         $key  = trim($l['baseProductName'] ?? $l['invoiceDescription'] ?? '');
         if (!isset($por_linea_factura[$key])) {
@@ -135,6 +145,29 @@ arsort($por_linea_factura);
 // ── Diferencias ───────────────────────────────────────────────────────────────
 $tot_uds_pedidas = $tot_cajas + $tot_blisters;
 $diff_uds        = $tot_uds_pedidas - $tot_fact_uds;
+
+// ── Comparativa por producto ──────────────────────────────────────────────────
+// Normaliza un nombre de producto para comparación: minúsculas, sin espacios extra
+function normProd(string $s): string {
+    return preg_replace('/\s+/', ' ', strtolower(trim($s)));
+}
+// Construir mapa de unidades pedidas por producto (normalizadas)
+$uds_pedidas_por_prod = []; // normKey => ['orig'=>string,'cajas'=>int,'blisters'=>int]
+foreach ($por_producto as $nombre => $datos) {
+    if ($nombre === '(sin producto)') continue;
+    $k = normProd($nombre);
+    $uds_pedidas_por_prod[$k] = ['orig' => $nombre, 'cajas' => $datos['cajas'], 'blisters' => $datos['blisters']];
+}
+// Construir mapa de unidades facturadas por base product (normalizadas, sin portes)
+$uds_facturadas_por_prod = []; // normKey => ['orig'=>string,'qty'=>int,'total'=>float]
+foreach ($por_linea_factura as $nombre => $datos) {
+    $k = normProd($nombre);
+    $uds_facturadas_por_prod[$k] = ['orig' => $nombre, 'qty' => $datos['qty'], 'total' => $datos['total']];
+}
+// Unión de todas las claves
+$todas_claves = array_unique(array_merge(array_keys($uds_pedidas_por_prod), array_keys($uds_facturadas_por_prod)));
+sort($todas_claves);
+$hay_comparativa_prod = count($uds_pedidas_por_prod) > 0 && count($uds_facturadas_por_prod) > 0;
 $hay_factura     = $tot_facturas > 0;
 $hay_pedidos     = $tot_pedidos  > 0;
 
@@ -451,29 +484,48 @@ $api_facturas_url = $app_base . '/pedidos/api/facturas.php';
                             ];
                             foreach ($lineas as $l):
                                 [$line_color, $line_icon] = $line_status_map[$l['status'] ?? 'PENDING'] ?? ['text-muted', '·'];
+                                $es_porte = esPorte($l);
                             ?>
-                            <tr>
+                            <tr <?= $es_porte ? 'class="text-muted" style="opacity:.55;font-style:italic"' : '' ?>>
                                 <td class="small">
                                     <?= htmlspecialchars($l['invoiceDescription'] ?? '') ?>
                                     <?php if (!empty($l['graduation'])): ?>
                                         <span class="badge bg-light text-dark border ms-1" style="font-size:.65rem"><?= htmlspecialchars($l['graduation']) ?></span>
                                     <?php endif; ?>
+                                    <?php if ($es_porte): ?>
+                                        <span class="badge bg-secondary ms-1" style="font-size:.6rem">envío</span>
+                                    <?php endif; ?>
                                 </td>
                                 <td class="text-center fw-semibold"><?= (int)($l['quantity'] ?? 0) ?></td>
                                 <td class="text-end font-monospace small"><?= number_format((float)($l['invoiceUnitPrice'] ?? 0), 2, ',', '.') ?> €</td>
                                 <td class="text-end font-monospace small fw-semibold"><?= number_format((float)($l['invoiceLineTotal'] ?? 0), 2, ',', '.') ?> €</td>
-                                <td class="text-center <?= $line_color ?> fw-bold"><?= $line_icon ?></td>
+                                <td class="text-center <?= $line_color ?> fw-bold"><?= $es_porte ? '' : $line_icon ?></td>
                             </tr>
                             <?php endforeach; ?>
                             </tbody>
+                            <?php
+                            $uds_sin_portes = array_sum(array_map(
+                                fn($l) => esPorte($l) ? 0 : (int)($l['quantity'] ?? 0), $lineas
+                            ));
+                            $portes_factura = array_sum(array_map(
+                                fn($l) => esPorte($l) ? (float)($l['invoiceLineTotal'] ?? 0) : 0.0, $lineas
+                            ));
+                            ?>
                             <tfoot class="table-light fw-bold">
                                 <tr>
-                                    <td>TOTAL</td>
-                                    <td class="text-center"><?= array_sum(array_column($lineas, 'quantity')) ?></td>
+                                    <td>TOTAL productos</td>
+                                    <td class="text-center"><?= $uds_sin_portes ?></td>
                                     <td></td>
                                     <td class="text-end font-monospace"><?= number_format((float)$f['total_invoice'], 2, ',', '.') ?> €</td>
                                     <td></td>
                                 </tr>
+                                <?php if ($portes_factura > 0): ?>
+                                <tr class="text-muted" style="font-size:.8rem;opacity:.7">
+                                    <td colspan="3">Portes y servicios (no contabilizan como pedido)</td>
+                                    <td class="text-end font-monospace"><?= number_format($portes_factura, 2, ',', '.') ?> €</td>
+                                    <td></td>
+                                </tr>
+                                <?php endif; ?>
                             </tfoot>
                         </table>
                     </div>
@@ -582,6 +634,83 @@ $api_facturas_url = $app_base . '/pedidos/api/facturas.php';
             </div>
 
         </div>
+
+        <!-- Tabla comparativa por producto -->
+        <?php if ($hay_comparativa_prod): ?>
+        <div class="mt-4">
+            <h5 class="fw-bold text-muted small text-uppercase mb-2">
+                <i class="fas fa-table me-1"></i> Comparativa por producto (cajas+blisters vs uds. facturadas, sin portes)
+            </h5>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered mb-0" style="font-size:.82rem">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Producto</th>
+                            <th class="text-center">Cajas pedidas</th>
+                            <th class="text-center">Blisters pedidos</th>
+                            <th class="text-center">Total pedido</th>
+                            <th class="text-center">Uds. facturadas</th>
+                            <th class="text-center">Dif.</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($todas_claves as $k):
+                        $ped = $uds_pedidas_por_prod[$k]   ?? null;
+                        $fac = $uds_facturadas_por_prod[$k] ?? null;
+                        $nombre_display = $ped ? $ped['orig'] : ($fac ? $fac['orig'] : $k);
+                        $cajas     = $ped ? (int)$ped['cajas']    : 0;
+                        $blisters  = $ped ? (int)$ped['blisters'] : 0;
+                        $tot_ped   = $cajas + $blisters;
+                        $tot_fac   = $fac ? (int)$fac['qty'] : 0;
+                        $diff      = $tot_ped - $tot_fac;
+                        if ($diff === 0) { $row_class = ''; $diff_badge = '<span class="text-success fw-bold">✓</span>'; }
+                        elseif ($ped && !$fac) { $row_class = 'table-danger'; $diff_badge = '<span class="text-danger fw-bold">Solo pedido</span>'; }
+                        elseif (!$ped && $fac) { $row_class = 'table-warning'; $diff_badge = '<span class="text-warning fw-bold">Solo factura</span>'; }
+                        else { $row_class = 'table-warning'; $diff_badge = '<span class="text-danger fw-bold">' . ($diff > 0 ? '+' : '') . $diff . '</span>'; }
+                    ?>
+                    <tr class="<?= $row_class ?>">
+                        <td class="fw-semibold"><?= htmlspecialchars($nombre_display) ?></td>
+                        <td class="text-center"><?= $cajas    ?: '<span class="text-muted">—</span>' ?></td>
+                        <td class="text-center"><?= $blisters ?: '<span class="text-muted">—</span>' ?></td>
+                        <td class="text-center fw-bold"><?= $tot_ped ?: '<span class="text-muted">—</span>' ?></td>
+                        <td class="text-center fw-bold"><?= $tot_fac ?: '<span class="text-muted">—</span>' ?></td>
+                        <td class="text-center"><?= $diff_badge ?></td>
+                    </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                    <tfoot class="table-light fw-bold">
+                        <tr>
+                            <td>TOTAL</td>
+                            <td class="text-center"><?= $tot_cajas ?></td>
+                            <td class="text-center"><?= $tot_blisters ?></td>
+                            <td class="text-center"><?= $tot_uds_pedidas ?></td>
+                            <td class="text-center"><?= $tot_fact_uds ?></td>
+                            <td class="text-center">
+                                <?php if ($diff_uds === 0): ?>
+                                    <span class="text-success fw-bold">✓</span>
+                                <?php else: ?>
+                                    <span class="text-danger fw-bold"><?= ($diff_uds > 0 ? '+' : '') . $diff_uds ?></span>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            <?php if (!$hay_comparativa_prod && ($hay_pedidos || $hay_factura)): ?>
+                <p class="text-muted small mt-2">
+                    <i class="fas fa-info-circle me-1"></i>
+                    La comparativa por producto requiere que los pedidos tengan el campo "Notas / Tipo Lente" relleno
+                    con el mismo nombre de producto que aparece en la factura.
+                </p>
+            <?php endif; ?>
+        </div>
+        <?php elseif ($hay_pedidos && $hay_factura): ?>
+        <div class="mt-4 alert alert-light border small">
+            <i class="fas fa-info-circle me-1 text-muted"></i>
+            Para ver la comparativa por producto, rellena el campo <strong>Notas / Tipo Lente</strong> en los pedidos
+            con el nombre del producto tal y como aparece en la factura (p.ej. "TOTAL30 SPHERE").
+        </div>
+        <?php endif; ?>
 
         <!-- Alertas del analizador -->
         <?php

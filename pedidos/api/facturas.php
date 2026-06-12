@@ -705,6 +705,7 @@ try {
             }
             $promptText .= "IMPORTANT Rules for Item Extraction:
 1. Contact lenses are critical. Read lens powers/graduations exactly when present (examples: -1.50, +2.25, -03.00, ADD LOW, BC/DIA values), but do not treat different powers as different base products.
+   q (quantity) MUST be the integer value from the 'Cant.' or 'Qty' column — always a small whole number (1, 2, 3, 6, 30, 90…). NEVER use digits from graduations (-2.25 ≠ 225), SKU codes, diameters, base curves, percentages, or prices as quantity. If the Cant. column shows "1", q=1, even if the graduation reads "-02.25".
 2. Return compact JSON with these exact keys only:
    p=providerName (the SELLER/issuer of the invoice, never the customer), d=date, n=invoiceNumber, t=invoice grand total, l=line array.
    Each line: de=description, b=baseProductName, g=graduation, q=quantity, u=unitPrice, lt=line NET total, o=orderNumber, od=orderDate, cr=clientReference.

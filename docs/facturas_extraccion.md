@@ -126,6 +126,7 @@ Precio Unitario, Precio Total, Importe Dto., Importe neto, Impuesto %.
   con su cantidad.
 - Las líneas de descuento ("-25,99 % Cust/Mat Discount % -7,25") NO son productos:
   ya están reflejadas en el Importe neto de la línea anterior.
+- La cantidad (q) es el entero de la columna "Cant." — siempre 1, 2, 3, 6… NUNCA confundas con graduaciones: "-02.25" NO es 225.
 - "Referencia cliente NOMBRE" debajo de cada línea es el paciente: va en cr.
 - "Referencia producto" y "País de origen" se ignoran.
 - "Portes y servicios" al final de cada bloque de pedido es una línea propia.

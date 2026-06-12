@@ -99,6 +99,12 @@ const HistoryPage: React.FC = () => {
     return d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
+  const formatDateTime = (isoString: string) => {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return 'Fecha Inválida';
+    return d.toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
+
   const providers = useMemo(() => {
     return Array.from(new Set(history.map(record => record.provider).filter(Boolean))).sort((a, b) => a.localeCompare(b));
   }, [history]);
@@ -227,7 +233,7 @@ const HistoryPage: React.FC = () => {
               <tbody className="divide-y divide-slate-100">
                 {filteredHistory.map(record => (
                   <tr key={record.id} className="hover:bg-slate-50/50 transition-colors group">
-                    <td className="px-8 py-6 text-sm text-slate-700 font-bold">{formatDate(record.createdAt)}</td>
+                    <td className="px-8 py-6 text-sm text-slate-700 font-bold">{formatDateTime(record.createdAt)}</td>
                     <td className="px-8 py-6 text-sm text-slate-500 font-medium italic">{record.invoiceDate}</td>
                     <td className="px-8 py-6 font-black text-slate-800 uppercase text-xs tracking-tight">{record.provider}</td>
                     <td className="px-8 py-6"><span className="bg-slate-100 px-2 py-1 rounded text-[10px] font-black">{record.invoiceNumber}</span></td>
