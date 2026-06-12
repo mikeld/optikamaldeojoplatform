@@ -1439,7 +1439,21 @@ Pregunta:
                         `reviewed_at`=VALUES(`reviewed_at`),
                         `notes`=VALUES(`notes`)");
                 
-                $auditId = $data['id'] ?: uniqid('aud_');
+                $isDuplicate = false;
+                if (empty($data['id']) && !empty($data['invoiceNumber'])) {
+                    $dupStmt = $pdo->prepare("SELECT `id` FROM `facturas_audits` WHERE `invoice_number` = ? LIMIT 1");
+                    $dupStmt->execute([$data['invoiceNumber']]);
+                    $existingId = $dupStmt->fetchColumn();
+                    if ($existingId) {
+                        $isDuplicate = true;
+                        $auditId = $existingId; // reusar ID → ON DUPLICATE KEY UPDATE
+                    } else {
+                        $auditId = uniqid('aud_');
+                    }
+                } else {
+                    $auditId = $data['id'] ?: uniqid('aud_');
+                }
+
                 $stmt->execute([
                     $auditId,
                     $data['invoiceDate'],
@@ -1511,7 +1525,11 @@ Pregunta:
                     }
                 }
 
-                echo json_encode(['status' => 'success', 'id' => $savedId]);
+                echo json_encode([
+                    'status' => $isDuplicate ? 'duplicate_updated' : 'success',
+                    'id' => $savedId,
+                    'message' => $isDuplicate ? 'Factura ya existente: se ha actualizado el registro anterior en lugar de crear un duplicado.' : null,
+                ]);
             }
             break;
 

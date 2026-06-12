@@ -84,10 +84,13 @@ const HistoryPage: React.FC = () => {
     setDeletingAuditId(audit.id);
     try {
       await db.deleteAudit(audit.id);
-      setHistory(history.filter(item => item.id !== audit.id));
+      setHistory(prev => prev.filter(item => item.id !== audit.id));
       if (selectedAudit?.id === audit.id) {
         setSelectedAudit(null);
       }
+    } catch (err) {
+      console.error('deleteAudit error:', err);
+      alert(`Error al borrar la auditoría: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setDeletingAuditId(null);
     }
