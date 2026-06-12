@@ -211,24 +211,39 @@ const AlertsPage: React.FC = () => {
                                 </div>
 
                                 {alert.status === 'pending' && (
-                                    <div className="flex gap-2 mt-4">
-                                        <button
-                                            onClick={() => handleResolve(alert.id, 'price_updated')}
-                                            className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all"
-                                        >
-                                            Actualizar Precio
-                                        </button>
-                                        <button
-                                            onClick={() => handleResolve(alert.id, 'approved')}
-                                            className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all"
-                                        >
-                                            Aprobar
-                                        </button>
+                                    <div className="flex flex-wrap gap-2 mt-4">
+                                        {(alert.alertType === 'price_change' || alert.alertType === 'price_error') && (
+                                            <button
+                                                onClick={() => handleResolve(alert.id, 'price_updated')}
+                                                className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all"
+                                                title="Guarda este precio como nuevo precio de referencia: las próximas facturas con este precio ya no avisarán"
+                                            >
+                                                Aceptar nuevo precio ({alert.actualValue !== null ? `${alert.actualValue.toFixed(2)}€` : ''})
+                                            </button>
+                                        )}
+                                        {alert.alertType === 'unknown_product' && (
+                                            <button
+                                                onClick={() => handleResolve(alert.id, 'approved')}
+                                                className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all"
+                                                title="Registra el producto en el catálogo con este precio como referencia"
+                                            >
+                                                Añadir al catálogo
+                                            </button>
+                                        )}
+                                        {alert.alertType !== 'price_change' && alert.alertType !== 'price_error' && alert.alertType !== 'unknown_product' && (
+                                            <button
+                                                onClick={() => handleResolve(alert.id, 'approved')}
+                                                className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all"
+                                            >
+                                                Aprobar
+                                            </button>
+                                        )}
                                         <button
                                             onClick={() => handleResolve(alert.id, 'ignored')}
                                             className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-sm font-bold hover:bg-slate-200 transition-all"
+                                            title="Marca la alerta como ignorada sin tocar el precio de referencia (ej. descuento puntual)"
                                         >
-                                            Ignorar
+                                            Ignorar esta vez
                                         </button>
                                     </div>
                                 )}
@@ -236,7 +251,11 @@ const AlertsPage: React.FC = () => {
                                 {alert.resolutionAction && alert.status !== 'pending' && (
                                     <div className="mt-4 p-3 bg-slate-50 rounded-xl">
                                         <p className="text-xs text-slate-500">
-                                            <span className="font-bold">Acción tomada:</span> {alert.resolutionAction}
+                                            <span className="font-bold">Acción tomada:</span>{' '}
+                                            {alert.resolutionAction === 'price_updated' ? 'Nuevo precio aceptado y guardado en el maestro'
+                                                : alert.resolutionAction === 'approved' ? 'Aprobada (producto registrado en el catálogo)'
+                                                : alert.resolutionAction === 'ignored' ? 'Ignorada (precio de referencia sin cambios)'
+                                                : alert.resolutionAction}
                                         </p>
                                     </div>
                                 )}

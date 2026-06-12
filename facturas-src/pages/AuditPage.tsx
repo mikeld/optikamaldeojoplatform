@@ -727,7 +727,7 @@ const AuditPage: React.FC = () => {
               <h3 className="text-2xl font-black text-slate-800 mb-2">Auditoría guardada</h3>
               <p className="text-slate-500 text-sm mb-6 leading-relaxed">
                 {lastSaveSummary.alertCount > 0
-                  ? `Se han creado ${lastSaveSummary.alertCount} alertas (${lastSaveSummary.criticalCount} críticas) para revisar.`
+                  ? `Se han creado ${lastSaveSummary.alertCount} alertas (${lastSaveSummary.criticalCount} críticas). En el Centro de Alertas puedes aceptar los nuevos precios o ignorarlos uno a uno.`
                   : 'No se han detectado diferencias pendientes.'}
               </p>
               <div className="grid grid-cols-3 gap-3 mb-7">
@@ -755,12 +755,21 @@ const AuditPage: React.FC = () => {
                 >
                   Nueva factura
                 </button>
-                <a
-                  href="#/history"
-                  className="flex-1 py-3 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 transition-all"
-                >
-                  Historial
-                </a>
+                {lastSaveSummary.alertCount > 0 ? (
+                  <a
+                    href="#/alerts"
+                    className="flex-1 py-3 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 transition-all"
+                  >
+                    Revisar alertas ({lastSaveSummary.alertCount})
+                  </a>
+                ) : (
+                  <a
+                    href="#/history"
+                    className="flex-1 py-3 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 transition-all"
+                  >
+                    Historial
+                  </a>
+                )}
               </div>
             </div>
           </div>

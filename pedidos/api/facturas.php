@@ -1642,6 +1642,61 @@ Pregunta:
                         }
                     }
 
+                    // 2b. Si se acepta el nuevo precio, actualizar el maestro de precios y dejar rastro en el historial.
+                    // Así la próxima factura con este precio ya no genera alerta.
+                    if ($actionTaken === 'price_updated'
+                        && in_array($alert['alert_type'], ['price_change', 'price_error'], true)
+                        && $alert['actual_value'] !== null) {
+
+                        $nuevoPrecio = floatval($alert['actual_value']);
+
+                        $producto = null;
+                        if (!empty($alert['product_sku'])) {
+                            $q = $pdo->prepare("SELECT p.*, f.base_price AS family_price FROM `facturas_products` p
+                                LEFT JOIN `facturas_product_families` f ON p.family_id = f.id WHERE p.sku = ? LIMIT 1");
+                            $q->execute([$alert['product_sku']]);
+                            $producto = $q->fetch(PDO::FETCH_ASSOC) ?: null;
+                        }
+                        if (!$producto && !empty($alert['product_name'])) {
+                            $q = $pdo->prepare("SELECT p.*, f.base_price AS family_price FROM `facturas_products` p
+                                LEFT JOIN `facturas_product_families` f ON p.family_id = f.id WHERE p.name = ? LIMIT 1");
+                            $q->execute([$alert['product_name']]);
+                            $producto = $q->fetch(PDO::FETCH_ASSOC) ?: null;
+                        }
+
+                        if ($producto) {
+                            $precioAnterior = $producto['family_price'] !== null
+                                ? floatval($producto['family_price'])
+                                : floatval($producto['expected_price']);
+
+                            $upd = $pdo->prepare("UPDATE `facturas_products` SET `expected_price` = ?, `last_updated` = NOW() WHERE `id` = ?");
+                            $upd->execute([$nuevoPrecio, $producto['id']]);
+
+                            // validateInvoice prefiere el precio de la familia: si era la fuente, actualizarla también
+                            if (!empty($producto['family_id']) && $producto['family_price'] !== null) {
+                                $updF = $pdo->prepare("UPDATE `facturas_product_families` SET `base_price` = ? WHERE `id` = ?");
+                                $updF->execute([$nuevoPrecio, $producto['family_id']]);
+                            }
+
+                            $hist = $pdo->prepare("INSERT INTO `facturas_price_history`
+                                (`id`, `product_id`, `old_price`, `new_price`, `reason`, `changed_by`, `invoice_id`)
+                                VALUES (?, ?, ?, ?, ?, ?, ?)");
+                            $hist->execute([
+                                uniqid('hist_'),
+                                $producto['id'],
+                                $precioAnterior,
+                                $nuevoPrecio,
+                                'invoice_price_accepted',
+                                usuarioAuditoria($usuarioActual),
+                                $alert['audit_id'],
+                            ]);
+                        } elseif (!empty($alert['product_name'])) {
+                            // Alerta basada en familia (sin producto individual): actualizar la familia por nombre
+                            $updF = $pdo->prepare("UPDATE `facturas_product_families` SET `base_price` = ? WHERE `family_name` = ?");
+                            $updF->execute([$nuevoPrecio, $alert['product_name']]);
+                        }
+                    }
+
                     // 3. Buscar todas las alertas pendientes idénticas (mismo SKU y precio, o mismo nombre limpio, tipo de alerta y precio si no tiene SKU)
                     if (!empty($alert['product_sku'])) {
                         $selectStmt = $pdo->prepare("SELECT `id`, `audit_id` FROM `facturas_alerts` 
@@ -1784,11 +1839,13 @@ Pregunta:
                     // === OMITIR ALERTAS PARA AJUSTES Y SERVICIOS ===
                     // Bonos, descuentos, envíos o líneas con coste <= 0 no son productos del catálogo
                     // y no deben levantar alertas de producto desconocido.
-                    $isAdjustment = str_contains($lowerName, 'bono') || 
-                                    str_contains($lowerName, 'descuento') || 
-                                    str_contains($lowerName, 'desc.') || 
-                                    str_contains($lowerName, 'envio') || 
+                    $isAdjustment = str_contains($lowerName, 'bono') ||
+                                    str_contains($lowerName, 'descuento') ||
+                                    str_contains($lowerName, 'desc.') ||
+                                    str_contains($lowerName, 'envio') ||
                                     str_contains($lowerName, 'envío') ||
+                                    str_contains($lowerName, 'porte') ||
+                                    str_contains($lowerName, 'flete') ||
                                     $invoicePrice <= 0;
 
                     if ($isAdjustment) {
