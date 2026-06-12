@@ -18,9 +18,27 @@ const AlertsPage: React.FC = () => {
         setAlerts(data);
     };
 
+    const [isBulkResolving, setIsBulkResolving] = useState(false);
+
     const handleResolve = async (alertId: string, action: string) => {
         await db.resolveAlert(alertId, action);
         await loadAlerts();
+    };
+
+    const pendingPriceAlerts = alerts.filter(a => a.status === 'pending' && (a.alertType === 'price_change' || a.alertType === 'price_error'));
+    const pendingUnknownAlerts = alerts.filter(a => a.status === 'pending' && a.alertType === 'unknown_product');
+
+    const bulkResolve = async (toResolve: Alert[], action: string, label: string) => {
+        if (!confirm(`¿${label} (${toResolve.length} alertas)?`)) return;
+        setIsBulkResolving(true);
+        try {
+            for (const alert of toResolve) {
+                await db.resolveAlert(alert.id, action);
+            }
+            await loadAlerts();
+        } finally {
+            setIsBulkResolving(false);
+        }
     };
 
     const filtered = alerts.filter(alert => {
@@ -111,6 +129,38 @@ const AlertsPage: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Acciones masivas (ej. subida anual de tarifas del proveedor) */}
+            {(pendingPriceAlerts.length > 1 || pendingUnknownAlerts.length > 1) && (
+                <div className="bg-indigo-50 rounded-3xl p-6 border border-indigo-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <p className="font-black text-indigo-900">Resolución masiva</p>
+                        <p className="text-sm text-indigo-700">
+                            Útil cuando el proveedor actualiza la tarifa anual: acepta todos los precios nuevos de una vez después de revisar la lista.
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2 shrink-0">
+                        {pendingPriceAlerts.length > 1 && (
+                            <button
+                                onClick={() => bulkResolve(pendingPriceAlerts, 'price_updated', 'Aceptar todos los precios nuevos y actualizar el maestro')}
+                                disabled={isBulkResolving}
+                                className="px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all disabled:opacity-50"
+                            >
+                                {isBulkResolving ? 'Procesando…' : `Aceptar todos los precios (${pendingPriceAlerts.length})`}
+                            </button>
+                        )}
+                        {pendingUnknownAlerts.length > 1 && (
+                            <button
+                                onClick={() => bulkResolve(pendingUnknownAlerts, 'approved', 'Añadir todos los productos nuevos al catálogo')}
+                                disabled={isBulkResolving}
+                                className="px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all disabled:opacity-50"
+                            >
+                                {isBulkResolving ? 'Procesando…' : `Añadir todos al catálogo (${pendingUnknownAlerts.length})`}
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* Filters */}
             <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">

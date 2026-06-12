@@ -669,11 +669,12 @@ const AuditPage: React.FC = () => {
     setIsBulkProcessing(false);
   };
 
-  const executeFinalize = async () => {
-    if (!auditResult) return;
+  const executeFinalize = async (override?: AuditRecord) => {
+    const record = override ?? auditResult;
+    if (!record) return;
     try {
-      const auditId = await db.saveAudit({ ...auditResult, globalStatus: 'in_review' });
-      const validation = await db.validateInvoice(auditId, auditResult.lines
+      const auditId = await db.saveAudit({ ...record, globalStatus: 'in_review' });
+      const validation = await db.validateInvoice(auditId, record.lines
         .filter(line => line.status !== LineStatus.REJECTED)
         .map(line => ({
           sku: line.masterProductSku || null,
@@ -689,7 +690,7 @@ const AuditPage: React.FC = () => {
           ? 'pending'
           : 'approved';
       await db.saveAudit({
-        ...auditResult,
+        ...record,
         id: auditId,
         globalStatus: finalStatus,
         alertCount: validation.alertCount,
@@ -707,9 +708,23 @@ const AuditPage: React.FC = () => {
     }
   };
 
+  // Camino rápido para facturas recurrentes (ej. Visionis): si todos los precios
+  // coinciden con el catálogo, aceptar todas las líneas y guardar en un solo clic.
+  const approveAllAndSave = async () => {
+    if (!auditResult) return;
+    const updatedLines = auditResult.lines.map(line =>
+      line.status === LineStatus.MATCHED ? { ...line, status: LineStatus.ACCEPTED } : line
+    );
+    const updated = { ...auditResult, lines: updatedLines };
+    setAuditResult(updated);
+    await executeFinalize(updated);
+  };
+
   if (auditResult) {
     const summary = invoiceSummary(auditResult);
     const catalogSuggestions = unknownCatalogGroups(auditResult.lines);
+    const totalsOk = Math.abs(summary.detectedTotal - summary.compareTotal) <= 0.05;
+    const allPricesOk = summary.lines > 0 && summary.unknown === 0 && summary.discrepancies === 0 && totalsOk && !extractionWarning;
 
     return (
       <div className="space-y-6 max-w-6xl mx-auto pb-20">
@@ -961,6 +976,26 @@ const AuditPage: React.FC = () => {
             <p className="text-sm font-bold leading-relaxed">
               Aviso de extracción IA: {extractionWarning}
             </p>
+          </div>
+        )}
+
+        {allPricesOk && (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3 text-emerald-800">
+              <CheckCircle2 className="w-6 h-6 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-black">Factura correcta: los {summary.lines} precios coinciden con el catálogo</p>
+                <p className="text-xs font-semibold text-emerald-700 mt-0.5">
+                  Sin productos nuevos, sin diferencias de precio y los importes cuadran. Puedes aprobarla directamente.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={approveAllAndSave}
+              className="px-6 py-3 bg-emerald-600 text-white font-black rounded-xl hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-100 shrink-0"
+            >
+              <CheckSquare className="w-5 h-5" /> Aprobar y guardar
+            </button>
           </div>
         )}
 
