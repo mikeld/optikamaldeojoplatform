@@ -430,6 +430,8 @@ function normalizarFacturaExtraida($invoice) {
                 'graduation' => $line['g'] ?? $line['graduation'] ?? null,
                 'quantity' => (float)($line['q'] ?? $line['quantity'] ?? 0),
                 'unitPrice' => (float)($line['u'] ?? $line['unitPrice'] ?? 0),
+                'discountPercent' => isset($line['dp']) && (float)$line['dp'] > 0 ? (float)$line['dp'] : ($line['discountPercent'] ?? null),
+                'sku' => $line['sku'] ?? null,
                 'total' => (float)($line['lt'] ?? $line['total'] ?? 0),
                 'orderNumber' => isset($line['o']) ? (string)$line['o'] : ($line['orderNumber'] ?? null),
                 'orderDate' => isset($line['od']) ? (string)$line['od'] : ($line['orderDate'] ?? null),
@@ -708,10 +710,10 @@ try {
    q (quantity) MUST be the integer value from the 'Cant.' or 'Qty' column — always a small whole number (1, 2, 3, 6, 30, 90...). NEVER use digits from graduations (-2.25 != 225), SKU codes, diameters, base curves, percentages, or prices as quantity. If the Cant. column shows '1', q=1, even if the graduation reads '-02.25'.
 2. Return compact JSON with these exact keys only:
    p=providerName (the SELLER/issuer of the invoice, never the customer), d=date, n=invoiceNumber, t=invoice grand total, l=line array.
-   Each line: de=description, b=baseProductName, g=graduation, q=quantity, u=unitPrice, lt=line NET total, o=orderNumber, od=orderDate, cr=clientReference.
+   Each line: de=description, b=baseProductName, g=graduation, q=quantity, u=unitPrice, dp=discountPercent, lt=line NET total, o=orderNumber, od=orderDate, cr=clientReference.
 3. NEVER extract as products: the customer/recipient block (customer name, address, customer NIF/VAT, 'Solicitado por' blocks), bank details (IBAN/SWIFT), payment terms, page footers, legal registry text, tax summary rows. Only extract real product/service line items (usually numbered rows in the items table).
 4. lt (line total) must be the NET amount of the line AFTER all discounts ('Importe neto' column when present). Lines with net amount 0.00 (free replacements, warranty) MUST still be extracted with lt=0 and their real quantity. Do NOT skip zero lines.
-5. unitPrice must be the final net unit price (lt / q when discounts apply). Preserve decimals exactly.
+5. If the invoice has a discount column (DESC. %, Dto.), u = the unit/tariff price AS PRINTED (before discount), dp = the discount percent, lt = the final net amount after discount. If there is NO discount column, dp is omitted and u = lt / q. Preserve decimals exactly.
 6. Keep product identity separate from graduation. b must be the same for the same lens family regardless of graduation/power. Remove powers, sphere/cylinder, BC, DIA and eye-specific numeric noise from b.
 7. Many invoices group lines under order blocks like 'Número de pedido: 1132943129 ... Su pedido 30/04/2026'. For each product line, fill o with that order number and od with that order date (YYYY-MM-DD). If a line shows a customer/patient reference ('Referencia cliente NAME'), put that name in cr. If the invoice has no order grouping, leave o/od/cr empty.
 8. Shipping/handling charges ('Portes y servicios', 'Gastos de envío') are real lines: extract them with b='Portes y servicios', q=1 and their amount, keeping the o of the order block they belong to.
@@ -746,6 +748,7 @@ try {
                                         'g' => ['type' => 'STRING'],
                                         'q' => ['type' => 'NUMBER'],
                                         'u' => ['type' => 'NUMBER'],
+                                        'dp' => ['type' => 'NUMBER'],
                                         'lt' => ['type' => 'NUMBER'],
                                         'o' => ['type' => 'STRING'],
                                         'od' => ['type' => 'STRING'],

@@ -184,16 +184,36 @@ const unknownCatalogGroups = (lines: AuditLine[]) => {
     .slice(0, 12);
 };
 
+// SKU raíz del corchete inicial de la descripción: "[15DOB.8,50.-8,00] ..." → "15dob"
+// La graduación va dentro del corchete en algunos proveedores (Visionis) pero no
+// cambia el precio, así que la raíz identifica el producto.
+const extractSkuRoot = (text?: string | null): string | null => {
+  if (!text) return null;
+  const m = text.trim().match(/^\[([^\]]+)\]/);
+  if (!m) return null;
+  const root = m[1].split(/[.,]/)[0].trim().toLowerCase();
+  return root || null;
+};
+
+const lineSkuRoot = (line: AuditLine): string | null =>
+  (line.invoiceSku ? line.invoiceSku.toLowerCase() : null)
+  || extractSkuRoot(line.baseProductName)
+  || extractSkuRoot(line.invoiceDescription);
+
 const matchInvoiceItem = (item: InvoiceItem, products: Product[], families: ProductFamily[]) => {
   const itemBase = item.baseProductName || item.description;
   const normalizedDescription = normalizeLensName(item.description);
   const normalizedBase = normalizeLensName(itemBase);
   const candidateText = normalizedBase || normalizedDescription;
+  const itemSku = (item.sku ? item.sku.toLowerCase().trim() : null)
+    || extractSkuRoot(itemBase)
+    || extractSkuRoot(item.description);
 
   const productMatch = products.find(product => {
     const sku = product.sku.toLowerCase().trim();
     const productName = normalizeLensName(product.name);
-    return sku === item.description.toLowerCase().trim()
+    return (itemSku !== null && (sku === itemSku || extractSkuRoot(`[${product.sku}]`) === itemSku))
+      || sku === item.description.toLowerCase().trim()
       || productName === normalizedDescription
       || productName === normalizedBase;
   });
@@ -448,12 +468,22 @@ const AuditPage: React.FC = () => {
         if (!match) status = LineStatus.NEW_PRODUCT;
         else if (Math.abs(match.price - item.unitPrice) < 0.01) status = LineStatus.MATCHED;
 
+        // Líneas sin coste (envíos gratis, bonos, personalizaciones a 0 €) se dan por
+        // validadas automáticamente: no hay precio que comprobar. Se pueden desvalidar
+        // con el botón de deshacer si hace falta.
+        const name = `${item.baseProductName || ''} ${item.description}`.toLowerCase();
+        const esServicioSinCoste = item.unitPrice <= 0 && (item.total ?? 0) <= 0;
+        const esEnvioGratis = (name.includes('envío') || name.includes('envio') || name.includes('bono')) && (item.total ?? 0) <= 0;
+        if (esServicioSinCoste || esEnvioGratis) status = LineStatus.ACCEPTED;
+
         return {
           id: `line-${idx}-${Date.now()}`,
           invoiceDescription: item.description,
           baseProductName: item.baseProductName,
+          invoiceSku: item.sku || extractSkuRoot(item.baseProductName) || extractSkuRoot(item.description),
           quantity: item.quantity,
           invoiceUnitPrice: item.unitPrice,
+          discountPercent: item.discountPercent ?? null,
           invoiceLineTotal: item.total,
           masterProductPrice: match?.price,
           masterProductId: match?.productId,
@@ -505,13 +535,39 @@ const AuditPage: React.FC = () => {
     }
   };
 
-  const handleLineAction = async (lineIdx: number, action: 'ACCEPT' | 'REJECT' | 'ADD_TO_CATALOG' | 'EDIT' | 'RESOLVE_PRICE') => {
+  // Acepta también todas las demás líneas del mismo producto (mismo SKU raíz) con el
+  // mismo precio unitario: la misma lentilla con distinta graduación cuesta lo mismo.
+  const cascadeSameSku = (lines: AuditLine[], reference: AuditLine, apply: (l: AuditLine) => void) => {
+    const sku = lineSkuRoot(reference);
+    if (!sku) return 0;
+    let count = 0;
+    lines.forEach(l => {
+      if (l === reference || l.status === LineStatus.REJECTED || l.status === LineStatus.ACCEPTED) return;
+      if (lineSkuRoot(l) === sku && Math.abs(l.invoiceUnitPrice - reference.invoiceUnitPrice) < 0.01) {
+        apply(l);
+        count++;
+      }
+    });
+    return count;
+  };
+
+  const handleLineAction = async (lineIdx: number, action: 'ACCEPT' | 'REJECT' | 'ADD_TO_CATALOG' | 'EDIT' | 'RESOLVE_PRICE' | 'UNDO') => {
     if (!auditResult) return;
     const lines = [...auditResult.lines];
     const line = lines[lineIdx];
 
     if (action === 'ACCEPT') {
       line.status = LineStatus.ACCEPTED;
+      cascadeSameSku(lines, line, l => { l.status = LineStatus.ACCEPTED; });
+    }
+    else if (action === 'UNDO') {
+      // Recalcular el estado original a partir del precio de catálogo conocido
+      if (typeof line.masterProductPrice === 'number') {
+        line.difference = line.invoiceUnitPrice - line.masterProductPrice;
+        line.status = Math.abs(line.difference) < 0.01 ? LineStatus.MATCHED : LineStatus.DISCREPANCY;
+      } else {
+        line.status = LineStatus.NEW_PRODUCT;
+      }
     }
     else if (action === 'RESOLVE_PRICE') {
       setActiveLineIdx(lineIdx);
@@ -523,7 +579,9 @@ const AuditPage: React.FC = () => {
     }
     else if (action === 'ADD_TO_CATALOG') {
       setActiveLineIdx(lineIdx);
-      setTempSku(`SKU-${Math.floor(Math.random() * 10000)}`);
+      // El SKU real de la factura ([OP2775]) es mejor identificador que uno aleatorio
+      const skuFactura = lineSkuRoot(line);
+      setTempSku(skuFactura ? skuFactura.toUpperCase() : `SKU-${Math.floor(Math.random() * 10000)}`);
       setModalMode('SKU');
       return;
     }
@@ -555,6 +613,14 @@ const AuditPage: React.FC = () => {
       line.masterProductPrice = line.invoiceUnitPrice;
       line.difference = 0;
     }
+    // Mismo producto (SKU raíz) y mismo precio en otras líneas → resolverlas igual
+    cascadeSameSku(lines, line, l => {
+      l.status = LineStatus.ACCEPTED;
+      if (shouldUpdateMaster) {
+        l.masterProductPrice = l.invoiceUnitPrice;
+        l.difference = 0;
+      }
+    });
     setAuditResult({ ...auditResult, lines });
     setModalMode('NONE');
     setActiveLineIdx(null);
@@ -568,7 +634,7 @@ const AuditPage: React.FC = () => {
     const newProd: Product = {
       id: `prod-${Date.now()}`,
       sku: tempSku,
-      name: line.invoiceDescription,
+      name: line.baseProductName || line.invoiceDescription,
       expectedPrice: line.invoiceUnitPrice,
       vat: 21
     };
@@ -578,6 +644,15 @@ const AuditPage: React.FC = () => {
     line.masterProductId = newProd.id;
     line.masterProductSku = newProd.sku;
     line.masterProductPrice = newProd.expectedPrice;
+
+    // Las demás líneas del mismo producto (otras graduaciones, mismo precio) quedan vinculadas también
+    cascadeSameSku(lines, line, l => {
+      l.status = LineStatus.ACCEPTED;
+      l.masterProductId = newProd.id;
+      l.masterProductSku = newProd.sku;
+      l.masterProductPrice = newProd.expectedPrice;
+      l.difference = 0;
+    });
 
     setAuditResult({ ...auditResult, lines });
     setModalMode('NONE');
@@ -677,7 +752,7 @@ const AuditPage: React.FC = () => {
       const validation = await db.validateInvoice(auditId, record.lines
         .filter(line => line.status !== LineStatus.REJECTED)
         .map(line => ({
-          sku: line.masterProductSku || null,
+          sku: line.masterProductSku || line.invoiceSku || null,
           name: line.invoiceDescription,
           familyName: line.matchedFamilyName || null,
           expectedPrice: line.masterProductPrice ?? null,
@@ -1084,7 +1159,11 @@ const AuditPage: React.FC = () => {
                         <span className={`text-lg font-black font-mono ${isDiscrepancy ? 'text-rose-600' : 'text-slate-800'}`}>
                           {line.invoiceUnitPrice.toFixed(2)}€
                         </span>
-                        {typeof line.invoiceLineTotal === 'number' && Math.abs(line.invoiceLineTotal - (line.invoiceUnitPrice * line.quantity)) > 0.01 && (
+                        {typeof line.discountPercent === 'number' && line.discountPercent > 0 ? (
+                          <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-100 px-1.5 py-0.5 rounded uppercase mt-0.5">
+                            −{line.discountPercent.toFixed(line.discountPercent % 1 === 0 ? 0 : 2)}% dto.
+                          </span>
+                        ) : typeof line.invoiceLineTotal === 'number' && Math.abs(line.invoiceLineTotal - (line.invoiceUnitPrice * line.quantity)) > 0.01 && (
                           <span className="text-[9px] font-black text-slate-400 uppercase mt-0.5">
                             antes dto.
                           </span>
@@ -1133,9 +1212,20 @@ const AuditPage: React.FC = () => {
                         )}
 
                         {(line.status === LineStatus.ACCEPTED || line.status === LineStatus.MATCHED) && (
-                          <div className="flex items-center gap-1.5 text-emerald-600 font-black text-[9px] bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-100 uppercase">
-                            <CheckCircle2 className="w-3.5 h-3.5" /> Validado
-                          </div>
+                          <>
+                            <div className="flex items-center gap-1.5 text-emerald-600 font-black text-[9px] bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-100 uppercase">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> Validado
+                            </div>
+                            {line.status === LineStatus.ACCEPTED && (
+                              <button
+                                onClick={() => handleLineAction(idx, 'UNDO')}
+                                className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+                                title="Quitar validación (volver a revisar esta línea)"
+                              >
+                                <RefreshCw className="w-4 h-4" />
+                              </button>
+                            )}
+                          </>
                         )}
                       </div>
                     </td>

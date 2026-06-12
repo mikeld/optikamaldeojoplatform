@@ -62,9 +62,11 @@ export interface InvoiceItem {
   id: string;
   description: string;
   baseProductName?: string;
+  sku?: string | null;
   graduation?: string | null;
   quantity: number;
   unitPrice: number;
+  discountPercent?: number | null;
   total: number;
   orderNumber?: string | null;
   orderDate?: string | null;
@@ -114,6 +116,8 @@ export interface AuditLine {
   baseProductName?: string;
   quantity: number;
   invoiceUnitPrice: number;
+  discountPercent?: number | null;
+  invoiceSku?: string | null;
   invoiceLineTotal?: number;
   masterProductPrice?: number;
   masterProductId?: string;

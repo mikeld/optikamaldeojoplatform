@@ -135,6 +135,36 @@ Precio Unitario, Precio Total, Importe Dto., Importe neto, Impuesto %.
   AIROPT ASTG HG, TOTAL30 MULTIFOCAL.
 ```
 
+**Reglas recomendadas para Visionis** (pégalas en Proveedores → Visionis →
+Reglas de extracción — solo se usan si la factura entra por Gemini; los PDF
+con texto los procesa el parser local que ya aplica todo esto):
+
+```
+Las facturas de Visionis agrupan las líneas por bloques "Albarán: DD/MM/YYYY V/OUT/XXXXXXX
+Pedido: ['SOXXXXXX'] Cliente: 29178". Columnas: DESCRIPCIÓN, CANTIDAD, PRECIO, DESC. (%),
+IMPUESTOS, IMPORTE.
+- u (unitPrice) es SIEMPRE la columna PRECIO (tarifa, antes del descuento). NUNCA importe/cantidad.
+- dp es la columna DESC. (%). lt es la columna IMPORTE (neto tras descuento).
+- Cada descripción empieza con un SKU entre corchetes: [OP2775], [15DOB.8,50.-8,00]...
+  En los SKU con puntos, la parte antes del primer punto es el producto; el resto es graduación.
+- b (baseProductName) = [SKU-raíz] + nombre hasta antes de "Pedido Optimize", "Pedido BOD",
+  "REF" o el nombre del paciente. Ej: "[OP2775] 1.50 BIFOCAL FT 45 HC".
+- El mismo SKU con distinta graduación tiene el mismo precio: NO crear productos distintos.
+- cr (clientReference) = el paciente: tras "Paciente:" (quitando Mr/códigos de montura),
+  tras "REF", o el nombre suelto al final de la línea en blísters.
+- o = el número SO del bloque (SO840948), od = la fecha del albarán (YYYY-MM-DD).
+- Líneas a 0,00 € (Envío, Bono, PERSONALIZACION BOD, BASE ESPECIAL) se extraen igual.
+- El bloque "(MALDEOJO OPTIKA ATELIER...)" es el cliente: nunca es un producto.
+```
+
+### Precio de tarifa vs descuento (importante)
+
+Cuando la factura tiene columna de descuento (Visionis), el precio que se
+compara contra el catálogo es el de **tarifa** (columna PRECIO), no el neto.
+Así un descuento comercial distinto no dispara "cambio de precio": el precio
+del catálogo es estable y el descuento se muestra como badge "−4,66% dto." en
+la línea. El importe neto (IMPORTE) se usa para la validación aritmética.
+
 ## Resumen de archivos tocados
 
 | Archivo | Cambio |
