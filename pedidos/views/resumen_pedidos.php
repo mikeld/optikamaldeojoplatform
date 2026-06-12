@@ -181,69 +181,115 @@ $diff_uds        = $tot_uds_pedidas - $tot_fact_uds;
 $hay_factura     = $tot_facturas > 0;
 $hay_pedidos     = $tot_pedidos  > 0;
 
-// ── Comparativa por cliente/paciente ─────────────────────────────────────────
-// Estructura de pedidos por cliente: normNombre => [orig, cajas, blisters, productos[]]
-$comp_pedidos = [];
+// ── Conciliación pedido ↔ bloque de pedido de la factura ─────────────────────
+// Cada pedido del programa se intenta casar con un bloque "Número de pedido" de
+// la factura. Señales: nombre del paciente (difuso), fecha del pedido y unidades.
+
+// 1) Pedidos individuales del programa
+$ped_items = [];
 foreach ($pedidos_mes as $p) {
-    $nombre = $p['referencia_cliente'] ?? '';
-    $norm   = normNombre($nombre);
-    if (!isset($comp_pedidos[$norm])) {
-        $comp_pedidos[$norm] = ['orig' => $nombre, 'cajas' => 0, 'blisters' => 0, 'productos' => []];
-    }
-    $prod = productoDelPedido($p);
-    if ($prod && !in_array($prod, $comp_pedidos[$norm]['productos'], true)) {
-        $comp_pedidos[$norm]['productos'][] = $prod;
-    }
+    $cajas = $blisters = 0;
     foreach (json_decode($p['rx_lineas'] ?? '[]', true) ?: [] as $l) {
-        if (($l['tipo'] ?? '') === 'caja')    $comp_pedidos[$norm]['cajas']    += (int)($l['cantidad'] ?? 0);
-        if (($l['tipo'] ?? '') === 'blister') $comp_pedidos[$norm]['blisters'] += (int)($l['cantidad'] ?? 0);
+        if (($l['tipo'] ?? '') === 'caja')    $cajas    += (int)($l['cantidad'] ?? 0);
+        if (($l['tipo'] ?? '') === 'blister') $blisters += (int)($l['cantidad'] ?? 0);
     }
+    $ped_items[] = [
+        'id'       => (int)$p['id'],
+        'cliente'  => $p['referencia_cliente'] ?? '',
+        'fecha'    => $p['fecha_pedido'] ?? '',
+        'producto' => productoDelPedido($p),
+        'uds'      => $cajas + $blisters,
+        'recibido' => (int)($p['recibido'] ?? 0),
+    ];
 }
 
-// Estructura de líneas facturadas por clientRef: normNombre => [orig, qty, productos[{base,desc,qty,total}]]
-$comp_factura = [];
+// 2) Bloques de pedido de la factura (agrupados por orderNumber; sin portes)
+$fact_orders_map = [];
 foreach ($facturas_mes as $f) {
     foreach ($f['lines_parsed'] as $l) {
         if (esPorte($l)) continue;
-        $cr   = trim($l['clientRef'] ?? '');
-        $norm = $cr !== '' ? normNombre($cr) : '__sin_cliente__';
-        $orig = $cr !== '' ? $cr : '(sin referencia)';
-        if (!isset($comp_factura[$norm])) {
-            $comp_factura[$norm] = ['orig' => $orig, 'qty' => 0, 'productos' => []];
+        $on = trim($l['orderNumber'] ?? '');
+        $key = $on !== '' ? $on : 'noorder_' . (normNombre($l['clientRef'] ?? '') ?: 'x');
+        if (!isset($fact_orders_map[$key])) {
+            $fact_orders_map[$key] = [
+                'orderNumber' => $on,
+                'orderDate'   => '',
+                'clientRef'   => '',
+                'uds'         => 0,
+                'total'       => 0.0,
+                'productos'   => [], // base => qty
+            ];
         }
-        $comp_factura[$norm]['qty'] += (int)($l['quantity'] ?? 0);
-        $comp_factura[$norm]['productos'][] = [
-            'base'  => $l['baseProductName'] ?? $l['invoiceDescription'] ?? '',
-            'desc'  => $l['invoiceDescription'] ?? '',
-            'qty'   => (int)($l['quantity'] ?? 0),
-            'total' => (float)($l['invoiceLineTotal'] ?? 0),
-        ];
+        $cr = trim($l['clientRef'] ?? '');
+        $od = trim($l['orderDate'] ?? '');
+        if ($fact_orders_map[$key]['clientRef'] === '' && $cr !== '') $fact_orders_map[$key]['clientRef'] = $cr;
+        if ($fact_orders_map[$key]['orderDate'] === '' && $od !== '') $fact_orders_map[$key]['orderDate'] = $od;
+        $fact_orders_map[$key]['uds']   += (int)($l['quantity'] ?? 0);
+        $fact_orders_map[$key]['total'] += (float)($l['invoiceLineTotal'] ?? 0);
+        $b = trim($l['baseProductName'] ?? '') ?: trim($l['invoiceDescription'] ?? '');
+        if ($b !== '') {
+            $fact_orders_map[$key]['productos'][$b] = ($fact_orders_map[$key]['productos'][$b] ?? 0) + (int)($l['quantity'] ?? 0);
+        }
+    }
+}
+$fact_orders = array_values($fact_orders_map);
+
+// 3) Puntuación de afinidad pedido↔bloque
+function scoreMatchPedidoOrden(array $ped, array $ord): int {
+    $score = 0;
+    // Nombre del paciente: palabras comunes (>1 letra, sin acentos)
+    $wa = array_filter(explode(' ', normNombre($ped['cliente'])), fn($w) => strlen($w) > 1);
+    $wb = array_filter(explode(' ', normNombre($ord['clientRef'])), fn($w) => strlen($w) > 1);
+    $common = count(array_intersect($wa, $wb));
+    if ($common >= 2)      $score += 60;
+    elseif ($common === 1) $score += 25;
+    // Fecha del pedido vs fecha "Su pedido" de la factura
+    if ($ped['fecha'] !== '' && $ord['orderDate'] !== '') {
+        $d = abs(strtotime($ped['fecha']) - strtotime($ord['orderDate'])) / 86400;
+        if ($d == 0)      $score += 30;
+        elseif ($d <= 2)  $score += 20;
+        elseif ($d <= 7)  $score += 8;
+    }
+    // Unidades exactas: refuerzo
+    if ($ped['uds'] > 0 && $ped['uds'] === $ord['uds']) $score += 10;
+    return $score;
+}
+
+// 4) Asignación greedy: mejores puntuaciones primero, umbral mínimo 40
+$score_pairs = [];
+foreach ($ped_items as $i => $ped) {
+    foreach ($fact_orders as $j => $ord) {
+        $s = scoreMatchPedidoOrden($ped, $ord);
+        if ($s >= 40) $score_pairs[] = [$s, $i, $j];
+    }
+}
+usort($score_pairs, fn($a, $b) => $b[0] <=> $a[0]);
+$ped_to_ord = [];
+$ord_to_ped = [];
+foreach ($score_pairs as [$s, $i, $j]) {
+    if (isset($ped_to_ord[$i]) || isset($ord_to_ped[$j])) continue;
+    $ped_to_ord[$i] = ['ord' => $j, 'score' => $s];
+    $ord_to_ped[$j] = $i;
+}
+
+// 5) Filas: casados primero (orden por fecha pedido), luego pedidos sin factura, luego bloques sin pedido
+$comp_rows = [];
+foreach ($ped_items as $i => $ped) {
+    $comp_rows[] = ['ped' => $i, 'ord' => $ped_to_ord[$i]['ord'] ?? null, 'score' => $ped_to_ord[$i]['score'] ?? 0];
+}
+usort($comp_rows, function ($a, $b) use ($ped_items) {
+    return strcmp($ped_items[$a['ped']]['fecha'], $ped_items[$b['ped']]['fecha']);
+});
+foreach ($fact_orders as $j => $ord) {
+    if (!isset($ord_to_ped[$j])) {
+        $comp_rows[] = ['ped' => null, 'ord' => $j, 'score' => 0];
     }
 }
 
-// Enlazar pedidos↔factura por nombre de cliente (fuzzy)
-// Resultado: array de filas con [ped_norm|null, fac_norm|null, matched]
-$comp_rows      = [];
-$fac_matched    = [];
-foreach ($comp_pedidos as $pNorm => $pData) {
-    $matched = null;
-    foreach ($comp_factura as $fNorm => $fData) {
-        if (isset($fac_matched[$fNorm])) continue;
-        if ($pNorm === $fNorm || clientesCoinciden($pData['orig'], $fData['orig'])) {
-            $matched = $fNorm;
-            $fac_matched[$fNorm] = true;
-            break;
-        }
-    }
-    $comp_rows[] = ['ped' => $pNorm, 'fac' => $matched];
-}
-// Líneas de factura sin pedido correspondiente
-foreach ($comp_factura as $fNorm => $fData) {
-    if (!isset($fac_matched[$fNorm])) {
-        $comp_rows[] = ['ped' => null, 'fac' => $fNorm];
-    }
-}
-$hay_comp_cliente = !empty($comp_pedidos) || !empty($comp_factura);
+$n_casados      = count($ped_to_ord);
+$n_solo_pedido  = count($ped_items) - $n_casados;
+$n_solo_factura = count($fact_orders) - $n_casados;
+$hay_comp_cliente = !empty($ped_items) || !empty($fact_orders);
 
 // Nombres de meses en español
 $meses_es = [1=>'Enero',2=>'Febrero',3=>'Marzo',4=>'Abril',5=>'Mayo',6=>'Junio',
@@ -709,56 +755,102 @@ $api_facturas_url = $app_base . '/pedidos/api/facturas.php';
 
         </div>
 
-        <!-- Tabla comparativa por cliente/paciente -->
+        <!-- Conciliación pedido ↔ bloque de pedido de la factura -->
         <?php if ($hay_comp_cliente): ?>
         <div class="mt-4">
-            <h5 class="fw-bold text-muted small text-uppercase mb-2">
-                <i class="fas fa-user-check me-1"></i> Comparativa por cliente — pedidos vs. factura
-                <span class="fw-normal text-muted ms-1">(portes excluidos)</span>
-            </h5>
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                <h5 class="fw-bold text-muted small text-uppercase mb-0">
+                    <i class="fas fa-link me-1"></i> Conciliación pedido a pedido
+                </h5>
+                <span class="badge bg-success"><?= $n_casados ?> casados</span>
+                <?php if ($n_solo_pedido > 0): ?>
+                    <span class="badge bg-danger"><?= $n_solo_pedido ?> pedidos sin factura</span>
+                <?php endif; ?>
+                <?php if ($n_solo_factura > 0): ?>
+                    <span class="badge bg-warning text-dark"><?= $n_solo_factura ?> en factura sin pedido</span>
+                <?php endif; ?>
+            </div>
+            <p class="text-muted small mb-2">
+                Cada pedido del programa se enlaza con su bloque "Nº de pedido" de la factura por
+                <strong>paciente + fecha + unidades</strong> (no hace falta que el nombre del producto coincida). Portes excluidos.
+            </p>
             <div class="table-responsive">
                 <table class="table table-sm table-bordered mb-0" style="font-size:.82rem">
                     <thead class="table-light">
                         <tr>
-                            <th>Cliente / Paciente</th>
-                            <th>Producto pedido</th>
-                            <th class="text-center" style="width:60px">Pedido</th>
-                            <th>Producto facturado</th>
-                            <th class="text-center" style="width:60px">Facturado</th>
-                            <th class="text-center" style="width:60px">Dif.</th>
+                            <th colspan="3" class="text-center bg-warning bg-opacity-10">📋 Pedido en el programa</th>
+                            <th colspan="4" class="text-center bg-success bg-opacity-10">🧾 En la factura</th>
+                            <th class="text-center" rowspan="2" style="width:70px;vertical-align:middle">Estado</th>
+                        </tr>
+                        <tr>
+                            <th>Cliente</th>
+                            <th>Producto / F. pedido</th>
+                            <th class="text-center" style="width:50px">Uds.</th>
+                            <th>Nº pedido</th>
+                            <th>Referencia cliente</th>
+                            <th>Productos</th>
+                            <th class="text-center" style="width:50px">Uds.</th>
                         </tr>
                     </thead>
                     <tbody>
                     <?php foreach ($comp_rows as $row):
-                        $pData = $row['ped'] !== null ? ($comp_pedidos[$row['ped']] ?? null) : null;
-                        $fData = $row['fac'] !== null ? ($comp_factura[$row['fac']] ?? null) : null;
-                        $nombre_cli = $pData ? $pData['orig'] : ($fData ? $fData['orig'] : '?');
-                        $tot_ped    = $pData ? ($pData['cajas'] + $pData['blisters']) : 0;
-                        $tot_fac    = $fData ? $fData['qty'] : 0;
-                        $diff_row   = $tot_ped - $tot_fac;
-                        $prod_ped   = $pData ? implode(', ', $pData['productos']) : '';
-                        // Productos facturados: agrupar por base product
-                        $prods_fac = [];
-                        if ($fData) {
-                            foreach ($fData['productos'] as $fp) {
-                                $b = $fp['base'] ?: $fp['desc'];
-                                if (!isset($prods_fac[$b])) $prods_fac[$b] = 0;
-                                $prods_fac[$b] += $fp['qty'];
-                            }
-                        }
-                        $prod_fac_str = implode(', ', array_map(fn($b,$q) => $b . ($q>1?" ({$q})":""), array_keys($prods_fac), array_values($prods_fac)));
+                        $ped = $row['ped'] !== null ? $ped_items[$row['ped']]   : null;
+                        $ord = $row['ord'] !== null ? $fact_orders[$row['ord']] : null;
+                        $uds_p = $ped ? $ped['uds'] : 0;
+                        $uds_f = $ord ? $ord['uds'] : 0;
+                        $diff_row = $uds_p - $uds_f;
 
-                        if (!$pData)      { $row_class = 'table-warning'; $badge = '<span class="badge bg-warning text-dark">Solo factura</span>'; }
-                        elseif (!$fData)  { $row_class = 'table-danger';  $badge = '<span class="badge bg-danger">Sin factura</span>'; }
-                        elseif ($diff_row === 0) { $row_class = 'table-success bg-opacity-25'; $badge = '<span class="text-success fw-bold fs-5">✓</span>'; }
-                        else              { $row_class = 'table-warning';  $badge = '<span class="text-danger fw-bold">' . ($diff_row > 0 ? '+' : '') . $diff_row . '</span>'; }
+                        if ($ped && $ord && $diff_row === 0) {
+                            $row_class = '';
+                            $badge = '<span class="text-success fw-bold fs-5" title="Pedido y factura coinciden">✓</span>';
+                        } elseif ($ped && $ord) {
+                            $row_class = 'table-warning';
+                            $badge = '<span class="text-danger fw-bold" title="Unidades distintas">' . ($diff_row > 0 ? '+' : '') . $diff_row . ' uds</span>';
+                        } elseif ($ped) {
+                            $row_class = 'table-danger';
+                            $badge = '<span class="badge bg-danger" title="Este pedido no aparece en la factura">Sin factura</span>';
+                        } else {
+                            $row_class = 'table-warning';
+                            $badge = '<span class="badge bg-warning text-dark" title="Bloque de la factura sin pedido registrado">Sin pedido</span>';
+                        }
+
+                        $prods_fac_str = '';
+                        if ($ord) {
+                            $prods_fac_str = implode(', ', array_map(
+                                fn($b, $q) => $q > 1 ? "$b ×$q" : $b,
+                                array_keys($ord['productos']), array_values($ord['productos'])
+                            ));
+                        }
                     ?>
                     <tr class="<?= $row_class ?>">
-                        <td class="fw-semibold"><?= htmlspecialchars($nombre_cli) ?></td>
-                        <td class="text-muted small"><?= htmlspecialchars($prod_ped) ?: '<span class="text-muted fst-italic">—</span>' ?></td>
-                        <td class="text-center fw-bold"><?= $tot_ped ?: '<span class="text-muted">—</span>' ?></td>
-                        <td class="text-muted small"><?= htmlspecialchars($prod_fac_str) ?: '<span class="text-muted fst-italic">—</span>' ?></td>
-                        <td class="text-center fw-bold"><?= $tot_fac ?: '<span class="text-muted">—</span>' ?></td>
+                        <?php if ($ped): ?>
+                        <td class="fw-semibold">
+                            <a href="ficha_cliente.php?ref=<?= urlencode($ped['cliente']) ?>" class="text-decoration-none text-dark">
+                                <?= htmlspecialchars($ped['cliente']) ?>
+                            </a>
+                        </td>
+                        <td class="small">
+                            <?= htmlspecialchars($ped['producto']) ?: '<span class="text-muted fst-italic">sin producto</span>' ?>
+                            <div class="text-muted font-monospace" style="font-size:.7rem"><?= htmlspecialchars($ped['fecha']) ?></div>
+                        </td>
+                        <td class="text-center fw-bold"><?= $uds_p ?: '—' ?></td>
+                        <?php else: ?>
+                        <td colspan="3" class="text-center text-muted fst-italic small">— sin pedido registrado —</td>
+                        <?php endif; ?>
+
+                        <?php if ($ord): ?>
+                        <td class="font-monospace small"><?= htmlspecialchars($ord['orderNumber'] ?: '—') ?>
+                            <?php if ($ord['orderDate']): ?>
+                                <div class="text-muted" style="font-size:.7rem"><?= htmlspecialchars($ord['orderDate']) ?></div>
+                            <?php endif; ?>
+                        </td>
+                        <td class="small"><?= htmlspecialchars($ord['clientRef'] ?: '—') ?></td>
+                        <td class="small text-muted"><?= htmlspecialchars($prods_fac_str) ?></td>
+                        <td class="text-center fw-bold"><?= $uds_f ?: '—' ?></td>
+                        <?php else: ?>
+                        <td colspan="4" class="text-center text-muted fst-italic small">— no aparece en la factura —</td>
+                        <?php endif; ?>
+
                         <td class="text-center"><?= $badge ?></td>
                     </tr>
                     <?php endforeach; ?>
@@ -767,7 +859,7 @@ $api_facturas_url = $app_base . '/pedidos/api/facturas.php';
                         <tr>
                             <td colspan="2">TOTAL</td>
                             <td class="text-center"><?= $tot_uds_pedidas ?></td>
-                            <td></td>
+                            <td colspan="3"></td>
                             <td class="text-center"><?= $tot_fact_uds ?></td>
                             <td class="text-center">
                                 <?php if ($diff_uds === 0): ?>
@@ -780,11 +872,19 @@ $api_facturas_url = $app_base . '/pedidos/api/facturas.php';
                     </tfoot>
                 </table>
             </div>
-            <?php if (!empty($comp_factura['__sin_cliente__'])): ?>
-            <p class="text-muted small mt-2">
+            <?php
+            // Aviso si las líneas de la factura no traen estructura de pedidos (faltan orderNumber/clientRef)
+            $sin_estructura = 0;
+            foreach ($fact_orders as $o) {
+                if ($o['orderNumber'] === '' && $o['clientRef'] === '') $sin_estructura++;
+            }
+            if ($hay_factura && $sin_estructura > 0 && $sin_estructura === count($fact_orders)): ?>
+            <div class="alert alert-info border-0 rounded-3 small mt-2 mb-0">
                 <i class="fas fa-info-circle me-1"></i>
-                <?= count($comp_factura['__sin_cliente__']['productos']) ?> líneas de factura sin referencia de cliente (portes o líneas sin clientRef) — no se incluyen en la tabla.
-            </p>
+                La factura analizada no incluye números de pedido ni referencias de cliente por línea.
+                Vuelve a auditarla en <a href="<?= $app_base ?>/facturas/" target="_blank" class="alert-link">el analizador</a>
+                (las auditorías nuevas extraen esa información) para que la conciliación funcione pedido a pedido.
+            </div>
             <?php endif; ?>
         </div>
         <?php endif; ?>
