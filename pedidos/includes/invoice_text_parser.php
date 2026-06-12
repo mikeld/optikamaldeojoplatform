@@ -212,11 +212,12 @@ function extractInvoiceFromPlainText($textContent, $pageNumber = null) {
             $quantity = invoiceTextNumber($match[2][0]);
             $total = invoiceTextNumber($match[5][0]);
             // Columnas Visionis: PRECIO (tarifa unitaria), DESC. (%), IMPORTE (neto tras descuento).
-            // El precio de catálogo a comparar es el de TARIFA, no el neto (importe/cantidad):
-            // así un descuento comercial puntual no dispara "cambio de precio".
+            // El precio de referencia que de verdad importa es el IMPORTE neto (última columna),
+            // ya con el descuento aplicado, repartido por unidad. La tarifa y el % de descuento
+            // se conservan solo como información para mostrar junto a la línea.
             $grossUnit = invoiceTextNumber($match[3][0]);
             $discountPercent = invoiceTextNumber($match[4][0]);
-            $unitPrice = $grossUnit > 0 ? $grossUnit : ($quantity > 0 ? round($total / $quantity, 4) : 0.0);
+            $unitPrice = $quantity > 0 ? round($total / $quantity, 4) : 0.0;
 
             // Bloque de albarán al que pertenece esta línea. Se compara con el FINAL del
             // match porque la cabecera del albarán queda capturada dentro de la descripción

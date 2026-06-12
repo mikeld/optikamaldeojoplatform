@@ -1159,13 +1159,9 @@ const AuditPage: React.FC = () => {
                         <span className={`text-lg font-black font-mono ${isDiscrepancy ? 'text-rose-600' : 'text-slate-800'}`}>
                           {line.invoiceUnitPrice.toFixed(2)}€
                         </span>
-                        {typeof line.discountPercent === 'number' && line.discountPercent > 0 ? (
-                          <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-100 px-1.5 py-0.5 rounded uppercase mt-0.5">
-                            −{line.discountPercent.toFixed(line.discountPercent % 1 === 0 ? 0 : 2)}% dto.
-                          </span>
-                        ) : typeof line.invoiceLineTotal === 'number' && Math.abs(line.invoiceLineTotal - (line.invoiceUnitPrice * line.quantity)) > 0.01 && (
-                          <span className="text-[9px] font-black text-slate-400 uppercase mt-0.5">
-                            antes dto.
+                        {typeof line.discountPercent === 'number' && line.discountPercent > 0 && (
+                          <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded uppercase mt-0.5">
+                            dto. {line.discountPercent.toFixed(line.discountPercent % 1 === 0 ? 0 : 2)}% incl.
                           </span>
                         )}
                         {isDiscrepancy && (

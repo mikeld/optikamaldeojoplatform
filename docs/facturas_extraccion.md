@@ -143,8 +143,9 @@ con texto los procesa el parser local que ya aplica todo esto):
 Las facturas de Visionis agrupan las líneas por bloques "Albarán: DD/MM/YYYY V/OUT/XXXXXXX
 Pedido: ['SOXXXXXX'] Cliente: 29178". Columnas: DESCRIPCIÓN, CANTIDAD, PRECIO, DESC. (%),
 IMPUESTOS, IMPORTE.
-- u (unitPrice) es SIEMPRE la columna PRECIO (tarifa, antes del descuento). NUNCA importe/cantidad.
-- dp es la columna DESC. (%). lt es la columna IMPORTE (neto tras descuento).
+- u (unitPrice) es SIEMPRE el NETO tras descuentos: u = IMPORTE / cantidad (última columna).
+- dp es la columna DESC. (%), solo informativa. lt es la columna IMPORTE (neto tras descuento).
+- La columna PRECIO (tarifa antes del descuento) NO se usa como referencia.
 - Cada descripción empieza con un SKU entre corchetes: [OP2775], [15DOB.8,50.-8,00]...
   En los SKU con puntos, la parte antes del primer punto es el producto; el resto es graduación.
 - b (baseProductName) = [SKU-raíz] + nombre hasta antes de "Pedido Optimize", "Pedido BOD",
@@ -157,13 +158,13 @@ IMPUESTOS, IMPORTE.
 - El bloque "(MALDEOJO OPTIKA ATELIER...)" es el cliente: nunca es un producto.
 ```
 
-### Precio de tarifa vs descuento (importante)
+### El precio de referencia es el IMPORTE neto (importante)
 
-Cuando la factura tiene columna de descuento (Visionis), el precio que se
-compara contra el catálogo es el de **tarifa** (columna PRECIO), no el neto.
-Así un descuento comercial distinto no dispara "cambio de precio": el precio
-del catálogo es estable y el descuento se muestra como badge "−4,66% dto." en
-la línea. El importe neto (IMPORTE) se usa para la validación aritmética.
+El precio que se compara contra el catálogo es el **IMPORTE de la última
+columna ya con el descuento aplicado**, repartido por unidad (IMPORTE ÷
+cantidad). Es lo que de verdad se paga. La columna PRECIO (tarifa antes del
+descuento) NO se usa. El % de descuento se conserva solo para mostrarlo como
+badge informativo "dto. 5% incl." junto al precio neto.
 
 ## Resumen de archivos tocados
 
