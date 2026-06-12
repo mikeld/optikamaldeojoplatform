@@ -774,6 +774,9 @@ try {
                 throw new Exception('Gemini ha devuelto JSON, pero no incluye líneas de factura válidas');
             }
 
+            // Reconectar a MySQL: la llamada a Gemini puede tardar >30s y la conexión puede haberse caído
+            try { $pdo->query("SELECT 1"); } catch (Exception $_) { $pdo = (new Conexion())->pdo; }
+
             // Resolver el proveedor oficial de pedidos (evita duplicados tipo "ALCON HEALTHCARE, S.A." vs "Alcon")
             $oficial = null;
             if ($providerId !== null && $providerId > 0) {
