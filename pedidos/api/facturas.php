@@ -1360,9 +1360,9 @@ Pregunta:
                 borrarArchivoFacturaRelativo($relativePath);
             }
 
+            asegurarTablaFacturasPages($pdo); // DDL → commit implícito en MySQL; debe ir ANTES de beginTransaction
             $pdo->beginTransaction();
             try {
-                asegurarTablaFacturasPages($pdo);
                 $pagesStmt = $pdo->prepare("SELECT `image_path` FROM `facturas_pages` WHERE `audit_id` = ?");
                 $pagesStmt->execute([$auditId]);
                 $pagePaths = $pagesStmt->fetchAll(PDO::FETCH_COLUMN);
