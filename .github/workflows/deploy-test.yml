@@ -57,6 +57,7 @@ jobs:
           UPLOAD_TOKEN: ${{ secrets.DEPLOY_UPLOAD_TOKEN }}
         run: |
           echo "Token length is: ${#UPLOAD_TOKEN}"
+          echo -n "$UPLOAD_TOKEN" | shasum -a 256
 
       - name: Upload to Hostinger test (HTTP)
         env:
