@@ -52,6 +52,12 @@ jobs:
           cp deploy/unzip.php deploy/dist/unzip.php
           sed -i "s/COMPARE_WITH_TOKEN/$UNZIP_TOKEN/g" deploy/dist/unzip.php
 
+      - name: Debug UPLOAD_TOKEN length
+        env:
+          UPLOAD_TOKEN: ${{ secrets.DEPLOY_UPLOAD_TOKEN }}
+        run: |
+          echo "Token length is: ${#UPLOAD_TOKEN}"
+
       - name: Upload to Hostinger test (HTTP)
         env:
           UPLOAD_TOKEN: ${{ secrets.DEPLOY_UPLOAD_TOKEN }}
