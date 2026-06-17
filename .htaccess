@@ -1,0 +1,17 @@
+# ----------------------------------------------------------------------
+# Seguridad y Robustez - Optikamaldeojo Platform
+# ----------------------------------------------------------------------
+
+# 1. Prevenir el listado de archivos en directorios sin index.php
+Options -Indexes
+
+# 2. Denegar acceso web directo a archivos sensibles y de configuración
+RedirectMatch 403 (?i)\.(git|github|env|sql|db)$
+RedirectMatch 403 (?i)db_config\.php$
+RedirectMatch 403 (?i)composer\.(json|lock)$
+RedirectMatch 403 (?i)package\.(json|lock)$
+
+# 3. Forzar el uso de HTTPS en todo el sitio
+RewriteEngine On
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]

@@ -66,6 +66,7 @@ rsync -a \
   "$ROOT_DIR/manifest.json" \
   "$ROOT_DIR/offline.html" \
   "$ROOT_DIR/sw.js" \
+  "$ROOT_DIR/.htaccess" \
   "$RELEASE_DIR/"
 
 echo "==> Copying compiled Facturas Check"
