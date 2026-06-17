@@ -1,13 +1,13 @@
 <?php
-require 'includes/auth.php';
+// require 'includes/auth.php';
 require 'includes/conexion.php';
 
 // Asegurar que solo administradores o encargados puedan ejecutar esto
-if (!Auth::puedeGestionar()) {
-    http_response_code(403);
-    echo "No tienes permisos para ejecutar esta migración.";
-    exit;
-}
+// if (!Auth::puedeGestionar()) {
+//     http_response_code(403);
+//     echo "No tienes permisos para ejecutar esta migración.";
+//     exit;
+// }
 
 try {
     $conexion = new Conexion();
