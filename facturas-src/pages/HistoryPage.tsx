@@ -84,10 +84,13 @@ const HistoryPage: React.FC = () => {
     setDeletingAuditId(audit.id);
     try {
       await db.deleteAudit(audit.id);
-      setHistory(history.filter(item => item.id !== audit.id));
+      setHistory(prev => prev.filter(item => item.id !== audit.id));
       if (selectedAudit?.id === audit.id) {
         setSelectedAudit(null);
       }
+    } catch (err) {
+      console.error('deleteAudit error:', err);
+      alert(`Error al borrar la auditoría: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setDeletingAuditId(null);
     }
@@ -97,6 +100,12 @@ const HistoryPage: React.FC = () => {
     const d = new Date(isoString);
     if (isNaN(d.getTime())) return 'Fecha Inválida';
     return d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
+
+  const formatDateTime = (isoString: string) => {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return 'Fecha Inválida';
+    return d.toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
   const providers = useMemo(() => {
@@ -227,7 +236,7 @@ const HistoryPage: React.FC = () => {
               <tbody className="divide-y divide-slate-100">
                 {filteredHistory.map(record => (
                   <tr key={record.id} className="hover:bg-slate-50/50 transition-colors group">
-                    <td className="px-8 py-6 text-sm text-slate-700 font-bold">{formatDate(record.createdAt)}</td>
+                    <td className="px-8 py-6 text-sm text-slate-700 font-bold">{formatDateTime(record.createdAt)}</td>
                     <td className="px-8 py-6 text-sm text-slate-500 font-medium italic">{record.invoiceDate}</td>
                     <td className="px-8 py-6 font-black text-slate-800 uppercase text-xs tracking-tight">{record.provider}</td>
                     <td className="px-8 py-6"><span className="bg-slate-100 px-2 py-1 rounded text-[10px] font-black">{record.invoiceNumber}</span></td>

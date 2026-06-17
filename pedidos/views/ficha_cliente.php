@@ -79,9 +79,14 @@ $stmt_first = $pdo->prepare("
 $stmt_first->execute([':ref' => $cliente['referencia']]);
 $primera_compra = $stmt_first->fetchColumn() ?: '—';
 
-// Obtener mensajes WhatsApp fuera del bucle
-$msg_es = obtenerMensajeWhatsApp('recibido', 'es');
-$msg_eu = obtenerMensajeWhatsApp('recibido', 'eu');
+// Mensajes WhatsApp por tipo de estado
+$ws_msgs = [];
+foreach (['por_pedir','atrasado','pendiente','recibido'] as $t) {
+    $ws_msgs[$t] = [
+        'es' => obtenerMensajeWhatsApp($t, 'es'),
+        'eu' => obtenerMensajeWhatsApp($t, 'eu'),
+    ];
+}
 ?>
 
 <div class="container-fluid py-4">
@@ -111,6 +116,9 @@ $msg_eu = obtenerMensajeWhatsApp('recibido', 'eu');
                 </div>
             </div>
             <div class="col-auto d-flex gap-2">
+                <a href="listado_pedidos.php?cliente=<?= urlencode($cliente['referencia']) ?>" class="btn btn-action btn-outline-secondary">
+                    <i class="fas fa-list me-1"></i> Ver pedidos
+                </a>
                 <a href="formulario_usuarios.php?id=<?= $id ?>" class="btn btn-action btn-outline-primary">
                     <i class="fas fa-edit me-1"></i> Editar
                 </a>
@@ -172,6 +180,7 @@ $msg_eu = obtenerMensajeWhatsApp('recibido', 'eu');
                             <th>Estado</th>
                             <th>F. Pedido</th>
                             <th>F. Llegada</th>
+                            <th class="text-center" style="width:90px">WhatsApp</th>
                             <th class="text-center" style="width:44px"></th>
                         </tr>
                     </thead>
@@ -180,19 +189,24 @@ $msg_eu = obtenerMensajeWhatsApp('recibido', 'eu');
                         <?php
                             $rv = (int)$p['recibido'];
                             if ($rv === 1) {
-                                $estado_class = 'bg-success'; $estado_text = 'Finalizado';
+                                $estado_class = 'bg-success'; $estado_text = 'Finalizado'; $ws_tipo = 'recibido';
                             } elseif ($rv === 3) {
-                                $estado_class = 'bg-secondary'; $estado_text = 'Cancelado';
+                                $estado_class = 'bg-secondary'; $estado_text = 'Cancelado'; $ws_tipo = 'recibido';
                             } elseif (!$p['fecha_pedido']) {
-                                $estado_class = 'bg-warning text-dark'; $estado_text = 'Sin pedir';
+                                $estado_class = 'bg-warning text-dark'; $estado_text = 'Sin pedir'; $ws_tipo = 'por_pedir';
                             } elseif ($p['fecha_llegada'] && $p['fecha_llegada'] <= $fecha_hoy_local) {
-                                $estado_class = 'bg-danger'; $estado_text = 'Atrasado';
+                                $estado_class = 'bg-danger'; $estado_text = 'Atrasado'; $ws_tipo = 'atrasado';
                             } elseif ($rv === 2) {
-                                $estado_class = 'bg-warning text-dark'; $estado_text = 'Parcial';
+                                $estado_class = 'bg-warning text-dark'; $estado_text = 'Parcial'; $ws_tipo = 'pendiente';
                             } else {
-                                $estado_class = 'bg-primary'; $estado_text = 'En camino';
+                                $estado_class = 'bg-primary'; $estado_text = 'En camino'; $ws_tipo = 'pendiente';
                             }
                             $via_data = parsearVia($p['via'] ?? '');
+                            $tel = urlencode($cliente['telefono'] ?? '');
+                            $nc  = $cliente['referencia'];
+                            $np  = $p['lc_gafa_recambio'] ?? 'pedido';
+                            $ws_es = urlencode(str_replace(['{cliente}','{producto}'], [$nc,$np], $ws_msgs[$ws_tipo]['es']));
+                            $ws_eu = urlencode(str_replace(['{cliente}','{producto}'], [$nc,$np], $ws_msgs[$ws_tipo]['eu']));
                         ?>
                         <tr class="<?= $rv === 3 ? 'opacity-60' : '' ?>">
                             <td class="font-monospace small text-muted"><?= $p['fecha_cliente'] ?? '—' ?></td>
@@ -206,6 +220,14 @@ $msg_eu = obtenerMensajeWhatsApp('recibido', 'eu');
                             <td><span class="badge <?= $estado_class ?>"><?= $estado_text ?></span></td>
                             <td class="font-monospace small"><?= $p['fecha_pedido'] ?? '<span class="text-muted">—</span>' ?></td>
                             <td class="font-monospace small fw-bold text-primary"><?= $p['fecha_llegada'] ?? '<span class="text-muted">—</span>' ?></td>
+                            <td class="text-center">
+                                <?php if ($cliente['telefono']): ?>
+                                <div class="d-flex justify-content-center gap-1">
+                                    <a href="../includes/whatsapp_redirect.php?telefono=<?= $tel ?>&mensaje=<?= $ws_es ?>" class="btn btn-ws-pill btn-ws-es" title="Castellano" target="_blank" rel="noopener noreferrer"><i class="fab fa-whatsapp"></i> ES</a>
+                                    <a href="../includes/whatsapp_redirect.php?telefono=<?= $tel ?>&mensaje=<?= $ws_eu ?>" class="btn btn-ws-pill btn-ws-eu" title="Euskera" target="_blank" rel="noopener noreferrer"><i class="fab fa-whatsapp"></i> EU</a>
+                                </div>
+                                <?php else: ?><span class="text-muted small">Sin tel.</span><?php endif; ?>
+                            </td>
                             <td class="text-center">
                                 <a href="../controllers/editar_pedido.php?id=<?= $p['id'] ?>" class="btn btn-edit-icon" title="Editar">
                                     <i class="fas fa-pen-to-square"></i>

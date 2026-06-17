@@ -629,8 +629,13 @@ tr.fondo-sin-fecha, .fondo-sin-fecha {
 }
 
 .tr-parcial {
-    background: rgba(217,119,6,.04) !important;
+    background: rgba(217,119,6,.12) !important;
     border-left: 3px solid var(--warning) !important;
+}
+
+.tr-urgente {
+    background: rgba(220,38,38,.08) !important;
+    border-left: 3px solid var(--danger) !important;
 }
 
 /* ── Buttons — base ──────────────────────────── */

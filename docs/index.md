@@ -30,6 +30,11 @@ Para entender en detalle cada sección del proyecto, consulta los siguientes arc
    - Flujo de extracción de datos: Parser local tabulado vs Gemini 2.5 Flash.
    - Optimización de costes de API, renderizado PDF en el cliente (PDF.js) y validaciones de totales.
 
+4b. 📂 **[Extracción de facturas con IA por proveedor (facturas_extraccion.md)](file:///Users/mikel/Developer/ProyectosPersonales/OptikamaldeojoPlatform/docs/facturas_extraccion.md)**
+   - Matching robusto de proveedores (nombre fiscal vs proveedor oficial de pedidos).
+   - Estructura por pedidos en facturas (número de pedido, fecha, referencia cliente/paciente).
+   - Validación aritmética de la extracción y flujo de trabajo para afinar reglas por proveedor.
+
 5. 📂 **[Asistente RAG e Inteligencia Artificial (rag_ai.md)](file:///Users/mikel/Developer/ProyectosPersonales/OptikamaldeojoPlatform/docs/rag_ai.md)**
    - Arquitectura de búsqueda híbrida actual en MySQL (Texto completo y filtros).
    - Almacenamiento de páginas visuales como evidencia de auditorías.

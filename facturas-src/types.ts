@@ -62,10 +62,22 @@ export interface InvoiceItem {
   id: string;
   description: string;
   baseProductName?: string;
+  sku?: string | null;
   graduation?: string | null;
   quantity: number;
   unitPrice: number;
+  discountPercent?: number | null;
   total: number;
+  orderNumber?: string | null;
+  orderDate?: string | null;
+  clientRef?: string | null;
+}
+
+export interface InvoiceValidation {
+  linesSum: number;
+  declaredTotal: number;
+  ok: boolean;
+  message: string;
 }
 
 export interface InvoiceData {
@@ -78,6 +90,8 @@ export interface InvoiceData {
   taxes?: Array<{ rate: number; base: number; amount: number }>;
   hasFiscalSummary?: boolean;
   total: number;
+  officialProvider?: { id: number; name: string } | null;
+  validation?: InvoiceValidation | null;
 }
 
 export type InvoiceAiModel = 'gemini-2.5-flash' | 'gemini-2.5-flash-lite';
@@ -102,6 +116,8 @@ export interface AuditLine {
   baseProductName?: string;
   quantity: number;
   invoiceUnitPrice: number;
+  discountPercent?: number | null;
+  invoiceSku?: string | null;
   invoiceLineTotal?: number;
   masterProductPrice?: number;
   masterProductId?: string;
@@ -111,6 +127,9 @@ export interface AuditLine {
   graduation?: string | null;
   status: LineStatus;
   difference: number;
+  orderNumber?: string | null;
+  orderDate?: string | null;
+  clientRef?: string | null;
 }
 
 export type AuditStatus = 'pending' | 'approved' | 'rejected' | 'in_review';

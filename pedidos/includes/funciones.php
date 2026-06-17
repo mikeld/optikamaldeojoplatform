@@ -249,12 +249,14 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
     }
     if ($tipo === 1) echo '<th style="width:80px;">Atraso</th>';
     echo '<th class="text-center" style="width:110px;">Estado</th>';
+    echo '<th class="text-center" style="width:90px;">WhatsApp</th>';
     echo '<th class="text-center" style="width:44px;"></th>'; // acciones
     echo '</tr></thead><tbody>';
 
     $hoy = new DateTime();
-    $msgES = obtenerMensajeWhatsApp('recibido', 'es');
-    $msgEU = obtenerMensajeWhatsApp('recibido', 'eu');
+    $tipo_msg = $mostrar_carrito ? 'por_pedir' : ($tipo === 1 ? 'atrasado' : ($tipo === 3 ? 'recibido' : 'pendiente'));
+    $msgES = obtenerMensajeWhatsApp($tipo_msg, 'es');
+    $msgEU = obtenerMensajeWhatsApp($tipo_msg, 'eu');
 
     foreach ($pedidos as $p) {
         $p_json = htmlspecialchars(json_encode($p), ENT_QUOTES, 'UTF-8');
@@ -265,6 +267,10 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
         // Color de fila
         $row_class = 'clickable-row';
         if ($recibido_val === 2) $row_class .= ' tr-parcial';
+        if ($mostrar_carrito && !empty($p['fecha_cliente'])) {
+            $dias_fila = (int)(new DateTime($p['fecha_cliente']))->diff($hoy)->days;
+            if ($dias_fila >= 5) $row_class .= ' tr-urgente';
+        }
 
         echo '<tr class="'.$row_class.'" data-pedido=\''.$p_json.'\'>';
 
@@ -275,7 +281,7 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
         if ($avisado) {
             echo ' <span class="badge badge-avisado ms-1" title="Cliente avisado"><i class="fas fa-phone-volume"></i></span>';
         }
-        if ($en_carrito) {
+        if ($en_carrito && empty($p['fecha_pedido'])) {
             echo '<div class="mt-1 badge-en-carrito"><span class="badge bg-info" style="font-size:.65rem;"><i class="fas fa-cart-plus me-1"></i>En carrito</span></div>';
         }
         if (!empty($p['notas_recepcion'])) {
@@ -359,7 +365,7 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
             } elseif ($tipo < 3) {
                 if ($recibido_val === 2) {
                     echo '<div class="d-flex flex-column gap-1">';
-                    echo '<span class="badge bg-warning text-dark" style="font-size:.65rem;"><i class="fas fa-box-open"></i> PARCIAL</span>';
+                    echo '<button type="button" title="Recibido parcial" class="btn btn-warning text-dark btn-sm btn-action open-parcial-btn w-100"><i class="fas fa-box-open"></i></button>';
                     echo '<form action="../controllers/marcar_recibido.php" method="POST" class="m-0">';
                     echo '<input type="hidden" name="pedido_id" value="'.htmlspecialchars($p['id']).'">';
                     echo '<input type="hidden" name="recibido_val" value="1">';
@@ -401,6 +407,19 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
                 echo '</div>';
             }
         }
+        echo '</td>';
+
+        // WhatsApp
+        $tel = urlencode($p['telefono'] ?? '');
+        $nombreCliente  = $p['referencia_cliente'] ?? 'Cliente';
+        $nombreProducto = $p['lc_gafa_recambio']   ?? 'pedido';
+        $msgES_custom = str_replace(['{cliente}', '{producto}'], [$nombreCliente, $nombreProducto], $msgES);
+        $msgEU_custom = str_replace(['{cliente}', '{producto}'], [$nombreCliente, $nombreProducto], $msgEU);
+        echo '<td class="align-middle text-center">';
+        echo '<div class="d-flex justify-content-center gap-1">';
+        echo '<a href="../includes/whatsapp_redirect.php?telefono='.$tel.'&mensaje='.urlencode($msgES_custom).'" class="btn btn-ws-pill btn-ws-es" title="Castellano" target="_blank" rel="noopener noreferrer"><i class="fab fa-whatsapp"></i> ES</a>';
+        echo '<a href="../includes/whatsapp_redirect.php?telefono='.$tel.'&mensaje='.urlencode($msgEU_custom).'" class="btn btn-ws-pill btn-ws-eu" title="Euskera" target="_blank" rel="noopener noreferrer"><i class="fab fa-whatsapp"></i> EU</a>';
+        echo '</div>';
         echo '</td>';
 
         // Editar

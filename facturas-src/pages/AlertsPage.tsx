@@ -18,9 +18,27 @@ const AlertsPage: React.FC = () => {
         setAlerts(data);
     };
 
+    const [isBulkResolving, setIsBulkResolving] = useState(false);
+
     const handleResolve = async (alertId: string, action: string) => {
         await db.resolveAlert(alertId, action);
         await loadAlerts();
+    };
+
+    const pendingPriceAlerts = alerts.filter(a => a.status === 'pending' && (a.alertType === 'price_change' || a.alertType === 'price_error'));
+    const pendingUnknownAlerts = alerts.filter(a => a.status === 'pending' && a.alertType === 'unknown_product');
+
+    const bulkResolve = async (toResolve: Alert[], action: string, label: string) => {
+        if (!confirm(`¿${label} (${toResolve.length} alertas)?`)) return;
+        setIsBulkResolving(true);
+        try {
+            for (const alert of toResolve) {
+                await db.resolveAlert(alert.id, action);
+            }
+            await loadAlerts();
+        } finally {
+            setIsBulkResolving(false);
+        }
     };
 
     const filtered = alerts.filter(alert => {
@@ -111,6 +129,38 @@ const AlertsPage: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Acciones masivas (ej. subida anual de tarifas del proveedor) */}
+            {(pendingPriceAlerts.length > 1 || pendingUnknownAlerts.length > 1) && (
+                <div className="bg-indigo-50 rounded-3xl p-6 border border-indigo-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <p className="font-black text-indigo-900">Resolución masiva</p>
+                        <p className="text-sm text-indigo-700">
+                            Útil cuando el proveedor actualiza la tarifa anual: acepta todos los precios nuevos de una vez después de revisar la lista.
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2 shrink-0">
+                        {pendingPriceAlerts.length > 1 && (
+                            <button
+                                onClick={() => bulkResolve(pendingPriceAlerts, 'price_updated', 'Aceptar todos los precios nuevos y actualizar el maestro')}
+                                disabled={isBulkResolving}
+                                className="px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all disabled:opacity-50"
+                            >
+                                {isBulkResolving ? 'Procesando…' : `Aceptar todos los precios (${pendingPriceAlerts.length})`}
+                            </button>
+                        )}
+                        {pendingUnknownAlerts.length > 1 && (
+                            <button
+                                onClick={() => bulkResolve(pendingUnknownAlerts, 'approved', 'Añadir todos los productos nuevos al catálogo')}
+                                disabled={isBulkResolving}
+                                className="px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all disabled:opacity-50"
+                            >
+                                {isBulkResolving ? 'Procesando…' : `Añadir todos al catálogo (${pendingUnknownAlerts.length})`}
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* Filters */}
             <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
@@ -211,24 +261,39 @@ const AlertsPage: React.FC = () => {
                                 </div>
 
                                 {alert.status === 'pending' && (
-                                    <div className="flex gap-2 mt-4">
-                                        <button
-                                            onClick={() => handleResolve(alert.id, 'price_updated')}
-                                            className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all"
-                                        >
-                                            Actualizar Precio
-                                        </button>
-                                        <button
-                                            onClick={() => handleResolve(alert.id, 'approved')}
-                                            className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all"
-                                        >
-                                            Aprobar
-                                        </button>
+                                    <div className="flex flex-wrap gap-2 mt-4">
+                                        {(alert.alertType === 'price_change' || alert.alertType === 'price_error') && (
+                                            <button
+                                                onClick={() => handleResolve(alert.id, 'price_updated')}
+                                                className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all"
+                                                title="Guarda este precio como nuevo precio de referencia: las próximas facturas con este precio ya no avisarán"
+                                            >
+                                                Aceptar nuevo precio ({alert.actualValue !== null ? `${alert.actualValue.toFixed(2)}€` : ''})
+                                            </button>
+                                        )}
+                                        {alert.alertType === 'unknown_product' && (
+                                            <button
+                                                onClick={() => handleResolve(alert.id, 'approved')}
+                                                className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all"
+                                                title="Registra el producto en el catálogo con este precio como referencia"
+                                            >
+                                                Añadir al catálogo
+                                            </button>
+                                        )}
+                                        {alert.alertType !== 'price_change' && alert.alertType !== 'price_error' && alert.alertType !== 'unknown_product' && (
+                                            <button
+                                                onClick={() => handleResolve(alert.id, 'approved')}
+                                                className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all"
+                                            >
+                                                Aprobar
+                                            </button>
+                                        )}
                                         <button
                                             onClick={() => handleResolve(alert.id, 'ignored')}
                                             className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-sm font-bold hover:bg-slate-200 transition-all"
+                                            title="Marca la alerta como ignorada sin tocar el precio de referencia (ej. descuento puntual)"
                                         >
-                                            Ignorar
+                                            Ignorar esta vez
                                         </button>
                                     </div>
                                 )}
@@ -236,7 +301,11 @@ const AlertsPage: React.FC = () => {
                                 {alert.resolutionAction && alert.status !== 'pending' && (
                                     <div className="mt-4 p-3 bg-slate-50 rounded-xl">
                                         <p className="text-xs text-slate-500">
-                                            <span className="font-bold">Acción tomada:</span> {alert.resolutionAction}
+                                            <span className="font-bold">Acción tomada:</span>{' '}
+                                            {alert.resolutionAction === 'price_updated' ? 'Nuevo precio aceptado y guardado en el maestro'
+                                                : alert.resolutionAction === 'approved' ? 'Aprobada (producto registrado en el catálogo)'
+                                                : alert.resolutionAction === 'ignored' ? 'Ignorada (precio de referencia sin cambios)'
+                                                : alert.resolutionAction}
                                         </p>
                                     </div>
                                 )}

@@ -27,15 +27,19 @@ include 'header.php';
 // Conexión y parámetros comunes
 $pdo = (new Conexion())->pdo;
 
-// Filtro de fechas para "Finalizados" (por defecto: últimos 90 días)
+// Filtro de fechas para "Finalizados" (por defecto: últimos 90 días, sin fecha fin)
 $rec_fecha_desde = $_GET['rec_fecha_desde'] ?? date('Y-m-d', strtotime('-90 days'));
-$rec_fecha_hasta = $_GET['rec_fecha_hasta'] ?? date('Y-m-d');
+$rec_fecha_hasta = $_GET['rec_fecha_hasta'] ?? '2099-12-31';
+
+// Filtro global por cliente (desde ficha_cliente u otras páginas)
+$cliente_global = trim($_GET['cliente'] ?? '');
 
 // Helper para parámetros de tabla
 function getTableParams($prefix, $default_sort = 'id') {
+    global $cliente_global;
     $sort       = $_GET[$prefix . 'orden_columna']    ?? $default_sort;
     $dir        = strtoupper($_GET[$prefix . 'orden_direccion'] ?? 'ASC') === 'DESC' ? 'DESC' : 'ASC';
-    $filter     = $_GET[$prefix . 'filtro'] ?? '';
+    $filter     = $cliente_global ?: ($_GET[$prefix . 'filtro'] ?? '');
     $valid_cols = ['id', 'referencia_cliente', 'lc_gafa_recambio', 'rx', 'fecha_pedido', 'via', 'fecha_llegada'];
     if (!in_array($sort, $valid_cols)) $sort = $default_sort;
 
@@ -55,15 +59,16 @@ $p_recibidos  = getTableParams('recibidos_');
 
 // Validar fechas del filtro de finalizados
 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $rec_fecha_desde)) $rec_fecha_desde = date('Y-m-d', strtotime('-90 days'));
-if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $rec_fecha_hasta)) $rec_fecha_hasta = date('Y-m-d');
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $rec_fecha_hasta)) $rec_fecha_hasta = '2099-12-31';
 
 $fecha_hoy              = date('Y-m-d');
 
 // 1) Pedidos Pendientes de Pedir (fecha_pedido IS NULL) — sin límite, siempre serán pocos
 $stmt = $pdo->prepare("
-    SELECT p.*, c.telefono, c.email
+    SELECT p.*, c.telefono, c.email, pr.nombre AS proveedor_nombre
     FROM pedidos p
     JOIN clientes c ON p.referencia_cliente = c.referencia
+    LEFT JOIN proveedores pr ON p.proveedor_id = pr.id
     WHERE p.recibido IN (0, 2)
       AND p.recibido != 3
       AND p.fecha_pedido IS NULL
@@ -79,9 +84,10 @@ $pedidos_por_pedir = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // 2) Pedidos Atrasados (fecha_llegada <= hoy) — sin límite
 $stmt = $pdo->prepare("
-    SELECT p.*, c.telefono, c.email
+    SELECT p.*, c.telefono, c.email, pr.nombre AS proveedor_nombre
     FROM pedidos p
     JOIN clientes c ON p.referencia_cliente = c.referencia
+    LEFT JOIN proveedores pr ON p.proveedor_id = pr.id
     WHERE p.recibido IN (0, 2)
       AND p.fecha_llegada <= :fecha_hoy
       AND p.deleted_at IS NULL
@@ -97,9 +103,10 @@ $pedidos_atrasados = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // 3) Pedidos pedidos al proveedor pero sin fecha prevista de llegada
 $stmt = $pdo->prepare("
-    SELECT p.*, c.telefono, c.email
+    SELECT p.*, c.telefono, c.email, pr.nombre AS proveedor_nombre
     FROM pedidos p
     JOIN clientes c ON p.referencia_cliente = c.referencia
+    LEFT JOIN proveedores pr ON p.proveedor_id = pr.id
     WHERE p.recibido IN (0, 2)
       AND p.fecha_pedido IS NOT NULL
       AND p.fecha_llegada IS NULL
@@ -115,9 +122,10 @@ $pedidos_sin_fecha = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // 4) Pedidos Pendientes de Recibir (fecha_llegada > hoy) — sin límite
 $stmt = $pdo->prepare("
-    SELECT p.*, c.telefono, c.email
+    SELECT p.*, c.telefono, c.email, pr.nombre AS proveedor_nombre
     FROM pedidos p
     JOIN clientes c ON p.referencia_cliente = c.referencia
+    LEFT JOIN proveedores pr ON p.proveedor_id = pr.id
     WHERE p.recibido IN (0, 2)
       AND p.fecha_llegada > :fecha_hoy
       AND p.deleted_at IS NULL
@@ -133,9 +141,10 @@ $pedidos_pendientes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // 5) Pedidos Recibidos — filtrados por rango de fechas (fecha_llegada o fecha_pedido)
 $stmt = $pdo->prepare("
-    SELECT p.*, c.telefono, c.email
+    SELECT p.*, c.telefono, c.email, pr.nombre AS proveedor_nombre
     FROM pedidos p
     JOIN clientes c ON p.referencia_cliente = c.referencia
+    LEFT JOIN proveedores pr ON p.proveedor_id = pr.id
     WHERE p.recibido = 1
       AND p.deleted_at IS NULL
       AND (p.fecha_llegada BETWEEN :rec_desde AND :rec_hasta
@@ -232,6 +241,14 @@ $proveedor_mas_atrasos = $proveedor_mas_atrasos_stmt->fetch(PDO::FETCH_ASSOC);
 ?>
 
 <div class="container-fluid py-4">
+
+    <?php if ($cliente_global): ?>
+    <div class="alert alert-info d-flex align-items-center justify-content-between py-2 mb-3">
+        <span><i class="fas fa-filter me-2"></i> Mostrando pedidos de <strong><?= htmlspecialchars($cliente_global) ?></strong></span>
+        <a href="listado_pedidos.php" class="btn btn-sm btn-outline-secondary"><i class="fas fa-times me-1"></i> Quitar filtro</a>
+    </div>
+    <?php endif; ?>
+
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="mb-0 section-title">
             <i class="fas fa-boxes-stacked"></i> Listado de Pedidos
@@ -528,13 +545,12 @@ $proveedor_mas_atrasos = $proveedor_mas_atrasos_stmt->fetch(PDO::FETCH_ASSOC);
             <div class="d-flex flex-wrap align-items-center gap-2">
                 <form method="GET" class="d-flex align-items-center gap-1">
                     <?php foreach ($_GET as $k => $v): ?>
-                        <?php if (!in_array($k, ['rec_fecha_desde', 'rec_fecha_hasta'])): ?>
+                        <?php if (!in_array($k, ['rec_fecha_desde'])): ?>
                             <input type="hidden" name="<?= htmlspecialchars($k) ?>" value="<?= htmlspecialchars($v) ?>">
                         <?php endif; ?>
                     <?php endforeach; ?>
+                    <label class="small text-muted mb-0">Desde:</label>
                     <input type="date" name="rec_fecha_desde" class="form-control form-control-sm" style="width:140px;" value="<?= htmlspecialchars($rec_fecha_desde) ?>">
-                    <span class="text-muted small">—</span>
-                    <input type="date" name="rec_fecha_hasta" class="form-control form-control-sm" style="width:140px;" value="<?= htmlspecialchars($rec_fecha_hasta) ?>">
                     <button type="submit" class="btn btn-sm btn-success"><i class="fas fa-filter"></i></button>
                 </form>
                 <button id="btn-finalizados" class="btn btn-action btn-outline-secondary"
@@ -615,17 +631,28 @@ $proveedor_mas_atrasos = $proveedor_mas_atrasos_stmt->fetch(PDO::FETCH_ASSOC);
                         <div class="p-3 bg-light rounded-4 h-100">
                             <label class="small text-muted text-uppercase fw-bold mb-1">Cliente</label>
                             <div id="p-cliente" class="fs-5 fw-bold text-dark"></div>
-                            
+
                             <hr class="my-3 opacity-10">
-                            
+
+                            <label class="small text-muted text-uppercase fw-bold mb-1">Proveedor</label>
+                            <div id="p-proveedor" class="text-secondary fw-semibold"></div>
+
+                            <hr class="my-3 opacity-10">
+
                             <label class="small text-muted text-uppercase fw-bold mb-1">Producto / Servicio</label>
                             <div id="p-producto" class="text-primary fw-bold"></div>
                         </div>
                     </div>
                     <div class="col-md-6">
-                        <div class="p-3 bg-light rounded-4 h-100">
-                            <label class="small text-muted text-uppercase fw-bold mb-1">Graduación (RX)</label>
-                            <div id="p-rx" class="mt-1"></div>
+                        <div class="p-3 bg-light rounded-4 h-100 d-flex flex-column gap-3">
+                            <div>
+                                <label class="small text-muted text-uppercase fw-bold mb-1">Estado</label>
+                                <div id="p-estado" class="mt-1"></div>
+                            </div>
+                            <div>
+                                <label class="small text-muted text-uppercase fw-bold mb-1">Graduación (RX)</label>
+                                <div id="p-rx" class="mt-1"></div>
+                            </div>
                         </div>
                     </div>
                     <!-- Estado de Pack (Cajas/Blisters) -->
@@ -638,21 +665,33 @@ $proveedor_mas_atrasos = $proveedor_mas_atrasos_stmt->fetch(PDO::FETCH_ASSOC);
                             <div id="p-observaciones" class="mt-2 text-dark lh-base" style="white-space: pre-wrap; font-size: 1.05rem;"></div>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div id="p-notas-recepcion-wrapper" class="col-12" style="display:none;">
+                        <div class="p-3 bg-light rounded-4 border-start border-warning border-4">
+                            <label class="small text-muted text-uppercase fw-bold mb-1">Notas de Recepción</label>
+                            <div id="p-notas-recepcion" class="mt-2 text-dark lh-base" style="white-space: pre-wrap; font-size: 1.05rem;"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
                         <div class="p-3 bg-light rounded-4 text-center">
-                            <label class="small text-muted text-uppercase fw-bold d-block mb-1">Fecha Pedido</label>
+                            <label class="small text-muted text-uppercase fw-bold d-block mb-1">F. Cliente</label>
+                            <span id="p-fecha-cliente" class="badge bg-white text-dark border px-3 py-2"></span>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="p-3 bg-light rounded-4 text-center">
+                            <label class="small text-muted text-uppercase fw-bold d-block mb-1">F. Pedido</label>
                             <span id="p-fecha-pedido" class="badge bg-white text-dark border px-3 py-2"></span>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <div class="p-3 bg-light rounded-4 text-center">
                             <label class="small text-muted text-uppercase fw-bold d-block mb-1">Vía</label>
                             <span id="p-via" class="badge bg-info text-white px-3 py-2"></span>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <div class="p-3 bg-light rounded-4 text-center">
-                            <label class="small text-muted text-uppercase fw-bold d-block mb-1">Fecha Llegada</label>
+                            <label class="small text-muted text-uppercase fw-bold d-block mb-1">F. Llegada</label>
                             <span id="p-fecha-llegada" class="badge bg-primary px-3 py-2"></span>
                         </div>
                     </div>
@@ -661,12 +700,21 @@ $proveedor_mas_atrasos = $proveedor_mas_atrasos_stmt->fetch(PDO::FETCH_ASSOC);
             <div class="modal-footer border-0 p-4 pt-0 flex-wrap gap-2">
                 <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Cerrar</button>
                 <?php
-                $msgES_modal = obtenerMensajeWhatsApp('recibido', 'es');
-                $msgEU_modal = obtenerMensajeWhatsApp('recibido', 'eu');
+                $waModalMsgs = [];
+                foreach (['por_pedir','pendiente','recibido'] as $t) {
+                    $waModalMsgs[$t] = [
+                        'es' => obtenerMensajeWhatsApp($t, 'es'),
+                        'eu' => obtenerMensajeWhatsApp($t, 'eu'),
+                    ];
+                }
                 ?>
                 <div id="p-whatsapp-btns" class="d-flex gap-2"
-                     data-msg-es="<?= htmlspecialchars($msgES_modal) ?>"
-                     data-msg-eu="<?= htmlspecialchars($msgEU_modal) ?>">
+                     data-msg-porpedir-es="<?= htmlspecialchars($waModalMsgs['por_pedir']['es']) ?>"
+                     data-msg-porpedir-eu="<?= htmlspecialchars($waModalMsgs['por_pedir']['eu']) ?>"
+                     data-msg-pendiente-es="<?= htmlspecialchars($waModalMsgs['pendiente']['es']) ?>"
+                     data-msg-pendiente-eu="<?= htmlspecialchars($waModalMsgs['pendiente']['eu']) ?>"
+                     data-msg-recibido-es="<?= htmlspecialchars($waModalMsgs['recibido']['es']) ?>"
+                     data-msg-recibido-eu="<?= htmlspecialchars($waModalMsgs['recibido']['eu']) ?>">
                 </div>
                 <a id="p-btn-editar" href="#" class="btn btn-primary rounded-pill px-4">
                     <i class="fas fa-edit me-1"></i> Editar Pedido
@@ -720,7 +768,23 @@ document.addEventListener('DOMContentLoaded', function() {
             // Rellenar modal
             document.getElementById('p-id').textContent = p.id;
             document.getElementById('p-cliente').textContent = p.referencia_cliente;
+            document.getElementById('p-proveedor').textContent = p.proveedor_nombre || '—';
             document.getElementById('p-producto').textContent = p.lc_gafa_recambio;
+
+            // Estado badge
+            const estadoMap = {
+                '0': ['bg-secondary', 'Pendiente'],
+                '1': ['bg-success',   'Recibido'],
+                '2': ['bg-warning text-dark', 'Recibido parcial'],
+                '3': ['bg-danger',    'Cancelado'],
+            };
+            const rec = String(p.recibido ?? 0);
+            const [estadoClass, estadoText] = estadoMap[rec] || ['bg-secondary', 'Desconocido'];
+            const enCarrito = (!p.fecha_pedido && p.recibido == 0);
+            const estadoHtml = enCarrito
+                ? '<span class="badge bg-light text-dark border"><i class="fas fa-shopping-cart me-1"></i>En carrito</span>'
+                : `<span class="badge ${estadoClass}">${estadoText}</span>`;
+            document.getElementById('p-estado').innerHTML = estadoHtml;
             
             // --- Formatear RX (JSON o Texto) con soporte para ambos formatos ---
             let rxHtml = '';
@@ -806,20 +870,34 @@ document.addEventListener('DOMContentLoaded', function() {
                 packContainer.innerHTML = packHtml;
             }
 
-            document.getElementById('p-observaciones').textContent = p.observaciones || '-';
-            document.getElementById('p-fecha-pedido').textContent = p.fecha_pedido || '-';
-            document.getElementById('p-via').textContent = p.via || '-';
-            document.getElementById('p-fecha-llegada').textContent = p.fecha_llegada || '-';
+            document.getElementById('p-observaciones').textContent = p.observaciones || '—';
+            document.getElementById('p-fecha-cliente').textContent = p.fecha_cliente || '—';
+            document.getElementById('p-fecha-pedido').textContent = p.fecha_pedido || '—';
+            document.getElementById('p-via').textContent = p.via || '—';
+            document.getElementById('p-fecha-llegada').textContent = p.fecha_llegada || '—';
+
+            // Notas de recepción (solo si hay algo)
+            const notasWrapper = document.getElementById('p-notas-recepcion-wrapper');
+            const notasEl = document.getElementById('p-notas-recepcion');
+            if (p.notas_recepcion) {
+                notasEl.textContent = p.notas_recepcion;
+                notasWrapper.style.display = '';
+            } else {
+                notasWrapper.style.display = 'none';
+            }
             document.getElementById('p-btn-editar').href = '../controllers/editar_pedido.php?id=' + p.id;
 
-            // WhatsApp en el modal
+            // WhatsApp en el modal — mensaje según estado
             const tel = encodeURIComponent(p.telefono || '');
             const cliente = p.referencia_cliente || '';
             const producto = p.lc_gafa_recambio || '';
             const waBtns = document.getElementById('p-whatsapp-btns');
             if (waBtns) {
-                const msgES = waBtns.dataset.msgEs || '';
-                const msgEU = waBtns.dataset.msgEu || '';
+                const recVal = parseInt(p.recibido ?? 0);
+                const sinFecha = !p.fecha_pedido;
+                const tipoKey = sinFecha ? 'porpedir' : (recVal === 1 || recVal === 2 ? 'recibido' : 'pendiente');
+                const msgES = waBtns.dataset['msg' + tipoKey.charAt(0).toUpperCase() + tipoKey.slice(1) + 'Es'] || '';
+                const msgEU = waBtns.dataset['msg' + tipoKey.charAt(0).toUpperCase() + tipoKey.slice(1) + 'Eu'] || '';
                 const fillMsg = (t) => t.replace(/{cliente}/g, cliente).replace(/{producto}/g, producto);
                 waBtns.innerHTML = `
                     <a href="../includes/whatsapp_redirect.php?telefono=${tel}&mensaje=${encodeURIComponent(fillMsg(msgES))}"

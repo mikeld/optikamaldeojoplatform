@@ -41,6 +41,7 @@ $menu_grupos = [
     'Proveedores' => [
         ['nombre' => 'Listado proveedores', 'url' => $pedidos_url('listado_proveedores.php'), 'icono' => 'bi-building', 'match' => ['listado_proveedores.php']],
         ['nombre' => 'Nuevo proveedor', 'url' => $pedidos_url('formulario_proveedores.php'), 'icono' => 'bi-building-add', 'match' => ['formulario_proveedores.php']],
+        ['nombre' => 'Resumen pedidos', 'url' => $pedidos_url('resumen_pedidos.php'), 'icono' => 'bi-clipboard2-data', 'match' => ['resumen_pedidos.php']],
     ],
     'Productos' => [
         ['nombre' => 'Listado productos', 'url' => $pedidos_url('listado_productos.php'), 'icono' => 'bi-box-seam', 'match' => ['listado_productos.php']],

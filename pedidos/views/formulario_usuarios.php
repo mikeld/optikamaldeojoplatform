@@ -58,10 +58,10 @@ if (isset($_GET['id']) && is_numeric($_GET['id'])) {
 
                     <!-- Referencia -->
                     <div class="mb-4">
-                        <label for="referencia" class="form-label">Referencia del Cliente</label>
+                        <label for="referencia" class="form-label">Nombre del Cliente</label>
                         <div class="input-group">
-                            <span class="input-group-text bg-white border-2 border-end-0"><i class="fas fa-tag text-muted"></i></span>
-                            <input type="text" id="referencia" name="referencia" class="form-control border-start-0" value="<?= htmlspecialchars($referencia) ?>" placeholder="Ej: REF123" required>
+                            <span class="input-group-text bg-white border-2 border-end-0"><i class="fas fa-user text-muted"></i></span>
+                            <input type="text" id="referencia" name="referencia" class="form-control border-start-0" value="<?= htmlspecialchars($referencia) ?>" placeholder="Ej: Juan García" required>
                         </div>
                     </div>
 

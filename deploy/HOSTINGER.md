@@ -61,20 +61,67 @@ En GitHub:
 Settings > Secrets and variables > Actions > New repository secret
 ```
 
-Crea estos secretos:
+Secretos necesarios:
 
 ```text
-HOSTINGER_FTP_HOST
-HOSTINGER_FTP_USER
-HOSTINGER_FTP_PASSWORD
-HOSTINGER_TEST_DIR
-HOSTINGER_PROD_DIR
 TEST_DB_USER
 TEST_DB_PASS
 PROD_DB_USER
 PROD_DB_PASS
 GEMINI_API_KEY
+DEPLOY_UPLOAD_TOKEN   ← nuevo, ver sección "Deploy via HTTP" abajo
 ```
+
+Los secretos FTP ya no son necesarios (deploy via HTTP).
+
+## Deploy via HTTP (sin FTP)
+
+El deploy usa HTTP en vez de FTP porque GitHub Actions tiene el puerto 21
+bloqueado hacia Hostinger de forma sistemática.
+
+### Paso 1 — subir upload_receiver.php al servidor (una sola vez)
+
+Sube `deploy/upload_receiver.php` tal cual (sin editar) via el gestor de
+archivos de Hostinger (hPanel):
+
+```
+public_html/upload_receiver.php       ← producción
+public_html/test/upload_receiver.php  ← test
+```
+
+### Paso 2 — crear el token (una sola vez)
+
+```bash
+openssl rand -hex 32
+```
+
+Guarda ese valor en DOS sitios:
+
+1. Secreto de GitHub `DEPLOY_UPLOAD_TOKEN`.
+2. Un fichero `.deploy_token` en cada entorno del servidor, con el token como
+   única línea (sin comillas ni espacios):
+
+```
+public_html/.deploy_token             ← producción
+public_html/test/.deploy_token        ← test
+```
+
+`upload_receiver.php` lee el token de ese fichero. Como `.deploy_token` no
+forma parte del release, **nunca se sobreescribe en los deploys** y no hay que
+volver a editar nada a mano.
+
+### Seguridad
+
+- Solo acepta POST con token correcto y extensiones `.zip` / `.php`
+- Si `.deploy_token` no existe o está vacío, el endpoint devuelve 403 siempre
+- `unzip.php` usa token de un solo uso y se auto-elimina tras extraer
+- `upload_receiver.php` permanece en el servidor entre deploys (no se auto-elimina)
+
+### Si el deploy falla con 403 en "Upload to Hostinger"
+
+El token de `.deploy_token` en el servidor no coincide con el secreto
+`DEPLOY_UPLOAD_TOKEN` de GitHub. Revisa que el fichero exista en el entorno
+correcto (test o prod) y que contenga el token completo en una sola línea.
 
 Valores esperados:
 

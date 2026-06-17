@@ -17,12 +17,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.3
         with:
           fetch-depth: 0
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6.4.0
         with:
           node-version: 22
           cache: npm
@@ -52,35 +52,33 @@ jobs:
           cp deploy/unzip.php deploy/dist/unzip.php
           sed -i "s/COMPARE_WITH_TOKEN/$UNZIP_TOKEN/g" deploy/dist/unzip.php
 
-      - name: Upload to Hostinger test
+      - name: Upload to Hostinger test (HTTP)
         env:
-          FTP_HOST: ${{ secrets.HOSTINGER_FTP_HOST }}
-          FTP_USER: ${{ secrets.HOSTINGER_FTP_USER }}
-          FTP_PASS: ${{ secrets.HOSTINGER_FTP_PASSWORD }}
-          FTP_DIR: ${{ secrets.HOSTINGER_TEST_DIR }}
+          UPLOAD_TOKEN: ${{ secrets.DEPLOY_UPLOAD_TOKEN }}
+          SITE_URL: https://sienna-woodpecker-278479.hostingersite.com/test
         run: |
-          test -n "$FTP_HOST"
-          test -n "$FTP_USER"
-          test -n "$FTP_PASS"
-          test -n "$FTP_DIR"
-          FTP_HOST_CLEAN="$(printf '%s' "${FTP_HOST#ftp://}" | tr -d '\r\n')"
-          FTP_USER_CLEAN="$(printf '%s' "$FTP_USER" | tr -d '\r\n')"
-          FTP_PASS_CLEAN="$(printf '%s' "$FTP_PASS" | tr -d '\r\n')"
-          FTP_DIR_CLEAN="$(printf '%s' "$FTP_DIR" | tr -d '\r\n')"
+          test -n "$UPLOAD_TOKEN"
 
-          echo "Uploading release.zip..."
-          curl --fail --silent --show-error --ftp-create-dirs --retry 3 --connect-timeout 60 --max-time 600 --user "$FTP_USER_CLEAN:$FTP_PASS_CLEAN" -T "deploy/dist/release.zip" "ftp://$FTP_HOST_CLEAN/$FTP_DIR_CLEAN/release.zip"
+          echo "Uploading release.zip via HTTP..."
+          curl --fail --show-error --retry 3 --retry-delay 10 --max-time 600 \
+            -F "file=@deploy/dist/release.zip" \
+            "$SITE_URL/upload_receiver.php?token=$UPLOAD_TOKEN&filename=release.zip"
 
-          echo "Uploading unzip.php..."
-          curl --fail --silent --show-error --ftp-create-dirs --retry 3 --connect-timeout 60 --max-time 600 --user "$FTP_USER_CLEAN:$FTP_PASS_CLEAN" -T "deploy/dist/unzip.php" "ftp://$FTP_HOST_CLEAN/$FTP_DIR_CLEAN/unzip.php"
+          echo ""
+          echo "Uploading unzip.php via HTTP..."
+          curl --fail --show-error --retry 3 --retry-delay 10 --max-time 120 \
+            -F "file=@deploy/dist/unzip.php" \
+            "$SITE_URL/upload_receiver.php?token=$UPLOAD_TOKEN&filename=unzip.php"
 
       - name: Trigger Remote Unzip
+        env:
+          SITE_URL: https://sienna-woodpecker-278479.hostingersite.com/test
         run: |
           echo "Triggering unzip..."
-          # Realizar curl llamando al script de descompresión con el token dinámico
-          RESPONSE=$(curl --fail --silent --show-error --retry 3 --retry-delay 5 "https://sienna-woodpecker-278479.hostingersite.com/test/unzip.php?token=${{ env.UNZIP_TOKEN }}")
+          RESPONSE=$(curl --fail --silent --show-error --retry 3 --retry-delay 5 \
+            "$SITE_URL/unzip.php?token=${{ env.UNZIP_TOKEN }}")
           echo "Server response: $RESPONSE"
           if [[ $(echo "$RESPONSE" | jq -r '.status') != "success" ]]; then
-            echo "Unzip failed!"
+            echo "Unzip failed: $RESPONSE"
             exit 1
           fi

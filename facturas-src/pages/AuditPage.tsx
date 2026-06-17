@@ -54,10 +54,32 @@ const formatSeconds = (startedAt: number | null) => {
 
 const modelLabel = (model: InvoiceAiModel) => model === 'gemini-2.5-flash-lite' ? 'Flash-Lite' : 'Normal';
 
+// Misma lógica de validación que el backend: la suma de líneas (importe neto)
+// debe coincidir con el total, o quedar por debajo dentro del margen del IVA.
+const computeInvoiceValidation = (items: InvoiceData['items'], declaredTotal: number) => {
+  const linesSum = Math.round(items.reduce((sum, it) => sum + Number(it.total || 0), 0) * 100) / 100;
+  let ok = false;
+  let message = '';
+  if (declaredTotal <= 0) {
+    message = 'La factura no declara total; no se puede validar la suma de líneas.';
+  } else if (Math.abs(linesSum - declaredTotal) <= 0.05) {
+    ok = true;
+  } else if (linesSum < declaredTotal && linesSum >= declaredTotal * 0.75) {
+    ok = true; // diferencia compatible con IVA
+  } else {
+    message = `La suma de líneas (${linesSum.toFixed(2)}€) no cuadra con el total declarado (${declaredTotal.toFixed(2)}€). Revisa si faltan líneas o hay importes mal leídos.`;
+  }
+  return { linesSum, declaredTotal, ok, message };
+};
+
 const mergeInvoicePages = (pages: InvoiceData[]): InvoiceData => {
   const firstWithHeader = pages.find(page => page.providerName || page.invoiceNumber || page.date) || pages[0];
   const fiscalSummary = [...pages].reverse().find(page => page.hasFiscalSummary)
     || [...pages].reverse().find(page => Number(page.total || 0) > 0);
+  const withOfficial = pages.find(page => page.officialProvider?.id);
+
+  const items = pages.flatMap(page => page.items || []);
+  const total = fiscalSummary?.total || 0;
 
   return {
     providerName: firstWithHeader?.providerName || 'Proveedor sin detectar',
@@ -67,8 +89,11 @@ const mergeInvoicePages = (pages: InvoiceData[]): InvoiceData => {
     taxTotal: fiscalSummary?.taxTotal || 0,
     taxes: fiscalSummary?.taxes || [],
     hasFiscalSummary: Boolean(fiscalSummary?.hasFiscalSummary),
-    total: fiscalSummary?.total || 0,
-    items: pages.flatMap(page => page.items || []),
+    total,
+    items,
+    officialProvider: withOfficial?.officialProvider || null,
+    // La validación por página no sirve (cada página solo ve sus líneas): se recalcula sobre el total combinado
+    validation: computeInvoiceValidation(items, total),
   };
 };
 
@@ -159,16 +184,36 @@ const unknownCatalogGroups = (lines: AuditLine[]) => {
     .slice(0, 12);
 };
 
+// SKU raíz del corchete inicial de la descripción: "[15DOB.8,50.-8,00] ..." → "15dob"
+// La graduación va dentro del corchete en algunos proveedores (Visionis) pero no
+// cambia el precio, así que la raíz identifica el producto.
+const extractSkuRoot = (text?: string | null): string | null => {
+  if (!text) return null;
+  const m = text.trim().match(/^\[([^\]]+)\]/);
+  if (!m) return null;
+  const root = m[1].split(/[.,]/)[0].trim().toLowerCase();
+  return root || null;
+};
+
+const lineSkuRoot = (line: AuditLine): string | null =>
+  (line.invoiceSku ? line.invoiceSku.toLowerCase() : null)
+  || extractSkuRoot(line.baseProductName)
+  || extractSkuRoot(line.invoiceDescription);
+
 const matchInvoiceItem = (item: InvoiceItem, products: Product[], families: ProductFamily[]) => {
   const itemBase = item.baseProductName || item.description;
   const normalizedDescription = normalizeLensName(item.description);
   const normalizedBase = normalizeLensName(itemBase);
   const candidateText = normalizedBase || normalizedDescription;
+  const itemSku = (item.sku ? item.sku.toLowerCase().trim() : null)
+    || extractSkuRoot(itemBase)
+    || extractSkuRoot(item.description);
 
   const productMatch = products.find(product => {
     const sku = product.sku.toLowerCase().trim();
     const productName = normalizeLensName(product.name);
-    return sku === item.description.toLowerCase().trim()
+    return (itemSku !== null && (sku === itemSku || extractSkuRoot(`[${product.sku}]`) === itemSku))
+      || sku === item.description.toLowerCase().trim()
       || productName === normalizedDescription
       || productName === normalizedBase;
   });
@@ -230,6 +275,7 @@ const AuditPage: React.FC = () => {
   }, []);
 
   const [auditResult, setAuditResult] = useState<AuditRecord | null>(null);
+  const [extractionWarning, setExtractionWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -422,12 +468,22 @@ const AuditPage: React.FC = () => {
         if (!match) status = LineStatus.NEW_PRODUCT;
         else if (Math.abs(match.price - item.unitPrice) < 0.01) status = LineStatus.MATCHED;
 
+        // Líneas sin coste (envíos gratis, bonos, personalizaciones a 0 €) se dan por
+        // validadas automáticamente: no hay precio que comprobar. Se pueden desvalidar
+        // con el botón de deshacer si hace falta.
+        const name = `${item.baseProductName || ''} ${item.description}`.toLowerCase();
+        const esServicioSinCoste = item.unitPrice <= 0 && (item.total ?? 0) <= 0;
+        const esEnvioGratis = (name.includes('envío') || name.includes('envio') || name.includes('bono')) && (item.total ?? 0) <= 0;
+        if (esServicioSinCoste || esEnvioGratis) status = LineStatus.ACCEPTED;
+
         return {
           id: `line-${idx}-${Date.now()}`,
           invoiceDescription: item.description,
           baseProductName: item.baseProductName,
+          invoiceSku: item.sku || extractSkuRoot(item.baseProductName) || extractSkuRoot(item.description),
           quantity: item.quantity,
           invoiceUnitPrice: item.unitPrice,
+          discountPercent: item.discountPercent ?? null,
           invoiceLineTotal: item.total,
           masterProductPrice: match?.price,
           masterProductId: match?.productId,
@@ -436,16 +492,23 @@ const AuditPage: React.FC = () => {
           matchedFamilyName: match?.familyName,
           graduation: extractGraduation(item),
           status: status,
-          difference: match ? item.unitPrice - match.price : 0
+          difference: match ? item.unitPrice - match.price : 0,
+          orderNumber: item.orderNumber || null,
+          orderDate: item.orderDate || null,
+          clientRef: item.clientRef || null
         };
       });
 
+      setExtractionWarning(extracted.validation && !extracted.validation.ok && extracted.validation.message ? extracted.validation.message : null);
       setAuditResult({
         id: `temp-${Date.now()}`,
         createdAt: new Date().toISOString(),
         invoiceDate: extracted.date || new Date().toISOString().split('T')[0],
-        provider: extracted.providerName,
-        pedidosProviderId: selectedProviderId || providers.find(p => p.name.toLowerCase() === (extracted.providerName || '').toLowerCase())?.pedidosProviderId || null,
+        provider: extracted.officialProvider?.name || extracted.providerName,
+        pedidosProviderId: selectedProviderId
+          || extracted.officialProvider?.id
+          || providers.find(p => p.name.toLowerCase() === (extracted.providerName || '').toLowerCase())?.pedidosProviderId
+          || null,
         invoiceNumber: extracted.invoiceNumber || 'S/N',
         lines: auditLines,
         totalInvoice: extracted.total,
@@ -472,13 +535,39 @@ const AuditPage: React.FC = () => {
     }
   };
 
-  const handleLineAction = async (lineIdx: number, action: 'ACCEPT' | 'REJECT' | 'ADD_TO_CATALOG' | 'EDIT' | 'RESOLVE_PRICE') => {
+  // Acepta también todas las demás líneas del mismo producto (mismo SKU raíz) con el
+  // mismo precio unitario: la misma lentilla con distinta graduación cuesta lo mismo.
+  const cascadeSameSku = (lines: AuditLine[], reference: AuditLine, apply: (l: AuditLine) => void) => {
+    const sku = lineSkuRoot(reference);
+    if (!sku) return 0;
+    let count = 0;
+    lines.forEach(l => {
+      if (l === reference || l.status === LineStatus.REJECTED || l.status === LineStatus.ACCEPTED) return;
+      if (lineSkuRoot(l) === sku && Math.abs(l.invoiceUnitPrice - reference.invoiceUnitPrice) < 0.01) {
+        apply(l);
+        count++;
+      }
+    });
+    return count;
+  };
+
+  const handleLineAction = async (lineIdx: number, action: 'ACCEPT' | 'REJECT' | 'ADD_TO_CATALOG' | 'EDIT' | 'RESOLVE_PRICE' | 'UNDO') => {
     if (!auditResult) return;
     const lines = [...auditResult.lines];
     const line = lines[lineIdx];
 
     if (action === 'ACCEPT') {
       line.status = LineStatus.ACCEPTED;
+      cascadeSameSku(lines, line, l => { l.status = LineStatus.ACCEPTED; });
+    }
+    else if (action === 'UNDO') {
+      // Recalcular el estado original a partir del precio de catálogo conocido
+      if (typeof line.masterProductPrice === 'number') {
+        line.difference = line.invoiceUnitPrice - line.masterProductPrice;
+        line.status = Math.abs(line.difference) < 0.01 ? LineStatus.MATCHED : LineStatus.DISCREPANCY;
+      } else {
+        line.status = LineStatus.NEW_PRODUCT;
+      }
     }
     else if (action === 'RESOLVE_PRICE') {
       setActiveLineIdx(lineIdx);
@@ -490,7 +579,9 @@ const AuditPage: React.FC = () => {
     }
     else if (action === 'ADD_TO_CATALOG') {
       setActiveLineIdx(lineIdx);
-      setTempSku(`SKU-${Math.floor(Math.random() * 10000)}`);
+      // El SKU real de la factura ([OP2775]) es mejor identificador que uno aleatorio
+      const skuFactura = lineSkuRoot(line);
+      setTempSku(skuFactura ? skuFactura.toUpperCase() : `SKU-${Math.floor(Math.random() * 10000)}`);
       setModalMode('SKU');
       return;
     }
@@ -522,6 +613,14 @@ const AuditPage: React.FC = () => {
       line.masterProductPrice = line.invoiceUnitPrice;
       line.difference = 0;
     }
+    // Mismo producto (SKU raíz) y mismo precio en otras líneas → resolverlas igual
+    cascadeSameSku(lines, line, l => {
+      l.status = LineStatus.ACCEPTED;
+      if (shouldUpdateMaster) {
+        l.masterProductPrice = l.invoiceUnitPrice;
+        l.difference = 0;
+      }
+    });
     setAuditResult({ ...auditResult, lines });
     setModalMode('NONE');
     setActiveLineIdx(null);
@@ -535,7 +634,7 @@ const AuditPage: React.FC = () => {
     const newProd: Product = {
       id: `prod-${Date.now()}`,
       sku: tempSku,
-      name: line.invoiceDescription,
+      name: line.baseProductName || line.invoiceDescription,
       expectedPrice: line.invoiceUnitPrice,
       vat: 21
     };
@@ -545,6 +644,15 @@ const AuditPage: React.FC = () => {
     line.masterProductId = newProd.id;
     line.masterProductSku = newProd.sku;
     line.masterProductPrice = newProd.expectedPrice;
+
+    // Las demás líneas del mismo producto (otras graduaciones, mismo precio) quedan vinculadas también
+    cascadeSameSku(lines, line, l => {
+      l.status = LineStatus.ACCEPTED;
+      l.masterProductId = newProd.id;
+      l.masterProductSku = newProd.sku;
+      l.masterProductPrice = newProd.expectedPrice;
+      l.difference = 0;
+    });
 
     setAuditResult({ ...auditResult, lines });
     setModalMode('NONE');
@@ -636,14 +744,15 @@ const AuditPage: React.FC = () => {
     setIsBulkProcessing(false);
   };
 
-  const executeFinalize = async () => {
-    if (!auditResult) return;
+  const executeFinalize = async (override?: AuditRecord) => {
+    const record = override ?? auditResult;
+    if (!record) return;
     try {
-      const auditId = await db.saveAudit({ ...auditResult, globalStatus: 'in_review' });
-      const validation = await db.validateInvoice(auditId, auditResult.lines
+      const auditId = await db.saveAudit({ ...record, globalStatus: 'in_review' });
+      const validation = await db.validateInvoice(auditId, record.lines
         .filter(line => line.status !== LineStatus.REJECTED)
         .map(line => ({
-          sku: line.masterProductSku || null,
+          sku: line.masterProductSku || line.invoiceSku || null,
           name: line.invoiceDescription,
           familyName: line.matchedFamilyName || null,
           expectedPrice: line.masterProductPrice ?? null,
@@ -656,7 +765,7 @@ const AuditPage: React.FC = () => {
           ? 'pending'
           : 'approved';
       await db.saveAudit({
-        ...auditResult,
+        ...record,
         id: auditId,
         globalStatus: finalStatus,
         alertCount: validation.alertCount,
@@ -674,9 +783,23 @@ const AuditPage: React.FC = () => {
     }
   };
 
+  // Camino rápido para facturas recurrentes (ej. Visionis): si todos los precios
+  // coinciden con el catálogo, aceptar todas las líneas y guardar en un solo clic.
+  const approveAllAndSave = async () => {
+    if (!auditResult) return;
+    const updatedLines = auditResult.lines.map(line =>
+      line.status === LineStatus.MATCHED ? { ...line, status: LineStatus.ACCEPTED } : line
+    );
+    const updated = { ...auditResult, lines: updatedLines };
+    setAuditResult(updated);
+    await executeFinalize(updated);
+  };
+
   if (auditResult) {
     const summary = invoiceSummary(auditResult);
     const catalogSuggestions = unknownCatalogGroups(auditResult.lines);
+    const totalsOk = Math.abs(summary.detectedTotal - summary.compareTotal) <= 0.05;
+    const allPricesOk = summary.lines > 0 && summary.unknown === 0 && summary.discrepancies === 0 && totalsOk && !extractionWarning;
 
     return (
       <div className="space-y-6 max-w-6xl mx-auto pb-20">
@@ -694,7 +817,7 @@ const AuditPage: React.FC = () => {
               <h3 className="text-2xl font-black text-slate-800 mb-2">Auditoría guardada</h3>
               <p className="text-slate-500 text-sm mb-6 leading-relaxed">
                 {lastSaveSummary.alertCount > 0
-                  ? `Se han creado ${lastSaveSummary.alertCount} alertas (${lastSaveSummary.criticalCount} críticas) para revisar.`
+                  ? `Se han creado ${lastSaveSummary.alertCount} alertas (${lastSaveSummary.criticalCount} críticas). En el Centro de Alertas puedes aceptar los nuevos precios o ignorarlos uno a uno.`
                   : 'No se han detectado diferencias pendientes.'}
               </p>
               <div className="grid grid-cols-3 gap-3 mb-7">
@@ -722,12 +845,21 @@ const AuditPage: React.FC = () => {
                 >
                   Nueva factura
                 </button>
-                <a
-                  href="#/history"
-                  className="flex-1 py-3 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 transition-all"
-                >
-                  Historial
-                </a>
+                {lastSaveSummary.alertCount > 0 ? (
+                  <a
+                    href="#/alerts"
+                    className="flex-1 py-3 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 transition-all"
+                  >
+                    Revisar alertas ({lastSaveSummary.alertCount})
+                  </a>
+                ) : (
+                  <a
+                    href="#/history"
+                    className="flex-1 py-3 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 transition-all"
+                  >
+                    Historial
+                  </a>
+                )}
               </div>
             </div>
           </div>
@@ -913,6 +1045,35 @@ const AuditPage: React.FC = () => {
           <SummaryCard label="Diferencias" value={summary.discrepancies.toString()} tone={summary.discrepancies > 0 ? 'rose' : 'emerald'} />
         </div>
 
+        {extractionWarning && (
+          <div className="rounded-2xl border border-rose-100 bg-rose-50 px-5 py-4 text-rose-800 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
+            <p className="text-sm font-bold leading-relaxed">
+              Aviso de extracción IA: {extractionWarning}
+            </p>
+          </div>
+        )}
+
+        {allPricesOk && (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3 text-emerald-800">
+              <CheckCircle2 className="w-6 h-6 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-black">Factura correcta: los {summary.lines} precios coinciden con el catálogo</p>
+                <p className="text-xs font-semibold text-emerald-700 mt-0.5">
+                  Sin productos nuevos, sin diferencias de precio y los importes cuadran. Puedes aprobarla directamente.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={approveAllAndSave}
+              className="px-6 py-3 bg-emerald-600 text-white font-black rounded-xl hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-100 shrink-0"
+            >
+              <CheckSquare className="w-5 h-5" /> Aprobar y guardar
+            </button>
+          </div>
+        )}
+
         {(summary.unknown > 0 || summary.discrepancies > 0 || Math.abs(summary.detectedTotal - summary.compareTotal) > 0.05) && (
           <div className="rounded-2xl border border-amber-100 bg-amber-50 px-5 py-4 text-amber-800 flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
@@ -982,6 +1143,13 @@ const AuditPage: React.FC = () => {
                         {line.graduation ? ` · Grad: ${line.graduation}` : ''}
                         {line.matchedFamilyName ? ` · Familia: ${line.matchedFamilyName}` : ''}
                       </p>
+                      {(line.orderNumber || line.clientRef) && (
+                        <p className="text-[10px] text-indigo-400 font-bold uppercase mt-0.5">
+                          {line.orderNumber ? `Pedido ${line.orderNumber}` : ''}
+                          {line.orderNumber && line.orderDate ? ` (${line.orderDate})` : ''}
+                          {line.clientRef ? `${line.orderNumber ? ' · ' : ''}Cliente: ${line.clientRef}` : ''}
+                        </p>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-center">
                       <span className="font-mono text-indigo-400 font-bold">{line.masterProductPrice ? `${line.masterProductPrice.toFixed(2)}€` : '--'}</span>
@@ -991,9 +1159,9 @@ const AuditPage: React.FC = () => {
                         <span className={`text-lg font-black font-mono ${isDiscrepancy ? 'text-rose-600' : 'text-slate-800'}`}>
                           {line.invoiceUnitPrice.toFixed(2)}€
                         </span>
-                        {typeof line.invoiceLineTotal === 'number' && Math.abs(line.invoiceLineTotal - (line.invoiceUnitPrice * line.quantity)) > 0.01 && (
-                          <span className="text-[9px] font-black text-slate-400 uppercase mt-0.5">
-                            antes dto.
+                        {typeof line.discountPercent === 'number' && line.discountPercent > 0 && (
+                          <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded uppercase mt-0.5">
+                            dto. {line.discountPercent.toFixed(line.discountPercent % 1 === 0 ? 0 : 2)}% incl.
                           </span>
                         )}
                         {isDiscrepancy && (
@@ -1040,9 +1208,20 @@ const AuditPage: React.FC = () => {
                         )}
 
                         {(line.status === LineStatus.ACCEPTED || line.status === LineStatus.MATCHED) && (
-                          <div className="flex items-center gap-1.5 text-emerald-600 font-black text-[9px] bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-100 uppercase">
-                            <CheckCircle2 className="w-3.5 h-3.5" /> Validado
-                          </div>
+                          <>
+                            <div className="flex items-center gap-1.5 text-emerald-600 font-black text-[9px] bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-100 uppercase">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> Validado
+                            </div>
+                            {line.status === LineStatus.ACCEPTED && (
+                              <button
+                                onClick={() => handleLineAction(idx, 'UNDO')}
+                                className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+                                title="Quitar validación (volver a revisar esta línea)"
+                              >
+                                <RefreshCw className="w-4 h-4" />
+                              </button>
+                            )}
+                          </>
                         )}
                       </div>
                     </td>
