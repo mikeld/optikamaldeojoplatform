@@ -15,7 +15,14 @@ $acciones_navbar = [
     ['nombre'=>'Listado Proveedores', 'url'=>'listado_proveedores.php', 'icono'=>'bi-building']
 ];
 include 'header.php';
-
+?>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+    .select2-container--open {
+        z-index: 1060; /* Ensure search dropdown shows above Bootstrap modal */
+    }
+</style>
+<?php
 $pdo = (new Conexion())->pdo;
 
 // Búsqueda, filtrado y ordenación
@@ -335,13 +342,24 @@ function sortLink($col, $label, $currentSort, $currentDir) {
     </div>
 </div>
 
+<!-- jQuery and Select2 JS -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
 <script>
     const modalStock = new bootstrap.Modal(document.getElementById('modalStock'));
+
+    $(document).ready(function() {
+        $('#stock-producto-id').select2({
+            dropdownParent: $('#modalStock'),
+            width: '100%'
+        });
+    });
 
     function openAddModal() {
         document.getElementById('stock-id').value = 0;
         document.getElementById('stock-modal-title-text').textContent = 'Añadir Stock';
-        document.getElementById('stock-producto-id').value = '';
+        $('#stock-producto-id').val('').trigger('change');
         document.getElementById('stock-tipo').value = 'caja';
         document.getElementById('stock-ojo').value = 'ninguno';
         
@@ -359,7 +377,7 @@ function sortLink($col, $label, $currentSort, $currentDir) {
     function openEditModal(s) {
         document.getElementById('stock-id').value = s.id;
         document.getElementById('stock-modal-title-text').textContent = 'Editar Stock';
-        document.getElementById('stock-producto-id').value = s.producto_id;
+        $('#stock-producto-id').val(s.producto_id).trigger('change');
         document.getElementById('stock-tipo').value = s.tipo;
         document.getElementById('stock-ojo').value = s.ojo;
         

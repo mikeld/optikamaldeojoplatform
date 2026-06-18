@@ -19,6 +19,16 @@ $apps = [
         'roles' => ['empleado', 'encargado', 'admin'],
     ],
     [
+        'nombre' => 'Stock Lentes',
+        'descripcion' => 'Control de stock de lentillas, cajas, blisters y graduaciones',
+        'url' => 'pedidos/views/listado_stock.php',
+        'icono' => 'fas fa-boxes',
+        'clase' => 'stock',
+        'grupo' => 'Trabajo diario',
+        'etiqueta' => 'Stock',
+        'roles' => ['empleado', 'encargado', 'admin'],
+    ],
+    [
         'nombre' => 'Facturas Check',
         'descripcion' => 'Auditoria inteligente de facturas, precios, alertas y proveedores',
         'url' => 'facturas/index.html',
@@ -77,12 +87,6 @@ $proximasApps = [
         'descripcion' => 'Seguimiento de clientes, compras, avisos y oportunidades de recompra.',
         'icono' => 'fas fa-address-book',
         'clase' => 'crm',
-    ],
-    [
-        'nombre' => 'Stock Lentes',
-        'descripcion' => 'Control de lentillas, soluciones, roturas de stock y minimos por proveedor.',
-        'icono' => 'fas fa-boxes-stacked',
-        'clase' => 'stock',
     ],
 ];
 

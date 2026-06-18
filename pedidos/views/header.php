@@ -50,11 +50,11 @@ $menu_grupos = [
     ],
 ];
 
+$menu_grupos['Control'] = [
+    ['nombre' => 'Calendario', 'url' => $pedidos_url('calendario.php'), 'icono' => 'bi-calendar3', 'match' => ['calendario.php']],
+];
 if ($can_manage) {
-    $menu_grupos['Control'] = [
-        ['nombre' => 'Calendario', 'url' => $pedidos_url('calendario.php'), 'icono' => 'bi-calendar3', 'match' => ['calendario.php']],
-        ['nombre' => 'Estadisticas', 'url' => $pedidos_url('estadisticas.php'), 'icono' => 'bi-graph-up-arrow', 'match' => ['estadisticas.php']],
-    ];
+    $menu_grupos['Control'][] = ['nombre' => 'Estadisticas', 'url' => $pedidos_url('estadisticas.php'), 'icono' => 'bi-graph-up-arrow', 'match' => ['estadisticas.php']];
 }
 
 if ($is_admin) {
