@@ -342,12 +342,18 @@ function sortLink($col, $label, $currentSort, $currentDir) {
     </div>
 </div>
 
-<!-- jQuery and Select2 JS -->
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<?php include 'footer.php'; ?>
 
+<!-- Select2 JS and Custom Modal script loaded after jQuery (from footer.php) -->
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
-    const modalStock = new bootstrap.Modal(document.getElementById('modalStock'));
+    let modalStockInstance = null;
+    function getModalStock() {
+        if (!modalStockInstance) {
+            modalStockInstance = new bootstrap.Modal(document.getElementById('modalStock'));
+        }
+        return modalStockInstance;
+    }
 
     $(document).ready(function() {
         $('#stock-producto-id').select2({
@@ -371,7 +377,7 @@ function sortLink($col, $label, $currentSort, $currentDir) {
         document.getElementById('stock-dia').value = '';
         
         document.getElementById('stock-cantidad').value = 1;
-        modalStock.show();
+        getModalStock().show();
     }
 
     function openEditModal(s) {
@@ -389,8 +395,6 @@ function sortLink($col, $label, $currentSort, $currentDir) {
         document.getElementById('stock-dia').value = s.dia || '';
         
         document.getElementById('stock-cantidad').value = s.cantidad;
-        modalStock.show();
+        getModalStock().show();
     }
 </script>
-
-<?php include 'footer.php'; ?>
