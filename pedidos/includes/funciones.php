@@ -250,7 +250,7 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
     if ($tipo === 1) echo '<th style="width:80px;">Atraso</th>';
     echo '<th class="text-center" style="width:110px;">Estado</th>';
     echo '<th class="text-center" style="width:90px;">WhatsApp</th>';
-    echo '<th class="text-center" style="width:44px;"></th>'; // acciones
+    echo '<th class="text-center" style="width:80px;"></th>'; // acciones
     echo '</tr></thead><tbody>';
 
     $hoy = new DateTime();
@@ -422,9 +422,12 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
         echo '</div>';
         echo '</td>';
 
-        // Editar
+        // Editar y Duplicar
         echo '<td class="align-middle text-center">';
+        echo '<div class="d-flex justify-content-center gap-2">';
         echo '<a href="../controllers/editar_pedido.php?id='.htmlspecialchars($p['id']).'" class="btn btn-edit-icon" title="Editar"><i class="fas fa-pen-to-square"></i></a>';
+        echo '<a href="formulario_pedidos.php?duplicar_id='.htmlspecialchars($p['id']).'" class="btn btn-edit-icon" title="Duplicar" onclick="event.stopPropagation()"><i class="fas fa-copy text-secondary"></i></a>';
+        echo '</div>';
         echo '</td>';
 
         echo '</tr>';

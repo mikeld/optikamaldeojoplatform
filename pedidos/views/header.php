@@ -46,6 +46,7 @@ $menu_grupos = [
     'Productos' => [
         ['nombre' => 'Listado productos', 'url' => $pedidos_url('listado_productos.php'), 'icono' => 'bi-box-seam', 'match' => ['listado_productos.php']],
         ['nombre' => 'Nuevo producto', 'url' => $pedidos_url('formulario_productos.php'), 'icono' => 'bi-plus-square-dotted', 'match' => ['formulario_productos.php']],
+        ['nombre' => 'Stock disponible', 'url' => $pedidos_url('listado_stock.php'), 'icono' => 'bi-boxes', 'match' => ['listado_stock.php']],
     ],
 ];
 

@@ -557,6 +557,9 @@ include '../views/header.php';
                         <input type="text" class="form-control form-control-sm rx-input rx-dia" placeholder="Dia" value="${data ? (data.dia || '') : ''}" oninput="serializeRxLines();">
                     </div>
                 </div>
+                <div class="rx-stock-warning alert alert-warning py-1 px-2 mt-2 mb-0 d-none" style="font-size: 0.85rem;">
+                    <i class="fas fa-exclamation-triangle me-1"></i> <span class="warning-text"></span>
+                </div>
             `;
             container.appendChild(div);
             
@@ -666,6 +669,70 @@ include '../views/header.php';
 
             document.getElementById('rx_lineas_json').value = JSON.stringify(rxLines);
             document.getElementById('rx').value = textLegacy.replace(/\|\s*$/, '');
+
+            // Trigger stock checks for all cards
+            document.querySelectorAll('.rx-line-row').forEach(card => {
+                triggerStockCheck(card);
+            });
+        }
+
+        const AJAX_CHECK_STOCK_URL = 'check_stock_ajax.php';
+
+        function triggerStockCheck(card) {
+            if (card.stockCheckTimeout) {
+                clearTimeout(card.stockCheckTimeout);
+            }
+            card.stockCheckTimeout = setTimeout(() => {
+                checkStockForCard(card);
+            }, 300);
+        }
+
+        function checkStockForCard(card) {
+            if (!card) return;
+            const notaInput = card.querySelector('.rx-input-nota');
+            const codigo = notaInput ? notaInput.value.trim() : '';
+            const warningDiv = card.querySelector('.rx-stock-warning');
+            if (!warningDiv) return;
+
+            if (!codigo) {
+                warningDiv.classList.add('d-none');
+                return;
+            }
+
+            const esf = card.querySelector('.rx-esf') ? card.querySelector('.rx-esf').value : '';
+            const cil = card.querySelector('.rx-cil') ? card.querySelector('.rx-cil').value : '';
+            const eje = card.querySelector('.rx-eje') ? card.querySelector('.rx-eje').value : '';
+            const add = card.querySelector('.rx-add') ? card.querySelector('.rx-add').value : '';
+            const rad = card.querySelector('.rx-rad') ? card.querySelector('.rx-rad').value : '';
+            const dia = card.querySelector('.rx-dia') ? card.querySelector('.rx-dia').value : '';
+            const ojo = card.querySelector('.rx-ojo') ? card.querySelector('.rx-ojo').value : 'ninguno';
+            const tipo = card.querySelector('.rx-tipo') ? card.querySelector('.rx-tipo').value : 'caja';
+
+            const url = `${AJAX_CHECK_STOCK_URL}?codigo=${encodeURIComponent(codigo)}&esf=${encodeURIComponent(esf)}&cil=${encodeURIComponent(cil)}&eje=${encodeURIComponent(eje)}&add=${encodeURIComponent(add)}&rad=${encodeURIComponent(rad)}&dia=${encodeURIComponent(dia)}&ojo=${encodeURIComponent(ojo)}&tipo=${encodeURIComponent(tipo)}`;
+            
+            fetch(url)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success && data.cantidad_total > 0) {
+                        let msg = `⚠️ ¡Stock disponible para este producto y graduación! `;
+                        
+                        const details = data.matches.map(m => {
+                            const format = m.tipo === 'caja' ? 'caja(s)' : 'blister(s)';
+                            const eye = m.ojo === 'ninguno' ? 'Genérico' : m.ojo;
+                            return `<strong>${m.cantidad}</strong> ${format} (${eye})`;
+                        }).join(', ');
+                        
+                        msg += `En total hay: ${details}.`;
+                        
+                        warningDiv.querySelector('.warning-text').innerHTML = msg;
+                        warningDiv.classList.remove('d-none');
+                    } else {
+                        warningDiv.classList.add('d-none');
+                    }
+                })
+                .catch(err => {
+                    console.error('Error al comprobar stock:', err);
+                });
         }
 
         function actualizarResumenPack() {
