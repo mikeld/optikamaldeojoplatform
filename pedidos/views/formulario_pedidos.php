@@ -398,6 +398,7 @@ try {
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
     <script>
+        const allProducts = <?= json_encode($productos) ?>;
         // Función para validar el formulario antes de enviar
         function validarFormulario() {
             const referenciaCliente = document.getElementById('referencia_cliente').value;
@@ -522,6 +523,21 @@ try {
             }
             ejeSelectHtml += `</select>`;
 
+            // Generar el HTML para el selector autocompletable con Select2
+            const currentNota = data && data.nota ? data.nota.trim() : '';
+            let productSelectHtml = `<select class="form-select form-select-sm rx-input-nota select2-product">`;
+            productSelectHtml += `<option value=""></option>`; // Placeholder
+            let customOptionFound = false;
+            allProducts.forEach(prod => {
+                const isSelected = (currentNota === prod.codigo) ? 'selected' : '';
+                if (isSelected) customOptionFound = true;
+                productSelectHtml += `<option value="${prod.codigo}" ${isSelected}>${prod.codigo} - ${prod.descripcion} (${prod.marca || ''})</option>`;
+            });
+            if (currentNota && !customOptionFound) {
+                productSelectHtml += `<option value="${currentNota}" selected>${currentNota}</option>`;
+            }
+            productSelectHtml += `</select>`;
+
             div.innerHTML = `
                 <div class="rx-linea-numero">LINEA #${index}</div>
                 <div class="rx-linea-actions">
@@ -556,7 +572,9 @@ try {
                     <div class="col-12">
                         <label class="form-label small mb-1">Notas / Tipo Lente</label>
                         <div class="d-flex rx-nota-container gap-1">
-                            <input type="text" list="productos-list" class="form-control form-control-sm rx-input-nota" placeholder="ej: Biofinity" value="${data ? (data.nota || '') : ''}" oninput="serializeRxLines();" autocomplete="off">
+                            <div style="flex-grow: 1; min-width: 0;">
+                                ${productSelectHtml}
+                            </div>
                             <button class="btn btn-sm btn-outline-primary" type="button" title="Crear nuevo producto" onclick="abrirModalNuevoProducto(this)" style="flex-shrink: 0; width: 31px; height: 31px; display: flex; align-items: center; justify-content: center; border-radius: 6px !important;">
                                 <i class="fas fa-plus"></i>
                             </button>
@@ -596,6 +614,28 @@ try {
                 </div>
             `;
             container.appendChild(div);
+
+            // Inicializar Select2 en el selector de producto
+            const selectEl = div.querySelector('.select2-product');
+            $(selectEl).select2({
+                tags: true,
+                placeholder: "ej: Biofinity (escribe o selecciona)",
+                allowClear: true,
+                width: '100%',
+                createTag: function (params) {
+                    var term = $.trim(params.term);
+                    if (term === '') {
+                        return null;
+                    }
+                    return {
+                        id: term,
+                        text: term,
+                        newTag: true
+                    }
+                }
+            }).on('change', function() {
+                serializeRxLines();
+            });
             
             // Inicializar visibilidad basada en el estado actual de los selectores
             const tipoSelect = div.querySelector('.rx-tipo');
@@ -641,7 +681,7 @@ try {
                 tipo:     card.querySelector('.rx-tipo').value,
                 ojo:      card.querySelector('.rx-ojo').value,
                 cantidad: parseInt(card.querySelector('.rx-cantidad').value) || 1,
-                nota:     card.querySelector('.rx-input-nota').value,
+                nota:     $(card.querySelector('.rx-input-nota')).val(),
                 esf:      card.querySelector('.rx-esf').value,
                 cil:      card.querySelector('.rx-cil').value,
                 eje:      card.querySelector('.rx-eje').value,
@@ -1246,7 +1286,7 @@ try {
                 activeProductInput = group.querySelector('.rx-input-nota');
 
                 // Pre-rellenar el código con lo que haya escrito en el campo de notas
-                const textoNota = activeProductInput ? activeProductInput.value.trim() : '';
+                const textoNota = activeProductInput ? $(activeProductInput).val().trim() : '';
                 const codigoInput = document.getElementById('modal_prod_codigo');
                 if (codigoInput && textoNota) {
                     codigoInput.value = textoNota;
@@ -1283,17 +1323,25 @@ try {
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) {
-                        // 1. Añadir el nuevo producto al datalist
+                        // 1. Añadir el nuevo producto al datalist y catálogo local JS
+                        allProducts.push(data.producto);
                         const datalist = document.getElementById('productos-list');
-                        const option = document.createElement('option');
-                        option.value = data.producto.codigo;
-                        option.textContent = `${data.producto.codigo} - ${data.producto.descripcion} (${data.producto.marca || ''})`;
-                        datalist.appendChild(option);
+                        if (datalist) {
+                            const option = document.createElement('option');
+                            option.value = data.producto.codigo;
+                            option.textContent = `${data.producto.codigo} - ${data.producto.descripcion} (${data.producto.marca || ''})`;
+                            datalist.appendChild(option);
+                        }
 
                         // 2. Establecer el valor en el input activo
                         if (activeProductInput) {
-                            activeProductInput.value = data.producto.codigo;
-                            activeProductInput.dispatchEvent(new Event('input'));
+                            const val = data.producto.codigo;
+                            if ($(activeProductInput).find("option[value='" + val + "']").length) {
+                                $(activeProductInput).val(val).trigger('change');
+                            } else {
+                                const newOption = new Option(val, val, true, true);
+                                $(activeProductInput).append(newOption).trigger('change');
+                            }
                         }
 
                         // 3. Cerrar modal y limpiar formulario

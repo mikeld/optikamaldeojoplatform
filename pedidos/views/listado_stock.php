@@ -94,6 +94,27 @@ try {
     $all_productos = [];
 }
 
+// Generar opciones de Esfera (Esf) de 0.25 en 0.25
+$esf_options = [];
+for ($val = -20.00; $val <= -0.25; $val += 0.25) {
+    $valStr = number_format($val, 2, '.', '');
+    $esf_options[] = $valStr;
+}
+$esf_options[] = '0.00';
+for ($val = 0.25; $val <= 20.00; $val += 0.25) {
+    $valStr = '+' . number_format($val, 2, '.', '');
+    $esf_options[] = $valStr;
+}
+
+// Generar opciones de Cilindro (Cil) de -0.75 a -6.00 en intervalos de 0.25
+$cil_options = [];
+for ($val = -0.75; $val >= -6.00; $val -= 0.25) {
+    $cil_options[] = number_format($val, 2, '.', '');
+}
+
+// Generar opciones de Eje de 0 a 180 (de 1 en 1)
+$eje_options = range(0, 180);
+
 // Helper para links de ordenación
 function sortLink($col, $label, $currentSort, $currentDir) {
     $newDir = ($col === $currentSort && $currentDir === 'ASC') ? 'DESC' : 'ASC';
@@ -300,15 +321,30 @@ function sortLink($col, $label, $currentSort, $currentDir) {
                         <div class="row g-2 mb-2">
                             <div class="col-4">
                                 <label for="stock-esf" class="small text-muted mb-1 d-block">Esf</label>
-                                <input type="text" id="stock-esf" name="esf" class="form-control form-control-sm" placeholder="Ej: -2.25">
+                                <select id="stock-esf" name="esf" class="form-select form-select-sm">
+                                    <option value="">Esf</option>
+                                    <?php foreach ($esf_options as $opt): ?>
+                                        <option value="<?= $opt ?>"><?= $opt ?></option>
+                                    <?php endforeach; ?>
+                                </select>
                             </div>
                             <div class="col-4">
                                 <label for="stock-cil" class="small text-muted mb-1 d-block">Cil</label>
-                                <input type="text" id="stock-cil" name="cil" class="form-control form-control-sm" placeholder="Ej: -0.75">
+                                <select id="stock-cil" name="cil" class="form-select form-select-sm">
+                                    <option value="">Cil</option>
+                                    <?php foreach ($cil_options as $opt): ?>
+                                        <option value="<?= $opt ?>"><?= $opt ?></option>
+                                    <?php endforeach; ?>
+                                </select>
                             </div>
                             <div class="col-4">
                                 <label for="stock-eje" class="small text-muted mb-1 d-block">Eje</label>
-                                <input type="text" id="stock-eje" name="eje" class="form-control form-control-sm" placeholder="Ej: 180">
+                                <select id="stock-eje" name="eje" class="form-select form-select-sm">
+                                    <option value="">Eje</option>
+                                    <?php foreach ($eje_options as $opt): ?>
+                                        <option value="<?= $opt ?>"><?= $opt ?></option>
+                                    <?php endforeach; ?>
+                                </select>
                             </div>
                         </div>
 
@@ -362,6 +398,32 @@ function sortLink($col, $label, $currentSort, $currentDir) {
         });
     });
 
+    function setSelectValueWithFallback(selectId, val) {
+        const select = document.getElementById(selectId);
+        if (!select) return;
+        
+        // Remove previous custom option
+        const customOpt = select.querySelector('.custom-fallback-option');
+        if (customOpt) customOpt.remove();
+        
+        if (!val) {
+            select.value = '';
+            return;
+        }
+        
+        select.value = val;
+        
+        // If option was not present, append it as custom fallback
+        if (select.value !== val) {
+            const opt = document.createElement('option');
+            opt.value = val;
+            opt.textContent = val;
+            opt.className = 'custom-fallback-option';
+            opt.selected = true;
+            select.appendChild(opt);
+        }
+    }
+
     function openAddModal() {
         document.getElementById('stock-id').value = 0;
         document.getElementById('stock-modal-title-text').textContent = 'Añadir Stock';
@@ -369,9 +431,18 @@ function sortLink($col, $label, $currentSort, $currentDir) {
         document.getElementById('stock-tipo').value = 'caja';
         document.getElementById('stock-ojo').value = 'ninguno';
         
-        document.getElementById('stock-esf').value = '';
-        document.getElementById('stock-cil').value = '';
-        document.getElementById('stock-eje').value = '';
+        const cleanSelect = (id) => {
+            const select = document.getElementById(id);
+            if (select) {
+                const customOpt = select.querySelector('.custom-fallback-option');
+                if (customOpt) customOpt.remove();
+                select.value = '';
+            }
+        };
+        cleanSelect('stock-esf');
+        cleanSelect('stock-cil');
+        cleanSelect('stock-eje');
+        
         document.getElementById('stock-add').value = '';
         document.getElementById('stock-rad').value = '';
         document.getElementById('stock-dia').value = '';
@@ -387,9 +458,10 @@ function sortLink($col, $label, $currentSort, $currentDir) {
         document.getElementById('stock-tipo').value = s.tipo;
         document.getElementById('stock-ojo').value = s.ojo;
         
-        document.getElementById('stock-esf').value = s.esf || '';
-        document.getElementById('stock-cil').value = s.cil || '';
-        document.getElementById('stock-eje').value = s.eje || '';
+        setSelectValueWithFallback('stock-esf', s.esf);
+        setSelectValueWithFallback('stock-cil', s.cil);
+        setSelectValueWithFallback('stock-eje', s.eje);
+        
         document.getElementById('stock-add').value = s.add || '';
         document.getElementById('stock-rad').value = s.rad || '';
         document.getElementById('stock-dia').value = s.dia || '';

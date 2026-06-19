@@ -242,7 +242,7 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
     echo $th('Producto', 'lc_gafa_recambio');
     echo $th('RX', 'rx', 'width:110px;');
     if ($mostrar_carrito) {
-        echo '<th style="width:90px;">Espera</th>';
+        echo $th('Espera', 'fecha_cliente', 'width:90px;');
     } else {
         echo $th('Pedido', 'fecha_pedido', 'width:95px;');
         echo $th('Llegada', 'fecha_llegada', 'width:95px;');
@@ -322,7 +322,7 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
         // RX
         echo '<td class="align-middle">'.formatearRX($p['rx'], $p['rx_lineas'] ?? null).'</td>';
 
-        // Fechas o días de espera
+         // Fechas o días de espera
         if ($mostrar_carrito) {
             // "Por pedir": mostrar días desde que el cliente encargó
             $dias_espera = '';
@@ -331,7 +331,13 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
             }
             $badge_class = $dias_espera >= 5 ? 'bg-danger' : ($dias_espera >= 2 ? 'bg-warning text-dark' : 'bg-secondary');
             echo '<td class="align-middle text-center">';
-            if ($dias_espera !== '') echo '<span class="badge '.$badge_class.'">'.$dias_espera.'d</span>';
+            if ($dias_espera !== '') {
+                echo '<span class="badge '.$badge_class.'" title="Fecha cliente: '.htmlspecialchars($p['fecha_cliente']).'">'.$dias_espera.'d</span>';
+                $fecha_formatted = ($p['fecha_cliente'] && $p['fecha_cliente'] !== '0000-00-00') ? date('d/m/Y', strtotime($p['fecha_cliente'])) : '';
+                if ($fecha_formatted) {
+                    echo '<div class="text-muted x-small mt-1" style="font-size: 0.7rem; font-family: monospace;">' . $fecha_formatted . '</div>';
+                }
+            }
             echo '</td>';
         } else {
             $fechaLlegadaRaw = $p['fecha_llegada'] ?: '';

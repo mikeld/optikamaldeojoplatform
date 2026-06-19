@@ -11,7 +11,7 @@ $apps = [
     [
         'nombre' => 'Pedidos Maldeojo',
         'descripcion' => 'Gestion diaria de pedidos, clientes, recepciones y avisos por WhatsApp',
-        'url' => 'pedidos/views/listado_pedidos.php?orden_columna=fecha_llegada&orden_direccion=ASC',
+        'url' => 'pedidos/views/listado_pedidos.php',
         'icono' => 'fas fa-shopping-cart',
         'clase' => 'pedidos',
         'grupo' => 'Trabajo diario',

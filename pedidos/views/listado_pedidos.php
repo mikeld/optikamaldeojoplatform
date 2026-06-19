@@ -35,12 +35,13 @@ $rec_fecha_hasta = $_GET['rec_fecha_hasta'] ?? '2099-12-31';
 $cliente_global = trim($_GET['cliente'] ?? '');
 
 // Helper para parámetros de tabla
-function getTableParams($prefix, $default_sort = 'id') {
+function getTableParams($prefix, $default_sort = 'id', $default_dir = 'ASC') {
     global $cliente_global;
-    $sort       = $_GET[$prefix . 'orden_columna']    ?? $default_sort;
-    $dir        = strtoupper($_GET[$prefix . 'orden_direccion'] ?? 'ASC') === 'DESC' ? 'DESC' : 'ASC';
+    // Soporte para parámetros globales sin prefijo si no vienen prefijados (útil desde el dashboard)
+    $sort       = $_GET[$prefix . 'orden_columna']    ?? ($_GET['orden_columna'] ?? $default_sort);
+    $dir        = strtoupper($_GET[$prefix . 'orden_direccion'] ?? ($_GET['orden_direction'] ?? ($_GET['orden_direccion'] ?? $default_dir))) === 'DESC' ? 'DESC' : 'ASC';
     $filter     = $cliente_global ?: ($_GET[$prefix . 'filtro'] ?? '');
-    $valid_cols = ['id', 'referencia_cliente', 'lc_gafa_recambio', 'rx', 'fecha_pedido', 'via', 'fecha_llegada'];
+    $valid_cols = ['id', 'referencia_cliente', 'lc_gafa_recambio', 'rx', 'fecha_pedido', 'via', 'fecha_llegada', 'fecha_cliente'];
     if (!in_array($sort, $valid_cols)) $sort = $default_sort;
 
     return [
@@ -51,11 +52,11 @@ function getTableParams($prefix, $default_sort = 'id') {
     ];
 }
 
-$p_pedir      = getTableParams('pedir_');
-$p_atrasados  = getTableParams('atrasados_');
-$p_sin_fecha  = getTableParams('sinfecha_');
-$p_pendientes = getTableParams('pendientes_');
-$p_recibidos  = getTableParams('recibidos_');
+$p_pedir      = getTableParams('pedir_', 'fecha_cliente', 'ASC');
+$p_atrasados  = getTableParams('atrasados_', 'fecha_llegada', 'ASC');
+$p_sin_fecha  = getTableParams('sinfecha_', 'fecha_pedido', 'ASC');
+$p_pendientes = getTableParams('pendientes_', 'fecha_llegada', 'ASC');
+$p_recibidos  = getTableParams('recibidos_', 'fecha_llegada', 'DESC');
 
 // Validar fechas del filtro de finalizados
 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $rec_fecha_desde)) $rec_fecha_desde = date('Y-m-d', strtotime('-90 days'));

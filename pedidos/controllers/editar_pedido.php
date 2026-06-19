@@ -55,7 +55,14 @@ $acciones_navbar = [
 ];
 include '../views/header.php';
 ?>
+<!-- Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <style>
+    .select2-container--bootstrap-5 .select2-selection { border-radius: 12px; height: calc(3.5rem + 2px); padding: 1rem 0.75rem; }
+    .select2-container .select2-selection--single { height: 38px !important; border-radius: 0.375rem !important; border: 1px solid #dee2e6 !important; }
+    .select2-container--default .select2-selection--single .select2-selection__rendered { line-height: 36px !important; padding-left: 12px !important; font-size: 0.875rem; }
+    .select2-container--default .select2-selection--single .select2-selection__arrow { height: 36px !important; }
+
     /* --- RX Multi-línea --- */
     .rx-linea-card {
         background: #f8f9fa;
@@ -84,10 +91,19 @@ include '../views/header.php';
     }
     .rx-od { background: #e3f0ff; color: #0d6efd; }
     .rx-oi { background: #fdecea; color: #dc3545; }
-    .btn-remove-rx {
-        position: absolute; top: 8px; right: 12px;
-        background: none; border: none; color: #adb5bd; cursor: pointer;
+    .rx-linea-actions {
+        position: absolute; top: 8px; right: 10px;
+        display: flex; gap: 4px; align-items: center;
     }
+    .btn-remove-rx, .btn-duplicate-rx {
+        background: none; border: none; font-size: 1rem;
+        cursor: pointer; line-height: 1; padding: 2px 4px;
+        transition: color .2s; border-radius: 4px;
+    }
+    .btn-remove-rx { color: #adb5bd; }
+    .btn-remove-rx:hover { color: #dc3545; }
+    .btn-duplicate-rx { color: #adb5bd; }
+    .btn-duplicate-rx:hover { color: #0d6efd; }
 
     /* --- Pack Cantidades --- */
     .pack-qty-card {
@@ -356,7 +372,12 @@ include '../views/header.php';
     </div>
 </div>
 
+    <!-- Select2 JS & dependencies -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
     <script>
+        const allProducts = <?= json_encode($productos) ?>;
         // --- Vía de Pedido ---
         const VIA_PLACEHOLDERS = {
             'Web':      '¿Qué portal? (ej: B+L, Marlow...)',
@@ -489,9 +510,27 @@ include '../views/header.php';
             }
             ejeSelectHtml += `</select>`;
 
+            // Generar el HTML para el selector autocompletable con Select2
+            const currentNota = data && data.nota ? data.nota.trim() : '';
+            let productSelectHtml = `<select class="form-select form-select-sm rx-input-nota select2-product">`;
+            productSelectHtml += `<option value=""></option>`; // Placeholder
+            let customOptionFound = false;
+            allProducts.forEach(prod => {
+                const isSelected = (currentNota === prod.codigo) ? 'selected' : '';
+                if (isSelected) customOptionFound = true;
+                productSelectHtml += `<option value="${prod.codigo}" ${isSelected}>${prod.codigo} - ${prod.descripcion} (${prod.marca || ''})</option>`;
+            });
+            if (currentNota && !customOptionFound) {
+                productSelectHtml += `<option value="${currentNota}" selected>${currentNota}</option>`;
+            }
+            productSelectHtml += `</select>`;
+
             div.innerHTML = `
                 <div class="rx-linea-numero">LINEA #${index}</div>
-                <button type="button" class="btn-remove-rx" onclick="removerLineaRX(this)"><i class="fas fa-times"></i></button>
+                <div class="rx-linea-actions">
+                    <button type="button" class="btn-duplicate-rx" onclick="duplicarLineaRX(this)" title="Duplicar línea"><i class="fas fa-copy"></i></button>
+                    <button type="button" class="btn-remove-rx" onclick="removerLineaRX(this)" title="Eliminar línea"><i class="fas fa-times"></i></button>
+                </div>
                 
                 <div class="row g-2 mb-2 mt-2">
                     <div class="col-md-3">
@@ -522,7 +561,9 @@ include '../views/header.php';
                     <div class="col-md rx-nota-column">
                         <label class="form-label small mb-1">Notas / Tipo Lente</label>
                         <div class="d-flex rx-nota-container gap-1">
-                            <input type="text" list="productos-list" class="form-control form-control-sm rx-input-nota" placeholder="ej: Biofinity" value="${data ? (data.nota || '') : ''}" oninput="serializeRxLines();">
+                            <div style="flex-grow: 1; min-width: 0;">
+                                ${productSelectHtml}
+                            </div>
                             <button class="btn btn-sm btn-outline-primary" type="button" title="Crear nuevo producto" onclick="abrirModalNuevoProducto(this)" style="flex-shrink: 0; width: 31px; height: 31px; display: flex; align-items: center; justify-content: center; border-radius: 6px !important;">
                                 <i class="fas fa-plus"></i>
                             </button>
@@ -562,6 +603,28 @@ include '../views/header.php';
                 </div>
             `;
             container.appendChild(div);
+
+            // Inicializar Select2 en el selector de producto
+            const selectEl = div.querySelector('.select2-product');
+            $(selectEl).select2({
+                tags: true,
+                placeholder: "ej: Biofinity (escribe o selecciona)",
+                allowClear: true,
+                width: '100%',
+                createTag: function (params) {
+                    var term = $.trim(params.term);
+                    if (term === '') {
+                        return null;
+                    }
+                    return {
+                        id: term,
+                        text: term,
+                        newTag: true
+                    }
+                }
+            }).on('change', function() {
+                serializeRxLines();
+            });
             
             // Inicializar visibilidad
             const tipoSelect = div.querySelector('.rx-tipo');
@@ -604,6 +667,26 @@ include '../views/header.php';
             actualizarResumenPack();
         }
 
+        function duplicarLineaRX(btn) {
+            const card = btn.closest('.rx-linea-card');
+            const data = {
+                tipo:     card.querySelector('.rx-tipo').value,
+                ojo:      card.querySelector('.rx-ojo').value,
+                cantidad: parseInt(card.querySelector('.rx-cantidad').value) || 1,
+                cantidad_recibida: 0,
+                nota:     $(card.querySelector('.rx-input-nota')).val(),
+                esf:      card.querySelector('.rx-esf').value,
+                cil:      card.querySelector('.rx-cil').value,
+                eje:      card.querySelector('.rx-eje').value,
+                add:      card.querySelector('.rx-add').value,
+                rad:      card.querySelector('.rx-rad').value,
+                dia:      card.querySelector('.rx-dia').value,
+            };
+            addRxLine(data);
+            serializeRxLines();
+            actualizarResumenPack();
+        }
+
         function reordenarLineas() {
             document.querySelectorAll('.rx-linea-numero').forEach((el, idx) => {
                 el.innerText = `LINEA #${idx + 1}`;
@@ -619,7 +702,7 @@ include '../views/header.php';
                 const ojo = card.querySelector('.rx-ojo').value;
                 const cantidad = parseInt(card.querySelector('.rx-cantidad').value) || 1;
                 const cantidad_recibida = parseInt(card.querySelector('.rx-recibida').value) || 0;
-                const nota = card.querySelector('.rx-input-nota').value.trim();
+                const nota = $(card.querySelector('.rx-input-nota')).val() ? $(card.querySelector('.rx-input-nota')).val().trim() : '';
                 
                 const esf = card.querySelector('.rx-esf').value.trim();
                 const cil = card.querySelector('.rx-cil').value.trim();
@@ -690,7 +773,7 @@ include '../views/header.php';
         function checkStockForCard(card) {
             if (!card) return;
             const notaInput = card.querySelector('.rx-input-nota');
-            const codigo = notaInput ? notaInput.value.trim() : '';
+            const codigo = notaInput ? $(notaInput).val().trim() : '';
             const warningDiv = card.querySelector('.rx-stock-warning');
             if (!warningDiv) return;
 
@@ -954,17 +1037,25 @@ include '../views/header.php';
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) {
-                        // 1. Añadir el nuevo producto al datalist
+                        // 1. Añadir el nuevo producto al datalist y catálogo local JS
+                        allProducts.push(data.producto);
                         const datalist = document.getElementById('productos-list');
-                        const option = document.createElement('option');
-                        option.value = data.producto.codigo;
-                        option.textContent = `${data.producto.codigo} - ${data.producto.descripcion} (${data.producto.marca || ''})`;
-                        datalist.appendChild(option);
+                        if (datalist) {
+                            const option = document.createElement('option');
+                            option.value = data.producto.codigo;
+                            option.textContent = `${data.producto.codigo} - ${data.producto.descripcion} (${data.producto.marca || ''})`;
+                            datalist.appendChild(option);
+                        }
 
                         // 2. Establecer el valor en el input activo
                         if (activeProductInput) {
-                            activeProductInput.value = data.producto.codigo;
-                            activeProductInput.dispatchEvent(new Event('input'));
+                            const val = data.producto.codigo;
+                            if ($(activeProductInput).find("option[value='" + val + "']").length) {
+                                $(activeProductInput).val(val).trigger('change');
+                            } else {
+                                const newOption = new Option(val, val, true, true);
+                                $(activeProductInput).append(newOption).trigger('change');
+                            }
                         }
 
                         // 3. Cerrar modal y limpiar formulario
