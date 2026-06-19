@@ -818,6 +818,44 @@ include '../views/header.php';
                 });
         }
 
+        $(document).on('change', '.rx-esf, .rx-input-nota', function() {
+            const card = this.closest('.rx-line-row');
+            if (card) {
+                checkEsfStockForCard(card);
+            }
+        });
+
+        function checkEsfStockForCard(card) {
+            if (!card) return;
+            const notaInput = card.querySelector('.rx-input-nota');
+            const codigo = notaInput ? ($(notaInput).val() || '').trim() : '';
+            const esfInput = card.querySelector('.rx-esf');
+            const esf = esfInput ? esfInput.value.trim() : '';
+
+            if (!codigo || !esf) {
+                return;
+            }
+
+            const lastPoppedKey = `${codigo}_${esf}`;
+            if (card.dataset.lastPoppedStock === lastPoppedKey) {
+                return;
+            }
+
+            const url = `${AJAX_CHECK_STOCK_URL}?codigo=${encodeURIComponent(codigo)}&esf=${encodeURIComponent(esf)}&check_esf_only=1`;
+
+            fetch(url)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success && data.cantidad_total > 0) {
+                        card.dataset.lastPoppedStock = lastPoppedKey;
+                        showStockDisponibleModal(codigo, esf, data.matches);
+                    }
+                })
+                .catch(err => {
+                    console.error('Error al comprobar stock por esfera:', err);
+                });
+        }
+
         function actualizarResumenPack() {
             let totalCajasOD = 0;
             let totalCajasOI = 0;

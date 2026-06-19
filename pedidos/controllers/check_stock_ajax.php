@@ -49,27 +49,40 @@ try {
 
     $producto_id = $prod['id'];
 
-    // 2. Buscar stock para este producto y graduación
-    $sql = "SELECT id, ojo, tipo, cantidad FROM productos_stock 
-            WHERE producto_id = :producto_id 
-              AND (esf = :esf OR (esf IS NULL AND :esf_null = 1))
-              AND (cil = :cil OR (cil IS NULL AND :cil_null = 1))
-              AND (eje = :eje OR (eje IS NULL AND :eje_null = 1))
-              AND (`add` = :add OR (`add` IS NULL AND :add_null = 1))
-              AND (rad = :rad OR (rad IS NULL AND :rad_null = 1))
-              AND (dia = :dia OR (dia IS NULL AND :dia_null = 1))
-              AND cantidad > 0";
-              
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([
-        ':producto_id' => $producto_id,
-        ':esf' => $esf, ':esf_null' => $esf === null ? 1 : 0,
-        ':cil' => $cil, ':cil_null' => $cil === null ? 1 : 0,
-        ':eje' => $eje, ':eje_null' => $eje === null ? 1 : 0,
-        ':add' => $add, ':add_null' => $add === null ? 1 : 0,
-        ':rad' => $rad, ':rad_null' => $rad === null ? 1 : 0,
-        ':dia' => $dia, ':dia_null' => $dia === null ? 1 : 0
-    ]);
+    $check_esf_only = isset($_GET['check_esf_only']) && $_GET['check_esf_only'] == 1;
+
+    if ($check_esf_only) {
+        $sql = "SELECT id, ojo, tipo, cantidad, esf, cil, eje, `add`, rad, dia FROM productos_stock 
+                WHERE producto_id = :producto_id 
+                  AND (esf = :esf OR (esf IS NULL AND :esf_null = 1))
+                  AND cantidad > 0";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([
+            ':producto_id' => $producto_id,
+            ':esf' => $esf,
+            ':esf_null' => $esf === null ? 1 : 0
+        ]);
+    } else {
+        $sql = "SELECT id, ojo, tipo, cantidad, esf, cil, eje, `add`, rad, dia FROM productos_stock 
+                WHERE producto_id = :producto_id 
+                  AND (esf = :esf OR (esf IS NULL AND :esf_null = 1))
+                  AND (cil = :cil OR (cil IS NULL AND :cil_null = 1))
+                  AND (eje = :eje OR (eje IS NULL AND :eje_null = 1))
+                  AND (`add` = :add OR (`add` IS NULL AND :add_null = 1))
+                  AND (rad = :rad OR (rad IS NULL AND :rad_null = 1))
+                  AND (dia = :dia OR (dia IS NULL AND :dia_null = 1))
+                  AND cantidad > 0";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([
+            ':producto_id' => $producto_id,
+            ':esf' => $esf, ':esf_null' => $esf === null ? 1 : 0,
+            ':cil' => $cil, ':cil_null' => $cil === null ? 1 : 0,
+            ':eje' => $eje, ':eje_null' => $eje === null ? 1 : 0,
+            ':add' => $add, ':add_null' => $add === null ? 1 : 0,
+            ':rad' => $rad, ':rad_null' => $rad === null ? 1 : 0,
+            ':dia' => $dia, ':dia_null' => $dia === null ? 1 : 0
+        ]);
+    }
     
     $matches = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
