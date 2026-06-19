@@ -29,6 +29,16 @@ $apps = [
         'roles' => ['empleado', 'encargado', 'admin'],
     ],
     [
+        'nombre' => 'Calendario Pedidos',
+        'descripcion' => 'Calendario de entregas y prevision de llegada de pedidos de clientes',
+        'url' => 'pedidos/views/calendario.php',
+        'icono' => 'fas fa-calendar-alt',
+        'clase' => 'agenda',
+        'grupo' => 'Trabajo diario',
+        'etiqueta' => 'Agenda',
+        'roles' => ['empleado', 'encargado', 'admin'],
+    ],
+    [
         'nombre' => 'Facturas Check',
         'descripcion' => 'Auditoria inteligente de facturas, precios, alertas y proveedores',
         'url' => 'facturas/index.html',

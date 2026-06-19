@@ -37,18 +37,24 @@ $menu_grupos = [
     'Clientes' => [
         ['nombre' => 'Listado clientes', 'url' => $pedidos_url('listado_usuarios.php'), 'icono' => 'bi-people', 'match' => ['listado_usuarios.php', 'ficha_cliente.php']],
         ['nombre' => 'Nuevo cliente', 'url' => $pedidos_url('formulario_usuarios.php'), 'icono' => 'bi-person-plus', 'match' => ['formulario_usuarios.php']],
-    ],
-    'Proveedores' => [
+    ]
+];
+
+if ($can_manage) {
+    $menu_grupos['Proveedores'] = [
         ['nombre' => 'Listado proveedores', 'url' => $pedidos_url('listado_proveedores.php'), 'icono' => 'bi-building', 'match' => ['listado_proveedores.php']],
         ['nombre' => 'Nuevo proveedor', 'url' => $pedidos_url('formulario_proveedores.php'), 'icono' => 'bi-building-add', 'match' => ['formulario_proveedores.php']],
         ['nombre' => 'Resumen pedidos', 'url' => $pedidos_url('resumen_pedidos.php'), 'icono' => 'bi-clipboard2-data', 'match' => ['resumen_pedidos.php']],
-    ],
-    'Productos' => [
-        ['nombre' => 'Listado productos', 'url' => $pedidos_url('listado_productos.php'), 'icono' => 'bi-box-seam', 'match' => ['listado_productos.php']],
-        ['nombre' => 'Nuevo producto', 'url' => $pedidos_url('formulario_productos.php'), 'icono' => 'bi-plus-square-dotted', 'match' => ['formulario_productos.php']],
-        ['nombre' => 'Stock disponible', 'url' => $pedidos_url('listado_stock.php'), 'icono' => 'bi-boxes', 'match' => ['listado_stock.php']],
-    ],
-];
+    ];
+}
+
+$productos_items = [];
+if ($can_manage) {
+    $productos_items[] = ['nombre' => 'Listado productos', 'url' => $pedidos_url('listado_productos.php'), 'icono' => 'bi-box-seam', 'match' => ['listado_productos.php']];
+    $productos_items[] = ['nombre' => 'Nuevo producto', 'url' => $pedidos_url('formulario_productos.php'), 'icono' => 'bi-plus-square-dotted', 'match' => ['formulario_productos.php']];
+}
+$productos_items[] = ['nombre' => 'Stock disponible', 'url' => $pedidos_url('listado_stock.php'), 'icono' => 'bi-boxes', 'match' => ['listado_stock.php']];
+$menu_grupos['Productos'] = $productos_items;
 
 $menu_grupos['Control'] = [
     ['nombre' => 'Calendario', 'url' => $pedidos_url('calendario.php'), 'icono' => 'bi-calendar3', 'match' => ['calendario.php']],
