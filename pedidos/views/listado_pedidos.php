@@ -405,15 +405,9 @@ $proveedor_mas_atrasos = $proveedor_mas_atrasos_stmt->fetch(PDO::FETCH_ASSOC);
                 <span class="badge bg-warning text-dark ms-2 fs-6"><?= $n_pedir ?></span>
             </h2>
             <div class="d-flex gap-2">
-                <?php if ($n_carrito > 0): ?>
-                <a href="carrito_pedidos.php" class="btn btn-info text-white btn-action">
-                    <i class="fas fa-shopping-cart me-1"></i> Carrito <span class="badge bg-white text-info ms-1"><?= $n_carrito ?></span>
+                <a href="carrito_pedidos.php" class="btn <?= $n_carrito > 0 ? 'btn-info text-white' : 'btn-outline-info' ?> btn-action" id="btn-ver-carrito">
+                    <i class="fas fa-shopping-cart me-1"></i> Carrito <span class="badge bg-white text-info ms-1 <?= $n_carrito > 0 ? '' : 'd-none' ?>" id="carrito-count-badge"><?= $n_carrito ?></span>
                 </a>
-                <?php else: ?>
-                <a href="carrito_pedidos.php" class="btn btn-outline-info btn-action">
-                    <i class="fas fa-shopping-cart me-1"></i> Carrito
-                </a>
-                <?php endif; ?>
                 <button id="btn-por-pedir" class="btn btn-action btn-outline-secondary"
                         onclick="toggleTable('tabla-por-pedir','btn-por-pedir')">
                     <i class="fas fa-eye-slash me-1"></i> Ocultar
@@ -1031,6 +1025,29 @@ document.addEventListener('DOMContentLoaded', function() {
                     clienteCell.appendChild(div);
                 } else if (!ahora && badge) {
                     badge.remove();
+                }
+            }
+
+            // Actualizar el número de elementos en el botón de Carrito
+            const badgeCount = document.getElementById('carrito-count-badge');
+            const btnVerCarrito = document.getElementById('btn-ver-carrito');
+            if (badgeCount && btnVerCarrito) {
+                let currentCount = parseInt(badgeCount.innerText) || 0;
+                if (ahora) {
+                    currentCount++;
+                } else {
+                    currentCount = Math.max(0, currentCount - 1);
+                }
+                
+                badgeCount.innerText = currentCount;
+                if (currentCount > 0) {
+                    badgeCount.classList.remove('d-none');
+                    btnVerCarrito.classList.remove('btn-outline-info');
+                    btnVerCarrito.classList.add('btn-info', 'text-white');
+                } else {
+                    badgeCount.classList.add('d-none');
+                    btnVerCarrito.classList.remove('btn-info', 'text-white');
+                    btnVerCarrito.classList.add('btn-outline-info');
                 }
             }
         })
