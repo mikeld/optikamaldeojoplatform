@@ -51,22 +51,25 @@ if ($filtro) {
     $params[':f6'] = "%$filtro%";
 }
 
-// Obtener total para paginación
-$stmtCount = $pdo->prepare("
-    SELECT COUNT(*) 
-    FROM productos_stock s
-    JOIN productos p ON s.producto_id = p.id
-    $cond
-");
-$stmtCount->execute($params);
-$totalStock = (int)$stmtCount->fetchColumn();
-$totalPages = ceil($totalStock / $limit);
-if ($page > $totalPages && $totalPages > 0) {
-    $page = $totalPages;
-    $offset = ($page - 1) * $limit;
-}
+$totalStock = 0;
+$totalPages = 0;
 
 try {
+    // Obtener total para paginación
+    $stmtCount = $pdo->prepare("
+        SELECT COUNT(*) 
+        FROM productos_stock s
+        JOIN productos p ON s.producto_id = p.id
+        $cond
+    ");
+    $stmtCount->execute($params);
+    $totalStock = (int)$stmtCount->fetchColumn();
+    $totalPages = ceil($totalStock / $limit);
+    if ($page > $totalPages && $totalPages > 0) {
+        $page = $totalPages;
+        $offset = ($page - 1) * $limit;
+    }
+
     // Obtener stock
     $stmt = $pdo->prepare("
         SELECT s.*, p.codigo AS prod_codigo, p.descripcion AS prod_desc, p.marca AS prod_marca
