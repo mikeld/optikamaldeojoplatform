@@ -241,16 +241,13 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
     echo $th('Cliente', 'referencia_cliente');
     echo $th('Producto', 'lc_gafa_recambio');
     echo $th('RX', 'rx', 'width:110px;');
-    if ($mostrar_carrito) {
-        echo $th('Espera', 'fecha_cliente', 'width:90px;');
-    } else {
-        echo $th('Pedido', 'fecha_pedido', 'width:95px;');
-        echo $th('Llegada', 'fecha_llegada', 'width:95px;');
-    }
+    echo $th('F. Cliente', 'fecha_cliente', 'width:95px;');
+    echo $th('Pedido', 'fecha_pedido', 'width:95px;');
+    echo $th('Llegada', 'fecha_llegada', 'width:95px;');
     if ($tipo === 1) echo '<th style="width:80px;">Atraso</th>';
     echo '<th class="text-center" style="width:110px;">Estado</th>';
     echo '<th class="text-center" style="width:90px;">WhatsApp</th>';
-    echo '<th class="text-center" style="width:80px;"></th>'; // acciones
+    echo '<th class="text-center" style="width:50px;"></th>'; // acciones
     echo '</tr></thead><tbody>';
 
     $hoy = new DateTime();
@@ -322,28 +319,25 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
         // RX
         echo '<td class="align-middle">'.formatearRX($p['rx'], $p['rx_lineas'] ?? null).'</td>';
 
-         // Fechas o días de espera
-        if ($mostrar_carrito) {
-            // "Por pedir": mostrar días desde que el cliente encargó
-            $dias_espera = '';
-            if (!empty($p['fecha_cliente'])) {
-                $dias_espera = (int)(new DateTime($p['fecha_cliente']))->diff($hoy)->days;
-            }
+         // Fechas (F. Cliente, Pedido, Llegada)
+        $fechaClienteRaw = $p['fecha_cliente'] ?? '';
+        $fechaClienteFormatted = ($fechaClienteRaw && $fechaClienteRaw !== '0000-00-00') ? date('d/m/Y', strtotime($fechaClienteRaw)) : '-';
+        echo '<td class="align-middle text-center">';
+        echo '<span class="font-monospace small">' . htmlspecialchars($fechaClienteFormatted) . '</span>';
+        if ($recibido_val !== 1 && !empty($fechaClienteRaw) && $fechaClienteRaw !== '0000-00-00') {
+            $dias_espera = (int)(new DateTime($fechaClienteRaw))->diff($hoy)->days;
             $badge_class = $dias_espera >= 5 ? 'bg-danger' : ($dias_espera >= 2 ? 'bg-warning text-dark' : 'bg-secondary');
-            echo '<td class="align-middle text-center">';
-            if ($dias_espera !== '') {
-                echo '<span class="badge '.$badge_class.'" title="Fecha cliente: '.htmlspecialchars($p['fecha_cliente']).'">'.$dias_espera.'d</span>';
-                $fecha_formatted = ($p['fecha_cliente'] && $p['fecha_cliente'] !== '0000-00-00') ? date('d/m/Y', strtotime($p['fecha_cliente'])) : '';
-                if ($fecha_formatted) {
-                    echo '<div class="text-muted x-small mt-1" style="font-size: 0.7rem; font-family: monospace;">' . $fecha_formatted . '</div>';
-                }
-            }
-            echo '</td>';
-        } else {
-            $fechaLlegadaRaw = $p['fecha_llegada'] ?: '';
-            echo '<td class="align-middle text-center font-monospace small">'.htmlspecialchars($p['fecha_pedido'] ?? '-').'</td>';
-            echo '<td class="align-middle text-center font-monospace small fw-bold text-primary">'.htmlspecialchars($fechaLlegadaRaw ?: '-').'</td>';
+            echo '<div class="mt-1"><span class="badge '.$badge_class.'" style="font-size:0.65rem;" title="Días de espera desde el encargo">'.$dias_espera.'d</span></div>';
         }
+        echo '</td>';
+
+        $fechaPedidoRaw = $p['fecha_pedido'] ?? '';
+        $fechaPedidoFormatted = ($fechaPedidoRaw && $fechaPedidoRaw !== '0000-00-00') ? date('d/m/Y', strtotime($fechaPedidoRaw)) : '-';
+        echo '<td class="align-middle text-center font-monospace small">' . htmlspecialchars($fechaPedidoFormatted) . '</td>';
+
+        $fechaLlegadaRaw = $p['fecha_llegada'] ?? '';
+        $fechaLlegadaFormatted = ($fechaLlegadaRaw && $fechaLlegadaRaw !== '0000-00-00') ? date('d/m/Y', strtotime($fechaLlegadaRaw)) : '-';
+        echo '<td class="align-middle text-center font-monospace small fw-bold text-primary">' . htmlspecialchars($fechaLlegadaFormatted) . '</td>';
 
         // Atraso
         if ($tipo === 1) {
@@ -428,12 +422,9 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
         echo '</div>';
         echo '</td>';
 
-        // Editar y Duplicar
+        // Editar
         echo '<td class="align-middle text-center">';
-        echo '<div class="d-flex justify-content-center gap-2">';
         echo '<a href="../controllers/editar_pedido.php?id='.htmlspecialchars($p['id']).'" class="btn btn-edit-icon" title="Editar"><i class="fas fa-pen-to-square"></i></a>';
-        echo '<a href="formulario_pedidos.php?duplicar_id='.htmlspecialchars($p['id']).'" class="btn btn-edit-icon" title="Duplicar" onclick="event.stopPropagation()"><i class="fas fa-copy text-secondary"></i></a>';
-        echo '</div>';
         echo '</td>';
 
         echo '</tr>';
