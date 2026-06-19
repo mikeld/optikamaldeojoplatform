@@ -109,7 +109,10 @@
       modalStockDispInstance = new bootstrap.Modal(modalEl);
     }
     
-    document.getElementById('stock-modal-title').innerHTML = `¡Hay stock para el producto <strong class="text-success">${escapeHtml(productCode)}</strong> y esfera <strong class="text-success">${escapeHtml(esfValue)}</strong>!`;
+    // Calcular cantidad total
+    const totalQty = matchesData.reduce((sum, m) => sum + parseInt(m.cantidad || 0), 0);
+    
+    document.getElementById('stock-modal-title').innerHTML = `¡Hay stock para el producto <strong class="text-success">${escapeHtml(productCode)}</strong> y esfera <strong class="text-success">${escapeHtml(esfValue)}</strong>!<br><span class="badge bg-success mt-2 fs-6">${totalQty} unidad(es) disponible(s)</span>`;
     
     let detailsHtml = '<ul class="mb-0 ps-3 fw-medium">';
     matchesData.forEach(m => {

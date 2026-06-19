@@ -391,6 +391,35 @@ try {
     </div>
 </div>
 
+<!-- Modal Stock Disponible -->
+<div class="modal fade" id="modalStockDisponible" tabindex="-1" aria-labelledby="modalStockDisponibleLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 15px; overflow: hidden;">
+            <div class="modal-header bg-success text-white py-3">
+                <h5 class="modal-title fw-bold" id="modalStockDisponibleLabel">
+                    <i class="fas fa-boxes me-2"></i>¡Stock Disponible!
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4 text-center">
+                <div class="mb-3 text-success">
+                    <i class="fas fa-check-circle fa-4x animate__animated animate__bounceIn"></i>
+                </div>
+                <h5 class="fw-bold mb-3" id="stock-modal-title">Existe stock para este producto y graduación.</h5>
+                <div class="alert alert-success border-0 bg-success bg-opacity-10 text-start py-3 px-4 mb-0" id="stock-modal-details" style="border-radius: 10px;">
+                    <!-- Detalles del stock -->
+                </div>
+            </div>
+            <div class="modal-footer border-0 bg-light p-3 d-flex justify-content-between">
+                <button type="button" class="btn btn-secondary px-3" style="border-radius: 8px;" data-bs-dismiss="modal">Cerrar</button>
+                <a href="#" id="stock-modal-link" target="_blank" class="btn btn-success text-white px-4 fw-semibold" style="border-radius: 8px;">
+                    <i class="fas fa-external-link-alt me-2"></i>Ver Stock Completo
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
     <!-- Select2 JS -->
@@ -860,6 +889,60 @@ try {
                 .catch(err => {
                     console.error('Error al comprobar stock por esfera:', err);
                 });
+        }
+
+        let modalStockDispInstance = null;
+        function showStockDisponibleModal(productCode, esfValue, matchesData) {
+            const modalEl = document.getElementById('modalStockDisponible');
+            if (!modalEl) return;
+            
+            if (!modalStockDispInstance) {
+                modalStockDispInstance = new bootstrap.Modal(modalEl);
+            }
+            
+            // Calcular cantidad total
+            const totalQty = matchesData.reduce((sum, m) => sum + parseInt(m.cantidad || 0), 0);
+            
+            document.getElementById('stock-modal-title').innerHTML = `¡Hay stock para el producto <strong class="text-success">${escapeHtml(productCode)}</strong> y esfera <strong class="text-success">${escapeHtml(esfValue)}</strong>!<br><span class="badge bg-success mt-2 fs-6">${totalQty} unidad(es) disponible(s)</span>`;
+            
+            let detailsHtml = '<ul class="mb-0 ps-3 fw-medium">';
+            matchesData.forEach(m => {
+                const format = m.tipo === 'caja' ? 'caja(s)' : 'blister(s)';
+                const eye = m.ojo === 'ninguno' ? 'Genérico' : m.ojo;
+                
+                let rxText = [];
+                if (m.esf) rxText.push(`Esf: ${m.esf}`);
+                if (m.cil) rxText.push(`Cil: ${m.cil}`);
+                if (m.eje) rxText.push(`Eje: ${m.eje}`);
+                if (m.add) rxText.push(`Add: ${m.add}`);
+                if (m.rad) rxText.push(`Rad: ${m.rad}`);
+                if (m.dia) rxText.push(`Dia: ${m.dia}`);
+                const rxStr = rxText.length > 0 ? ` [${rxText.join(', ')}]` : '';
+                
+                detailsHtml += `<li class="mb-1"><strong>${m.cantidad}</strong> ${format} para <strong>ojo ${eye}</strong>${rxStr}</li>`;
+            });
+            detailsHtml += '</ul>';
+            
+            document.getElementById('stock-modal-details').innerHTML = detailsHtml;
+            
+            let listadoStockUrl = 'listado_stock.php';
+            if (window.location.pathname.includes('/controllers/')) {
+                listadoStockUrl = '../views/listado_stock.php';
+            }
+            
+            document.getElementById('stock-modal-link').href = `${listadoStockUrl}?filtro=${encodeURIComponent(productCode)}`;
+            
+            modalStockDispInstance.show();
+        }
+        
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.toString()
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
         }
 
         function actualizarResumenPack() {
