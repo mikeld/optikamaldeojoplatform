@@ -1,33 +1,60 @@
 <?php
-// Trigger deploy change detection 3
 header('Content-Type: text/plain; charset=utf-8');
 ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
-try {
-    require_once __DIR__ . '/includes/conexion.php';
-    $conexion = new Conexion();
-    $pdo = $conexion->pdo;
+echo "=== DIAGNOSTICS & DEPLOY FIX ===\n";
 
-    echo "=== ALCON PROVIDERS IN CATALOG ===\n";
-    $stmt = $pdo->query("SELECT id, nombre FROM proveedores WHERE nombre LIKE '%Alcon%'");
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        echo "ID: " . $row['id'] . " - Name: " . $row['nombre'] . "\n";
-    }
+$prodTokenFile = __DIR__ . '/.deploy_token';
+$testTokenFile = __DIR__ . '/test/.deploy_token';
 
-    echo "=== LATEST AUDITS ===\n";
-    $stmt = $pdo->query("SELECT id, provider, invoice_number, invoice_date, total_invoice, `lines` FROM facturas_audits ORDER BY created_at DESC LIMIT 5");
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        echo "ID: " . $row['id'] . "\n";
-        echo "Provider: " . $row['provider'] . "\n";
-        echo "Number: " . $row['invoice_number'] . "\n";
-        echo "Date: " . $row['invoice_date'] . "\n";
-        echo "Total: " . $row['total_invoice'] . "\n";
-        echo "Lines: " . $row['lines'] . "\n";
-        echo "---------------------------------------------------\n";
+echo "Prod token file path: $prodTokenFile\n";
+if (file_exists($prodTokenFile)) {
+    $tokenValue = trim(file_get_contents($prodTokenFile));
+    echo "Prod token exists. Length: " . strlen($tokenValue) . "\n";
+    
+    // Check if test dir exists
+    $testDir = __DIR__ . '/test';
+    if (is_dir($testDir)) {
+        echo "Test directory exists.\n";
+        
+        // Write the token to test/.deploy_token
+        if (file_put_contents($testTokenFile, $tokenValue) !== false) {
+            echo "Successfully wrote token to test/.deploy_token\n";
+            chmod($testTokenFile, 0600);
+        } else {
+            echo "Failed to write token to test/.deploy_token\n";
+        }
+        
+        // Check if upload_receiver.php exists in test/
+        $testReceiver = $testDir . '/upload_receiver.php';
+        if (!file_exists($testReceiver)) {
+            echo "upload_receiver.php is missing in test/, trying to copy...\n";
+            if (file_exists(__DIR__ . '/deploy/upload_receiver.php')) {
+                copy(__DIR__ . '/deploy/upload_receiver.php', $testReceiver);
+                echo "Copied from deploy/upload_receiver.php\n";
+            } elseif (file_exists(__DIR__ . '/upload_receiver.php')) {
+                copy(__DIR__ . '/upload_receiver.php', $testReceiver);
+                echo "Copied from upload_receiver.php\n";
+            } else {
+                echo "Could not find source upload_receiver.php to copy!\n";
+            }
+        } else {
+            echo "upload_receiver.php exists in test/.\n";
+        }
+    } else {
+        echo "Test directory does NOT exist at $testDir\n";
     }
-} catch (Throwable $e) {
-    echo "ERROR: " . $e->getMessage() . "\n";
-    echo $e->getTraceAsString() . "\n";
+} else {
+    echo "Prod token does NOT exist at $prodTokenFile!\n";
 }
+
+echo "=== DIR LISTING ===\n";
+echo "Files in " . __DIR__ . ":\n";
+print_r(scandir(__DIR__));
+
+if (is_dir(__DIR__ . '/test')) {
+    echo "Files in " . __DIR__ . "/test:\n";
+    print_r(scandir(__DIR__ . '/test'));
+}
+
