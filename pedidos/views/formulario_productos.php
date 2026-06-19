@@ -1,6 +1,7 @@
 <?php
 // formulario_productos.php
 require '../includes/auth.php';
+Auth::verificarRoles([Auth::ROL_ADMIN, Auth::ROL_ENCARGADO]);
 require '../includes/conexion.php';
 require '../includes/funciones.php';
 

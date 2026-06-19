@@ -1,5 +1,6 @@
 <?php
 require '../includes/auth.php';
+Auth::verificarRoles([Auth::ROL_ADMIN, Auth::ROL_ENCARGADO]);
 require '../includes/conexion.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
