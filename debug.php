@@ -10,21 +10,18 @@ try {
     $conexion = new Conexion();
     $pdo = $conexion->pdo;
 
-    echo "=== ALCON PROVIDERS IN CATALOG ===\n";
-    $stmt = $pdo->query("SELECT id, nombre FROM proveedores WHERE nombre LIKE '%Alcon%'");
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        echo "ID: " . $row['id'] . " - Name: " . $row['nombre'] . "\n";
+    echo "=== ORDER 24 ===\n";
+    $stmt = $pdo->query("SELECT id, lc_gafa_recambio, rx, rx_lineas, pack_tipo, pack_estado FROM pedidos WHERE id = 24");
+    if ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        print_r($row);
+    } else {
+        echo "Order 24 not found.\n";
     }
 
-    echo "=== LATEST AUDITS ===\n";
-    $stmt = $pdo->query("SELECT id, provider, invoice_number, invoice_date, total_invoice, `lines` FROM facturas_audits ORDER BY created_at DESC LIMIT 5");
+    echo "\n=== LATEST 10 ORDERS ===\n";
+    $stmt = $pdo->query("SELECT id, lc_gafa_recambio, rx, rx_lineas, pack_tipo, pack_estado FROM pedidos ORDER BY id DESC LIMIT 10");
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        echo "ID: " . $row['id'] . "\n";
-        echo "Provider: " . $row['provider'] . "\n";
-        echo "Number: " . $row['invoice_number'] . "\n";
-        echo "Date: " . $row['invoice_date'] . "\n";
-        echo "Total: " . $row['total_invoice'] . "\n";
-        echo "Lines: " . $row['lines'] . "\n";
+        print_r($row);
         echo "---------------------------------------------------\n";
     }
 } catch (Throwable $e) {
