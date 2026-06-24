@@ -450,7 +450,8 @@ try {
 
             const normalizeEsf = (val) => {
                 if (!val) return '';
-                const parsed = parseFloat(val);
+                const cleanVal = val.toString().replace(',', '.');
+                const parsed = parseFloat(cleanVal);
                 if (isNaN(parsed)) return val.toString().trim();
                 if (parsed === 0) return '0.00';
                 if (parsed > 0) return '+' + parsed.toFixed(2);
@@ -459,7 +460,8 @@ try {
 
             const normalizeCil = (val) => {
                 if (!val) return '';
-                const parsed = parseFloat(val);
+                const cleanVal = val.toString().replace(',', '.');
+                const parsed = parseFloat(cleanVal);
                 if (isNaN(parsed)) return val.toString().trim();
                 return parsed.toFixed(2);
             };
@@ -1047,6 +1049,118 @@ try {
                 width: '100%'
             });
 
+        function parseLegacyRx(legacyRx, generalRecibido = 0) {
+            if (!legacyRx || !legacyRx.trim()) return [];
+            
+            const segments = legacyRx.split('|').map(s => s.trim()).filter(s => s.length > 0);
+            const lines = [];
+            
+            segments.forEach(segment => {
+                let rest = segment;
+                let ojo = 'ninguno';
+                let tipo = 'ninguno';
+                let cantidad = 1;
+                let nota = '';
+                
+                // 1. Parse Ojo
+                if (/^(OD|OI|OTRO)\b/i.test(rest)) {
+                    const match = rest.match(/^(OD|OI|OTRO)\b/i);
+                    ojo = match[0].toUpperCase();
+                    rest = rest.replace(/^(OD|OI|OTRO)\s*/i, '');
+                }
+                
+                // 2. Parse Product Note [Product]
+                const noteMatch = rest.match(/\[(.*?)\]/);
+                if (noteMatch) {
+                    nota = noteMatch[1].trim();
+                    rest = rest.replace(/\[.*?\]/g, ' ');
+                }
+                
+                // 3. Parse Quantity and Type e.g. (1 cajas)
+                const qtyMatch = rest.match(/\((\d+)\s+(caja|blister|cajas|blisters)s?\)/i);
+                if (qtyMatch) {
+                    cantidad = parseInt(qtyMatch[1], 10);
+                    const tipoStr = qtyMatch[2].toLowerCase();
+                    if (tipoStr.startsWith('caja')) tipo = 'caja';
+                    else if (tipoStr.startsWith('blister')) tipo = 'blister';
+                    rest = rest.replace(/\(.*?\)/g, ' ');
+                }
+                
+                // 4. Parse graduation fields from remaining text
+                let esf = '';
+                let cil = '';
+                let eje = '';
+                let add = '';
+                let rad = '';
+                let dia = '';
+                
+                // Extract R: and D: first
+                const radMatch = rest.match(/R:\s*([^\s]+)/i);
+                if (radMatch) {
+                    rad = radMatch[1].trim();
+                    rest = rest.replace(/R:\s*[^\s]+/i, ' ');
+                }
+                const diaMatch = rest.match(/D:\s*([^\s]+)/i);
+                if (diaMatch) {
+                    dia = diaMatch[1].trim();
+                    rest = rest.replace(/D:\s*[^\s]+/i, ' ');
+                }
+                
+                // Tokenize remaining words
+                const tokens = rest.trim().split(/\s+/).filter(t => t.length > 0);
+                
+                if (tokens.length > 0) {
+                    // Token 1 is Sphere
+                    esf = tokens[0];
+                    
+                    if (tokens.length > 1) {
+                        const token2 = tokens[1];
+                        const isToken2Numeric = /^[+-]?\d+([.,]\d+)?$/.test(token2);
+                        if (isToken2Numeric) {
+                            cil = token2;
+                            
+                            if (tokens.length > 2) {
+                                const token3 = tokens[2];
+                                const isToken3Numeric = /^[+-]?\d+([.,]\d+)?$/.test(token3);
+                                if (isToken3Numeric) {
+                                    eje = token3;
+                                    
+                                    if (tokens.length > 3) {
+                                        add = tokens.slice(3).join(' ');
+                                    }
+                                } else {
+                                    add = tokens.slice(2).join(' ');
+                                }
+                            }
+                        } else {
+                            add = tokens.slice(1).join(' ');
+                        }
+                    }
+                }
+                
+                let cantidad_recibida = 0;
+                if (generalRecibido === 1) {
+                    cantidad_recibida = cantidad;
+                }
+                
+                lines.push({
+                    tipo: tipo,
+                    ojo: ojo,
+                    cantidad: (tipo !== 'ninguno' && ojo !== 'ninguno') ? cantidad : 0,
+                    cantidad_recibida: (tipo !== 'ninguno' && ojo !== 'ninguno') ? cantidad_recibida : 0,
+                    esf: esf,
+                    cil: cil,
+                    eje: eje,
+                    add: add,
+                    rad: rad,
+                    dia: dia,
+                    nota: nota
+                });
+            });
+            
+            return lines;
+        }
+
             let ultimosPedidos = [];
 
             // Cargar sugerencias y datos históricos al cambiar el cliente
@@ -1114,10 +1228,26 @@ try {
                                 contLc.appendChild(btnLc);
                             }
 
-                            // Sugerencia para RX (si existe y es un JSON válido)
-                            if (ultimo.rx_lineas) {
+                            // Sugerencia para RX (si existe y es un JSON válido o texto heredado)
+                            if (ultimo.rx_lineas || ultimo.rx) {
                                 try {
-                                    const rxLinesData = JSON.parse(ultimo.rx_lineas);
+                                    let rxLinesData = [];
+                                    if (ultimo.rx_lineas) {
+                                        rxLinesData = JSON.parse(ultimo.rx_lineas);
+                                        const isLegacySerialized = (rxLinesData && rxLinesData.length === 1 && 
+                                            (rxLinesData[0].ojo === 'ninguno' || !rxLinesData[0].ojo) && 
+                                            (rxLinesData[0].nota.includes('|') || /^(OD|OI|OTRO)\b/i.test(rxLinesData[0].nota))
+                                        );
+                                        if (isLegacySerialized) {
+                                            const parsed = parseLegacyRx(rxLinesData[0].nota || ultimo.rx);
+                                            if (parsed && parsed.length > 0) {
+                                                rxLinesData = parsed;
+                                            }
+                                        }
+                                    } else if (ultimo.rx) {
+                                        rxLinesData = parseLegacyRx(ultimo.rx);
+                                    }
+
                                     if (Array.isArray(rxLinesData) && rxLinesData.length > 0) {
                                         const btnRx = document.createElement('button');
                                         btnRx.type = 'button';
@@ -1141,15 +1271,6 @@ try {
                                 } catch (e) {
                                     console.error("Error parsing rx_lineas from last order:", e);
                                 }
-                            } else if (ultimo.rx) { // Compatibilidad con campo RX legado
-                                const btnRx = document.createElement('button');
-                                btnRx.type = 'button';
-                                btnRx.className = 'btn btn-action btn-sm btn-outline-primary';
-                                btnRx.innerHTML = '<i class="fas fa-copy"></i> ' + ultimo.rx;
-                                btnRx.onclick = () => {
-                                    document.getElementById('rx').value = ultimo.rx;
-                                };
-                                contRx.appendChild(btnRx);
                             }
                         }
 
@@ -1208,9 +1329,25 @@ try {
                 // Copiar RX Lineas
                 const rxContainer = document.getElementById('rx-lineas-container');
                 rxContainer.innerHTML = '';
-                if (p.rx_lineas) {
+                if (p.rx_lineas || p.rx) {
                     try {
-                        const rxLinesData = JSON.parse(p.rx_lineas);
+                        let rxLinesData = [];
+                        if (p.rx_lineas) {
+                            rxLinesData = JSON.parse(p.rx_lineas);
+                            const isLegacySerialized = (rxLinesData && rxLinesData.length === 1 && 
+                                (rxLinesData[0].ojo === 'ninguno' || !rxLinesData[0].ojo) && 
+                                (rxLinesData[0].nota.includes('|') || /^(OD|OI|OTRO)\b/i.test(rxLinesData[0].nota))
+                            );
+                            if (isLegacySerialized) {
+                                const parsed = parseLegacyRx(rxLinesData[0].nota || p.rx);
+                                if (parsed && parsed.length > 0) {
+                                    rxLinesData = parsed;
+                                }
+                            }
+                        } else if (p.rx) {
+                            rxLinesData = parseLegacyRx(p.rx);
+                        }
+
                         if (Array.isArray(rxLinesData) && rxLinesData.length > 0) {
                             rxLinesData.forEach(line => addRxLine(line));
                         } else {
@@ -1264,9 +1401,25 @@ try {
                     document.getElementById('observaciones').value = duplicarData.observaciones;
                 }
                 const rxContainer = document.getElementById('rx-lineas-container');
-                if (rxContainer && duplicarData.rx_lineas) {
+                if (rxContainer && (duplicarData.rx_lineas || duplicarData.rx)) {
                     try {
-                        const rxLinesData = JSON.parse(duplicarData.rx_lineas);
+                        let rxLinesData = [];
+                        if (duplicarData.rx_lineas) {
+                            rxLinesData = JSON.parse(duplicarData.rx_lineas);
+                            const isLegacySerialized = (rxLinesData && rxLinesData.length === 1 && 
+                                (rxLinesData[0].ojo === 'ninguno' || !rxLinesData[0].ojo) && 
+                                (rxLinesData[0].nota.includes('|') || /^(OD|OI|OTRO)\b/i.test(rxLinesData[0].nota))
+                            );
+                            if (isLegacySerialized) {
+                                const parsed = parseLegacyRx(rxLinesData[0].nota || duplicarData.rx);
+                                if (parsed && parsed.length > 0) {
+                                    rxLinesData = parsed;
+                                }
+                            }
+                        } else if (duplicarData.rx) {
+                            rxLinesData = parseLegacyRx(duplicarData.rx);
+                        }
+
                         if (Array.isArray(rxLinesData) && rxLinesData.length > 0) {
                             rxContainer.innerHTML = '';
                             rxLinesData.forEach(line => {
