@@ -269,14 +269,14 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
             if ($dias_fila >= 5) $row_class .= ' tr-urgente';
         }
 
-        echo '<tr class="'.$row_class.'" data-pedido=\''.$p_json.'\'>';
+        echo '<tr class="'.$row_class.'" data-pedido=\''.$p_json.'\' data-proveedor-id="'.htmlspecialchars($p['proveedor_id'] ?? '').'">';
 
         // Columna: Cliente + indicador avisado
         $cliente_id_url = ''; // se obtiene si hubiera id del cliente; usamos referencia como búsqueda
         echo '<td class="align-middle">';
         echo '<a href="ficha_cliente.php?ref='.urlencode($p['referencia_cliente']).'" class="fw-bold text-decoration-none text-dark link-cliente" title="Ver ficha del cliente" onclick="event.stopPropagation()">'.htmlspecialchars($p['referencia_cliente']).'</a>';
         if ($avisado) {
-            echo ' <span class="badge badge-avisado ms-1" title="Cliente avisado"><i class="fas fa-phone-volume"></i></span>';
+            echo ' ' . '<span class="badge badge-avisado ms-1" title="Cliente avisado"><i class="fas fa-phone-volume"></i></span>';
         }
         if ($en_carrito && empty($p['fecha_pedido'])) {
             echo '<div class="mt-1 badge-en-carrito"><span class="badge bg-info" style="font-size:.65rem;"><i class="fas fa-cart-plus me-1"></i>En carrito</span></div>';
@@ -291,6 +291,10 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
         echo '<span class="fw-semibold">'.htmlspecialchars($p['lc_gafa_recambio']).'</span>';
         if ($p['pack_tipo']) {
             echo '<div class="mt-1">'.formatearPackEstado($p['pack_tipo'], $p['pack_estado']).'</div>';
+        }
+        $prov = trim($p['proveedor_nombre'] ?? '');
+        if ($prov !== '') {
+            echo '<div class="mt-1"><span class="badge bg-light text-secondary border" style="font-size:.65rem;"><i class="fas fa-building me-1 opacity-50"></i>'.htmlspecialchars($prov).'</span></div>';
         }
         // Vía — badge pequeño
         $via = trim($p['via'] ?? '');

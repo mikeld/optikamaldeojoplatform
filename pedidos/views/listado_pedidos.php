@@ -27,6 +27,10 @@ include 'header.php';
 // Conexión y parámetros comunes
 $pdo = (new Conexion())->pdo;
 
+// Obtener lista de proveedores activos para el selector de filtro
+$stmt_prov = $pdo->query("SELECT id, nombre FROM proveedores WHERE activo = 1 ORDER BY nombre ASC");
+$proveedores = $stmt_prov->fetchAll(PDO::FETCH_ASSOC);
+
 // Filtro de fechas para "Finalizados" (por defecto: últimos 90 días, sin fecha fin)
 $rec_fecha_desde = $_GET['rec_fecha_desde'] ?? date('Y-m-d', strtotime('-90 days'));
 $rec_fecha_hasta = $_GET['rec_fecha_hasta'] ?? '2099-12-31';
@@ -168,9 +172,10 @@ $total_recibidos_historico = (int)$pdo->query("SELECT COUNT(*) FROM pedidos WHER
 
 // 6) Cancelados recientes (últimos 90 días)
 $cancelados_stmt = $pdo->query("
-    SELECT p.*, c.telefono, c.email
+    SELECT p.*, c.telefono, c.email, pr.nombre AS proveedor_nombre
     FROM pedidos p
     JOIN clientes c ON p.referencia_cliente = c.referencia
+    LEFT JOIN proveedores pr ON p.proveedor_id = pr.id
     WHERE p.recibido = 3
       AND p.deleted_at IS NULL
     ORDER BY p.id DESC
@@ -273,11 +278,17 @@ $proveedor_mas_atrasos = $proveedor_mas_atrasos_stmt->fetch(PDO::FETCH_ASSOC);
             <a href="#card-pendientes"  class="quick-stat quick-stat-primary text-decoration-none" style="color:inherit"><i class="fas fa-truck me-1"></i> En camino: <strong><?= $n_pendientes ?></strong></a>
             <a href="#card-finalizados" class="quick-stat quick-stat-success text-decoration-none" style="color:inherit"><i class="fas fa-check-circle me-1"></i> Finalizados: <strong><?= $n_recibidos ?></strong></a>
         </div>
-        <div class="ms-md-auto" style="min-width:250px;flex:1;max-width:380px;">
-            <div class="input-group bg-white rounded-pill overflow-hidden border position-relative" style="border-color:var(--border-2)!important">
-                <span class="input-group-text bg-transparent border-0 pe-1"><i class="fas fa-search text-muted"></i></span>
-                <input type="text" id="buscador-general" class="form-control border-0 shadow-none px-2" placeholder="Buscar cliente, producto, RX…" style="padding-right:35px;border-radius:0!important">
-                <button type="button" id="btn-clear-search" class="btn btn-link text-muted position-absolute end-0 top-50 translate-middle-y text-decoration-none d-none" style="z-index:5"><i class="fas fa-times"></i></button>
+        <div class="ms-md-auto d-flex gap-2 align-items-center" style="min-width:320px;flex:1;max-width:520px;">
+            <select id="filtro-proveedor" class="form-select bg-white border rounded-pill shadow-none" style="width:160px; height:38px; border-color:var(--border-2)!important; font-size: 0.85rem;">
+                <option value="">— Proveedor —</option>
+                <?php foreach ($proveedores as $prov): ?>
+                    <option value="<?= $prov['id'] ?>"><?= htmlspecialchars($prov['nombre']) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <div class="input-group bg-white rounded-pill overflow-hidden border position-relative" style="border-color:var(--border-2)!important; flex-grow:1; height:38px;">
+                <span class="input-group-text bg-transparent border-0 pe-1" style="height:36px;"><i class="fas fa-search text-muted"></i></span>
+                <input type="text" id="buscador-general" class="form-control border-0 shadow-none px-2" placeholder="Buscar cliente, producto, RX…" style="padding-right:35px;border-radius:0!important; height:36px; font-size: 0.875rem;">
+                <button type="button" id="btn-clear-search" class="btn btn-link text-muted position-absolute end-0 top-50 translate-middle-y text-decoration-none d-none" style="z-index:5; padding:0 10px;"><i class="fas fa-times"></i></button>
             </div>
         </div>
     </div>
@@ -499,12 +510,15 @@ $proveedor_mas_atrasos = $proveedor_mas_atrasos_stmt->fetch(PDO::FETCH_ASSOC);
                     <tbody>
                     <?php foreach ($pedidos_cancelados as $p): ?>
                     <?php $p_json = htmlspecialchars(json_encode($p), ENT_QUOTES, 'UTF-8'); ?>
-                    <tr class="clickable-row" data-pedido='<?= $p_json ?>'>
+                    <tr class="clickable-row" data-pedido='<?= $p_json ?>' data-proveedor-id="<?= htmlspecialchars($p['proveedor_id'] ?? '') ?>">
                         <td class="align-middle">
                             <span class="fw-bold text-muted"><?= htmlspecialchars($p['referencia_cliente']) ?></span>
                         </td>
                         <td class="align-middle">
                             <span class="fw-semibold text-muted"><?= htmlspecialchars($p['lc_gafa_recambio']) ?></span>
+                            <?php if (!empty($p['proveedor_nombre'])): ?>
+                                <div class="mt-1"><span class="badge bg-light text-secondary border" style="font-size:.65rem;"><i class="fas fa-building me-1 opacity-50"></i><?= htmlspecialchars($p['proveedor_nombre']) ?></span></div>
+                            <?php endif; ?>
                         </td>
                         <td class="align-middle"><?= formatearRX($p['rx'], $p['rx_lineas'] ?? null) ?></td>
                         <td class="align-middle text-center font-monospace small"><?= htmlspecialchars($p['fecha_cliente'] ?? '-') ?></td>
@@ -1149,43 +1163,76 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.addEventListener('click', function() {
             document.querySelectorAll('.filtro-rapido').forEach(b => b.classList.remove('active'));
             this.classList.add('active');
-            const filtro = this.dataset.filtro;
-            const hoy = new Date().toISOString().slice(0,10);
-            document.querySelectorAll('.table-filterable tbody tr').forEach(row => {
-                if (!filtro) { row.style.display = ''; return; }
-                const texto = row.innerText.toLowerCase();
-                if (filtro === 'hoy') {
-                    row.style.display = texto.includes(hoy) ? '' : 'none';
-                } else {
-                    row.style.display = texto.toLowerCase().includes(filtro.toLowerCase()) ? '' : 'none';
-                }
-            });
+            aplicarFiltros();
         });
     });
 
-    // Buscador global — filtra directamente en las tablas
+    // Buscador global y filtro de proveedor — filtra directamente en las tablas
     const buscadorGeneral = document.getElementById('buscador-general');
-    const btnClearSearch  = document.getElementById('btn-clear-search');
+    const filtroProveedor  = document.getElementById('filtro-proveedor');
+    const btnClearSearch   = document.getElementById('btn-clear-search');
 
-    function filtrarTablas(term) {
-        const t = term.toLowerCase().trim();
+    function aplicarFiltros() {
+        const textTerm = buscadorGeneral ? buscadorGeneral.value.toLowerCase().trim() : '';
+        const provTerm = filtroProveedor ? filtroProveedor.value.trim() : '';
+        
+        const activeQuickFilterBtn = document.querySelector('.filtro-rapido.active');
+        const quickFilterVal = activeQuickFilterBtn ? activeQuickFilterBtn.dataset.filtro : '';
+        const hoy = new Date().toISOString().slice(0, 10);
+        
         document.querySelectorAll('.table-filterable tbody tr').forEach(row => {
-            row.style.display = row.innerText.toLowerCase().includes(t) ? '' : 'none';
+            const rowText = row.innerText.toLowerCase();
+            const matchesText = !textTerm || rowText.includes(textTerm);
+            
+            const rowProvId = row.getAttribute('data-proveedor-id') || '';
+            const matchesProv = !provTerm || (rowProvId === provTerm);
+            
+            let matchesQuick = true;
+            if (quickFilterVal) {
+                if (quickFilterVal === 'hoy') {
+                    matchesQuick = rowText.includes(hoy);
+                } else {
+                    matchesQuick = rowText.includes(quickFilterVal.toLowerCase());
+                }
+            }
+            
+            if (matchesText && matchesProv && matchesQuick) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
         });
-        btnClearSearch?.classList.toggle('d-none', term.length === 0);
-        sessionStorage.setItem('buscadorGlobalPedidos', term);
+        
+        if (btnClearSearch) {
+            btnClearSearch.classList.toggle('d-none', textTerm.length === 0);
+        }
+        
+        sessionStorage.setItem('buscadorGlobalPedidos', buscadorGeneral ? buscadorGeneral.value : '');
+        sessionStorage.setItem('filtroProveedorPedidos', filtroProveedor ? filtroProveedor.value : '');
     }
 
     if (buscadorGeneral) {
-        const saved = sessionStorage.getItem('buscadorGlobalPedidos');
-        if (saved) { buscadorGeneral.value = saved; filtrarTablas(saved); }
-        buscadorGeneral.addEventListener('input', e => filtrarTablas(e.target.value));
-        btnClearSearch?.addEventListener('click', () => {
+        const savedText = sessionStorage.getItem('buscadorGlobalPedidos');
+        if (savedText) buscadorGeneral.value = savedText;
+        buscadorGeneral.addEventListener('input', aplicarFiltros);
+    }
+    
+    if (filtroProveedor) {
+        const savedProv = sessionStorage.getItem('filtroProveedorPedidos');
+        if (savedProv) filtroProveedor.value = savedProv;
+        filtroProveedor.addEventListener('change', aplicarFiltros);
+    }
+
+    if (btnClearSearch) {
+        btnClearSearch.addEventListener('click', () => {
             buscadorGeneral.value = '';
-            filtrarTablas('');
+            aplicarFiltros();
             buscadorGeneral.focus();
         });
     }
+    
+    // Ejecutar filtros iniciales
+    aplicarFiltros();
 });
 
 function toggleTable(id, btnId) {
