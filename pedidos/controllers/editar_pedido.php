@@ -409,7 +409,8 @@ include '../views/header.php';
 
             const normalizeEsf = (val) => {
                 if (!val) return '';
-                const parsed = parseFloat(val);
+                const cleanVal = val.toString().replace(',', '.');
+                const parsed = parseFloat(cleanVal);
                 if (isNaN(parsed)) return val.toString().trim();
                 if (parsed === 0) return '0.00';
                 if (parsed > 0) return '+' + parsed.toFixed(2);
@@ -418,7 +419,8 @@ include '../views/header.php';
 
             const normalizeCil = (val) => {
                 if (!val) return '';
-                const parsed = parseFloat(val);
+                const cleanVal = val.toString().replace(',', '.');
+                const parsed = parseFloat(cleanVal);
                 if (isNaN(parsed)) return val.toString().trim();
                 return parsed.toFixed(2);
             };
@@ -924,16 +926,146 @@ include '../views/header.php';
             return { canal: 'Otro', detalle: via };
         }
 
+        function parseLegacyRx(legacyRx, generalRecibido = 0) {
+            if (!legacyRx || !legacyRx.trim()) return [];
+            
+            const segments = legacyRx.split('|').map(s => s.trim()).filter(s => s.length > 0);
+            const lines = [];
+            
+            segments.forEach(segment => {
+                let rest = segment;
+                let ojo = 'ninguno';
+                let tipo = 'ninguno';
+                let cantidad = 1;
+                let nota = '';
+                
+                // 1. Parse Ojo
+                if (/^(OD|OI|OTRO)\b/i.test(rest)) {
+                    const match = rest.match(/^(OD|OI|OTRO)\b/i);
+                    ojo = match[0].toUpperCase();
+                    rest = rest.replace(/^(OD|OI|OTRO)\s*/i, '');
+                }
+                
+                // 2. Parse Product Note [Product]
+                const noteMatch = rest.match(/\[(.*?)\]/);
+                if (noteMatch) {
+                    nota = noteMatch[1].trim();
+                    rest = rest.replace(/\[.*?\]/g, ' ');
+                }
+                
+                // 3. Parse Quantity and Type e.g. (1 cajas)
+                const qtyMatch = rest.match(/\((\d+)\s+(caja|blister|cajas|blisters)s?\)/i);
+                if (qtyMatch) {
+                    cantidad = parseInt(qtyMatch[1], 10);
+                    const tipoStr = qtyMatch[2].toLowerCase();
+                    if (tipoStr.startsWith('caja')) tipo = 'caja';
+                    else if (tipoStr.startsWith('blister')) tipo = 'blister';
+                    rest = rest.replace(/\(.*?\)/g, ' ');
+                }
+                
+                // 4. Parse graduation fields from remaining text
+                let esf = '';
+                let cil = '';
+                let eje = '';
+                let add = '';
+                let rad = '';
+                let dia = '';
+                
+                // Extract R: and D: first
+                const radMatch = rest.match(/R:\s*([^\s]+)/i);
+                if (radMatch) {
+                    rad = radMatch[1].trim();
+                    rest = rest.replace(/R:\s*[^\s]+/i, ' ');
+                }
+                const diaMatch = rest.match(/D:\s*([^\s]+)/i);
+                if (diaMatch) {
+                    dia = diaMatch[1].trim();
+                    rest = rest.replace(/D:\s*[^\s]+/i, ' ');
+                }
+                
+                // Tokenize remaining words
+                const tokens = rest.trim().split(/\s+/).filter(t => t.length > 0);
+                
+                if (tokens.length > 0) {
+                    // Token 1 is Sphere
+                    esf = tokens[0];
+                    
+                    if (tokens.length > 1) {
+                        const token2 = tokens[1];
+                        const isToken2Numeric = /^[+-]?\d+([.,]\d+)?$/.test(token2);
+                        if (isToken2Numeric) {
+                            cil = token2;
+                            
+                            if (tokens.length > 2) {
+                                const token3 = tokens[2];
+                                const isToken3Numeric = /^[+-]?\d+([.,]\d+)?$/.test(token3);
+                                if (isToken3Numeric) {
+                                    eje = token3;
+                                    
+                                    if (tokens.length > 3) {
+                                        add = tokens.slice(3).join(' ');
+                                    }
+                                } else {
+                                    add = tokens.slice(2).join(' ');
+                                }
+                            }
+                        } else {
+                            add = tokens.slice(1).join(' ');
+                        }
+                    }
+                }
+                
+                let cantidad_recibida = 0;
+                if (generalRecibido === 1) {
+                    cantidad_recibida = cantidad;
+                }
+                
+                lines.push({
+                    tipo: tipo,
+                    ojo: ojo,
+                    cantidad: (tipo !== 'ninguno' && ojo !== 'ninguno') ? cantidad : 0,
+                    cantidad_recibida: (tipo !== 'ninguno' && ojo !== 'ninguno') ? cantidad_recibida : 0,
+                    esf: esf,
+                    cil: cil,
+                    eje: eje,
+                    add: add,
+                    rad: rad,
+                    dia: dia,
+                    nota: nota
+                });
+            });
+            
+            return lines;
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             const initialRx = document.getElementById('rx_lineas_json').value;
             const legacyRx = document.getElementById('rx').value; 
+            const generalRecibido = parseInt(document.getElementById('recibido').value) || 0;
+            let linesLoaded = false;
+            
             try {
-                const data = JSON.parse(initialRx);
+                let data = JSON.parse(initialRx);
+                
+                // Detect if it was saved under the old fallback logic
+                const isLegacySerialized = (data && data.length === 1 && 
+                    (data[0].ojo === 'ninguno' || !data[0].ojo) && 
+                    (data[0].nota.includes('|') || /^(OD|OI|OTRO)\b/i.test(data[0].nota))
+                );
+                
+                if (isLegacySerialized) {
+                    const parsed = parseLegacyRx(data[0].nota || legacyRx, generalRecibido);
+                    if (parsed && parsed.length > 0) {
+                        data = parsed;
+                    }
+                }
+                
                 if (data && data.length > 0) {
                     data.forEach(d => {
                         // CASO A: Formato plano nuevo (tiene 'ojo')
                         if (d.ojo && !d.od && !d.oi) {
                             addRxLine(d);
+                            linesLoaded = true;
                         } 
                         // CASO B: Formato anidado antiguo (tiene 'od' o 'oi')
                         else if (d.od || d.oi) {
@@ -1022,16 +1154,22 @@ include '../views/header.php';
                                     nota: d.nota || d.notas || ''
                                 });
                             }
+                            linesLoaded = true;
                         }
                     });
-                } else if (legacyRx && legacyRx.trim() !== '') {
-                    addRxLine({ tipo: 'ninguno', ojo: 'ninguno', cantidad: 0, cantidad_recibida: 0, nota: legacyRx });
-                } else {
-                    addRxLine();
                 }
             } catch (e) {
+                console.error("Error parsing initial rx_lineas:", e);
+            }
+
+            if (!linesLoaded) {
                 if (legacyRx && legacyRx.trim() !== '') {
-                    addRxLine({ tipo: 'ninguno', ojo: 'ninguno', cantidad: 0, cantidad_recibida: 0, nota: legacyRx });
+                    const parsed = parseLegacyRx(legacyRx, generalRecibido);
+                    if (parsed && parsed.length > 0) {
+                        parsed.forEach(d => addRxLine(d));
+                    } else {
+                        addRxLine({ tipo: 'ninguno', ojo: 'ninguno', cantidad: 0, cantidad_recibida: 0, nota: legacyRx });
+                    }
                 } else {
                     addRxLine();
                 }
