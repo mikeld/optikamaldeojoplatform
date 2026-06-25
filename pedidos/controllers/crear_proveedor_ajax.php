@@ -1,7 +1,7 @@
 <?php
 header('Content-Type: application/json');
 require '../includes/auth.php';
-Auth::verificarRolesJson([Auth::ROL_ADMIN, Auth::ROL_ENCARGADO]);
+Auth::verificarRolesJson([Auth::ROL_ADMIN, Auth::ROL_ENCARGADO, Auth::ROL_EMPLEADO]);
 require '../includes/conexion.php';
 
 try {
