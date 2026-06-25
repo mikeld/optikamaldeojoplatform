@@ -57,6 +57,14 @@ include '../views/header.php';
 ?>
 <!-- Select2 CSS -->
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script>
+    window.onerror = function(msg, url, line, col, error) {
+        const div = document.createElement('div');
+        div.style.cssText = 'position:fixed;top:0;left:0;right:0;background:red;color:white;padding:15px;z-index:99999;font-family:monospace;font-weight:bold;font-size:14px;box-shadow:0 4px 10px rgba(0,0,0,0.3);';
+        div.innerHTML = '⚠️ JS Error: ' + msg + ' on line ' + line + ' (col ' + col + ')';
+        document.body.appendChild(div);
+    };
+</script>
 <style>
     .select2-container--bootstrap-5 .select2-selection { border-radius: 12px; height: calc(3.5rem + 2px); padding: 1rem 0.75rem; }
     .select2-container .select2-selection--single { height: 38px !important; border-radius: 0.375rem !important; border: 1px solid #dee2e6 !important; }
