@@ -1252,6 +1252,16 @@ include '../views/header.php';
                     btn.innerHTML = originalContent;
                 });
             });
+
+            // Auto-focus search input on Select2 open (allows typing immediately)
+            $(document).on('select2:open', function(e) {
+                setTimeout(function() {
+                    const searchField = document.querySelector('.select2-container--open .select2-search__field');
+                    if (searchField) {
+                        searchField.focus();
+                    }
+                }, 50);
+            });
         });
     </script>
 
