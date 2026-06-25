@@ -402,12 +402,14 @@ function sortLink($col, $label, $currentSort, $currentDir) {
 
         // Auto-focus search input on Select2 open (allows typing immediately)
         $(document).on('select2:open', function(e) {
-            setTimeout(function() {
-                const searchField = document.querySelector('.select2-container--open .select2-search__field');
-                if (searchField) {
+            const searchField = document.querySelector('.select2-container--open .select2-search__field');
+            if (searchField) {
+                searchField.removeAttribute('readonly');
+                searchField.focus();
+                setTimeout(function() {
                     searchField.focus();
-                }
-            }, 50);
+                }, 50);
+            }
         });
     });
 
