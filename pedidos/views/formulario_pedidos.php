@@ -423,7 +423,7 @@ try {
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
     <!-- Select2 JS -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
     <script>
@@ -1049,6 +1049,18 @@ try {
                 width: '100%'
             });
 
+            // Auto-focus search input on Select2 open (allows typing immediately)
+            $(document).on('select2:open', function(e) {
+                const searchField = document.querySelector('.select2-container--open .select2-search__field');
+                if (searchField) {
+                    searchField.removeAttribute('readonly');
+                    searchField.focus();
+                    setTimeout(function() {
+                        searchField.focus();
+                    }, 50);
+                }
+            });
+
         function parseLegacyRx(legacyRx, generalRecibido = 0) {
             if (!legacyRx || !legacyRx.trim()) return [];
             
@@ -1056,35 +1068,56 @@ try {
             const lines = [];
             
             segments.forEach(segment => {
-                let rest = segment;
+                let rest = segment.trim();
                 let ojo = 'ninguno';
                 let tipo = 'ninguno';
                 let cantidad = 1;
                 let nota = '';
                 
-                // 1. Parse Ojo
-                if (/^(OD|OI|OTRO)\b/i.test(rest)) {
-                    const match = rest.match(/^(OD|OI|OTRO)\b/i);
-                    ojo = match[0].toUpperCase();
-                    rest = rest.replace(/^(OD|OI|OTRO)\s*/i, '');
+                // 1. Detect and extract eye (OD, OI, OTRO) anywhere
+                const eyeMatch = rest.match(/\b(OD|OI|OTRO)\b/i);
+                if (eyeMatch) {
+                    ojo = eyeMatch[1].toUpperCase();
+                    // Remove the eye token and any adjacent punctuation like ":" or "-"
+                    rest = rest.replace(new RegExp('\\b' + eyeMatch[1] + '\\b\\s*[:\\-]?\\s*', 'i'), ' ');
                 }
                 
-                // 2. Parse Product Note [Product]
-                const noteMatch = rest.match(/\[(.*?)\]/);
-                if (noteMatch) {
-                    nota = noteMatch[1].trim();
-                    rest = rest.replace(/\[.*?\]/g, ' ');
-                }
-                
-                // 3. Parse Quantity and Type e.g. (1 cajas)
+                // 2. Detect and extract quantity (e.g. "(2 cajas)", "(1 blister)")
                 const qtyMatch = rest.match(/\((\d+)\s+(caja|blister|cajas|blisters)s?\)/i);
                 if (qtyMatch) {
                     cantidad = parseInt(qtyMatch[1], 10);
                     const tipoStr = qtyMatch[2].toLowerCase();
                     if (tipoStr.startsWith('caja')) tipo = 'caja';
                     else if (tipoStr.startsWith('blister')) tipo = 'blister';
-                    rest = rest.replace(/\(.*?\)/g, ' ');
+                    rest = rest.replace(qtyMatch[0], ' ');
                 }
+                
+                // 3. Detect and extract product name (nota)
+                const bracketMatch = rest.match(/\[(.*?)\]/);
+                if (bracketMatch) {
+                    nota = bracketMatch[1].trim();
+                    rest = rest.replace(bracketMatch[0], ' ');
+                } else {
+                    const gradIndicatorMatch = rest.match(/(?:con\s+)?(?:graduacion\s+)?\b(esf|cil|eje|add|rad|dia)\b/i);
+                    if (gradIndicatorMatch) {
+                        const index = rest.indexOf(gradIndicatorMatch[0]);
+                        nota = rest.substring(0, index).trim();
+                        rest = rest.substring(index);
+                    } else {
+                        const signedNumberMatch = rest.match(/\b[+-]\d+(?:[.,]\d+)?\b/);
+                        if (signedNumberMatch) {
+                            const index = rest.indexOf(signedNumberMatch[0]);
+                            nota = rest.substring(0, index).trim();
+                            rest = rest.substring(index);
+                        } else {
+                            nota = rest.trim();
+                            rest = '';
+                        }
+                    }
+                }
+                
+                // Clean up product note (remove trailing/leading punctuation)
+                nota = nota.replace(/^[:\-\s,]+|[:\-\s,]+$/g, '').trim();
                 
                 // 4. Parse graduation fields from remaining text
                 let esf = '';
@@ -1094,48 +1127,61 @@ try {
                 let rad = '';
                 let dia = '';
                 
-                // Extract R: and D: first
-                const radMatch = rest.match(/R:\s*([^\s]+)/i);
-                if (radMatch) {
-                    rad = radMatch[1].trim();
-                    rest = rest.replace(/R:\s*[^\s]+/i, ' ');
-                }
-                const diaMatch = rest.match(/D:\s*([^\s]+)/i);
-                if (diaMatch) {
-                    dia = diaMatch[1].trim();
-                    rest = rest.replace(/D:\s*[^\s]+/i, ' ');
-                }
+                const esfMatch = rest.match(/\besf(?:era)?[:\s]+([+-]?\d+(?:[.,]\d+)?)/i);
+                if (esfMatch) { esf = esfMatch[1]; rest = rest.replace(esfMatch[0], ' '); }
                 
-                // Tokenize remaining words
+                const cilMatch = rest.match(/\bcil(?:indro)?[:\s]+([+-]?\d+(?:[.,]\d+)?)/i);
+                if (cilMatch) { cil = cilMatch[1]; rest = rest.replace(cilMatch[0], ' '); }
+                
+                const ejeMatch = rest.match(/\beje[:\s]+(\d+)/i);
+                if (ejeMatch) { eje = ejeMatch[1]; rest = rest.replace(ejeMatch[0], ' '); }
+                
+                const addMatch = rest.match(/\badd(?:icion)?[:\s]+([+-]?\d+(?:[.,]\d+)?)/i);
+                if (addMatch) { add = addMatch[1]; rest = rest.replace(addMatch[0], ' '); }
+                
+                const radMatch = rest.match(/(?:\br(?:ad)?|R)[:\s]+([+-]?\d+(?:[.,]\d+)?)/i);
+                if (radMatch) { rad = radMatch[1]; rest = rest.replace(radMatch[0], ' '); }
+                
+                const diaMatch = rest.match(/(?:\bd(?:ia)?|D)[:\s]+([+-]?\d+(?:[.,]\d+)?)/i);
+                if (diaMatch) { dia = diaMatch[1]; rest = rest.replace(diaMatch[0], ' '); }
+                
+                // Fallback: tokenize whatever is left and assign by position
                 const tokens = rest.trim().split(/\s+/).filter(t => t.length > 0);
+                let tokenIdx = 0;
                 
-                if (tokens.length > 0) {
-                    // Token 1 is Sphere
-                    esf = tokens[0];
-                    
-                    if (tokens.length > 1) {
-                        const token2 = tokens[1];
-                        const isToken2Numeric = /^[+-]?\d+([.,]\d+)?$/.test(token2);
-                        if (isToken2Numeric) {
-                            cil = token2;
-                            
-                            if (tokens.length > 2) {
-                                const token3 = tokens[2];
-                                const isToken3Numeric = /^[+-]?\d+([.,]\d+)?$/.test(token3);
-                                if (isToken3Numeric) {
-                                    eje = token3;
-                                    
-                                    if (tokens.length > 3) {
-                                        add = tokens.slice(3).join(' ');
-                                    }
-                                } else {
-                                    add = tokens.slice(2).join(' ');
-                                }
-                            }
-                        } else {
-                            add = tokens.slice(1).join(' ');
-                        }
+                if (!esf && tokens.length > tokenIdx) {
+                    if (/^[+-]?\d+([.,]\d+)?$/.test(tokens[tokenIdx])) {
+                        esf = tokens[tokenIdx];
+                        tokenIdx++;
                     }
+                }
+                if (!cil && tokens.length > tokenIdx) {
+                    if (/^[+-]?\d+([.,]\d+)?$/.test(tokens[tokenIdx])) {
+                        cil = tokens[tokenIdx];
+                        tokenIdx++;
+                    }
+                }
+                if (!eje && tokens.length > tokenIdx) {
+                    if (/^\d+$/.test(tokens[tokenIdx])) {
+                        eje = tokens[tokenIdx];
+                        tokenIdx++;
+                    }
+                }
+                if (!add && tokens.length > tokenIdx) {
+                    add = tokens.slice(tokenIdx).join(' ');
+                }
+                
+                // Normalize numeric values
+                if (esf) esf = esf.replace(',', '.');
+                if (cil) cil = cil.replace(',', '.');
+                if (eje) eje = eje.replace(',', '.');
+                if (add) {
+                    add = add.replace(/^(con\b\s*)?(graduacion\b\s*)?(esf|cil|eje|add|rad|dia\b)?[:\-\s,]*/i, '').trim();
+                }
+                
+                // If we successfully parsed any graduation field but ojo was 'ninguno', set it to 'OTRO'
+                if ((esf || cil || eje || add || rad || dia) && ojo === 'ninguno') {
+                    ojo = 'OTRO';
                 }
                 
                 let cantidad_recibida = 0;
@@ -1236,7 +1282,12 @@ try {
                                         rxLinesData = JSON.parse(ultimo.rx_lineas);
                                         const isLegacySerialized = (rxLinesData && rxLinesData.length === 1 && 
                                             (rxLinesData[0].ojo === 'ninguno' || !rxLinesData[0].ojo) && 
-                                            (rxLinesData[0].nota.includes('|') || /^(OD|OI|OTRO)\b/i.test(rxLinesData[0].nota))
+                                            rxLinesData[0].nota && (
+                                                rxLinesData[0].nota.includes('|') || 
+                                                /\b(OD|OI|OTRO)\b/i.test(rxLinesData[0].nota) || 
+                                                /\b(esf|cil|eje|add)\b/i.test(rxLinesData[0].nota) ||
+                                                /\b[+-]\d+(?:[.,]\d+)?\b/.test(rxLinesData[0].nota)
+                                            )
                                         );
                                         if (isLegacySerialized) {
                                             const parsed = parseLegacyRx(rxLinesData[0].nota || ultimo.rx);
@@ -1336,7 +1387,12 @@ try {
                             rxLinesData = JSON.parse(p.rx_lineas);
                             const isLegacySerialized = (rxLinesData && rxLinesData.length === 1 && 
                                 (rxLinesData[0].ojo === 'ninguno' || !rxLinesData[0].ojo) && 
-                                (rxLinesData[0].nota.includes('|') || /^(OD|OI|OTRO)\b/i.test(rxLinesData[0].nota))
+                                rxLinesData[0].nota && (
+                                    rxLinesData[0].nota.includes('|') || 
+                                    /\b(OD|OI|OTRO)\b/i.test(rxLinesData[0].nota) || 
+                                    /\b(esf|cil|eje|add)\b/i.test(rxLinesData[0].nota) ||
+                                    /\b[+-]\d+(?:[.,]\d+)?\b/.test(rxLinesData[0].nota)
+                                )
                             );
                             if (isLegacySerialized) {
                                 const parsed = parseLegacyRx(rxLinesData[0].nota || p.rx);
@@ -1408,7 +1464,12 @@ try {
                             rxLinesData = JSON.parse(duplicarData.rx_lineas);
                             const isLegacySerialized = (rxLinesData && rxLinesData.length === 1 && 
                                 (rxLinesData[0].ojo === 'ninguno' || !rxLinesData[0].ojo) && 
-                                (rxLinesData[0].nota.includes('|') || /^(OD|OI|OTRO)\b/i.test(rxLinesData[0].nota))
+                                rxLinesData[0].nota && (
+                                    rxLinesData[0].nota.includes('|') || 
+                                    /\b(OD|OI|OTRO)\b/i.test(rxLinesData[0].nota) || 
+                                    /\b(esf|cil|eje|add)\b/i.test(rxLinesData[0].nota) ||
+                                    /\b[+-]\d+(?:[.,]\d+)?\b/.test(rxLinesData[0].nota)
+                                )
                             );
                             if (isLegacySerialized) {
                                 const parsed = parseLegacyRx(rxLinesData[0].nota || duplicarData.rx);
