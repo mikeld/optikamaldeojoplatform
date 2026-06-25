@@ -5,15 +5,14 @@ require_once '../includes/conexion.php';
 try {
     $conexion = new Conexion();
     
-    $id = isset($_GET['id']) ? (int)$_GET['id'] : 14;
-    
-    $stmt = $conexion->pdo->prepare("SELECT id, referencia_cliente, lc_gafa_recambio, rx, rx_lineas, pack_tipo, pack_estado FROM pedidos WHERE id = :id");
-    $stmt->execute([':id' => $id]);
-    $order = $stmt->fetch(PDO::FETCH_ASSOC);
+    $stmt = $conexion->pdo->prepare("SELECT id, referencia_cliente, lc_gafa_recambio, rx, rx_lineas, pack_tipo, pack_estado FROM pedidos WHERE rx LIKE :term OR rx_lineas LIKE :term OR lc_gafa_recambio LIKE :term");
+    $stmt->execute([':term' => '%blister acctua toric%']);
+    $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     echo json_encode([
         'success' => true,
-        'order' => $order
+        'count' => count($orders),
+        'orders' => $orders
     ], JSON_PRETTY_PRINT);
 } catch (Exception $e) {
     echo json_encode([
