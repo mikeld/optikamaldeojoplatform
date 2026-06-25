@@ -1082,18 +1082,35 @@ include '../views/header.php';
                 let data = JSON.parse(initialRx);
                 
                 // Detect if it was saved under the old fallback logic
-                const isLegacySerialized = (data && data.length === 1 && 
-                    (data[0].ojo === 'ninguno' || !data[0].ojo) && 
-                    data[0].nota && (
-                        data[0].nota.includes('|') || 
-                        /\b(OD|OI|OTRO)\b/i.test(data[0].nota) || 
-                        /\b(esf|cil|eje|add)\b/i.test(data[0].nota) ||
-                        /\b[+-]\d+(?:[.,]\d+)?\b/.test(data[0].nota)
-                    )
-                );
+                let isLegacySerialized = false;
+                let textToParse = '';
+
+                if (data && data.length === 1 && (data[0].ojo === 'ninguno' || !data[0].ojo)) {
+                    const notaText = data[0].nota || '';
+                    const notaHasRx = (
+                        notaText.includes('|') || 
+                        /\b(OD|OI|OTRO)\b/i.test(notaText) || 
+                        /\b(esf|cil|eje|add)\b/i.test(notaText) ||
+                        /\b[+-]\d+(?:[.,]\d+)?\b/.test(notaText)
+                    );
+                    const legacyHasRx = legacyRx && (
+                        legacyRx.includes('|') || 
+                        /\b(OD|OI|OTRO)\b/i.test(legacyRx) || 
+                        /\b(esf|cil|eje|add)\b/i.test(legacyRx) ||
+                        /\b[+-]\d+(?:[.,]\d+)?\b/.test(legacyRx)
+                    );
+
+                    if (notaHasRx) {
+                        isLegacySerialized = true;
+                        textToParse = notaText;
+                    } else if (legacyHasRx) {
+                        isLegacySerialized = true;
+                        textToParse = legacyRx;
+                    }
+                }
                 
-                if (isLegacySerialized) {
-                    const parsed = parseLegacyRx(data[0].nota || legacyRx, generalRecibido);
+                if (isLegacySerialized && textToParse) {
+                    const parsed = parseLegacyRx(textToParse, generalRecibido);
                     if (parsed && parsed.length > 0) {
                         data = parsed;
                     }
@@ -1101,6 +1118,10 @@ include '../views/header.php';
                 
                 if (data && data.length > 0) {
                     data.forEach(d => {
+                        // Force eye visibility if any graduation values are present
+                        if (d.ojo === 'ninguno' && (d.esf || d.cil || d.eje || d.add || d.rad || d.dia)) {
+                            d.ojo = 'OTRO';
+                        }
                         // CASO A: Formato plano nuevo (tiene 'ojo')
                         if (d.ojo && !d.od && !d.oi) {
                             addRxLine(d);
@@ -1306,5 +1327,7 @@ include '../views/header.php';
         });
     </script>
 
-<?php include '../views/footer.php'; ?>
-// force deploy
+<?php 
+$skip_jquery_in_footer = true;
+include '../views/footer.php'; 
+?>

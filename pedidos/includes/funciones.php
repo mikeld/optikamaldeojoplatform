@@ -384,7 +384,20 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
                     echo '<input type="hidden" name="recibido_val" value="1">';
                     echo '<button type="submit" title="Marcar recibido" class="btn btn-success btn-sm btn-action"><i class="fas fa-check"></i></button>';
                     echo '</form>';
+                    $show_parcial = false;
                     if (!empty($p['pack_tipo'])) {
+                        $show_parcial = true;
+                    } else if (!empty($p['rx_lineas'])) {
+                        $lineas = json_decode($p['rx_lineas'], true);
+                        if (is_array($lineas)) {
+                            if (count($lineas) > 1) {
+                                $show_parcial = true;
+                            } else if (count($lineas) === 1 && isset($lineas[0]['cantidad']) && $lineas[0]['cantidad'] > 1) {
+                                $show_parcial = true;
+                            }
+                        }
+                    }
+                    if ($show_parcial) {
                         echo '<button type="button" title="Recibido parcial" class="btn btn-warning text-dark btn-sm btn-action open-parcial-btn"><i class="fas fa-box-open"></i></button>';
                     }
                     echo '<button type="button" title="Cancelar pedido" class="btn btn-outline-danger btn-sm btn-action btn-cancelar-pedido" data-pedido-id="'.htmlspecialchars($p['id']).'"><i class="fas fa-ban"></i></button>';

@@ -1280,17 +1280,36 @@ try {
                                     let rxLinesData = [];
                                     if (ultimo.rx_lineas) {
                                         rxLinesData = JSON.parse(ultimo.rx_lineas);
-                                        const isLegacySerialized = (rxLinesData && rxLinesData.length === 1 && 
-                                            (rxLinesData[0].ojo === 'ninguno' || !rxLinesData[0].ojo) && 
-                                            rxLinesData[0].nota && (
-                                                rxLinesData[0].nota.includes('|') || 
-                                                /\b(OD|OI|OTRO)\b/i.test(rxLinesData[0].nota) || 
-                                                /\b(esf|cil|eje|add)\b/i.test(rxLinesData[0].nota) ||
-                                                /\b[+-]\d+(?:[.,]\d+)?\b/.test(rxLinesData[0].nota)
-                                            )
-                                        );
-                                        if (isLegacySerialized) {
-                                            const parsed = parseLegacyRx(rxLinesData[0].nota || ultimo.rx);
+                                        let isLegacySerialized = false;
+                                        let textToParse = '';
+
+                                        if (rxLinesData && rxLinesData.length === 1 && (rxLinesData[0].ojo === 'ninguno' || !rxLinesData[0].ojo)) {
+                                            const notaText = rxLinesData[0].nota || '';
+                                            const legacyText = ultimo.rx || '';
+                                            const notaHasRx = (
+                                                notaText.includes('|') || 
+                                                /\b(OD|OI|OTRO)\b/i.test(notaText) || 
+                                                /\b(esf|cil|eje|add)\b/i.test(notaText) ||
+                                                /\b[+-]\d+(?:[.,]\d+)?\b/.test(notaText)
+                                            );
+                                            const legacyHasRx = legacyText && (
+                                                legacyText.includes('|') || 
+                                                /\b(OD|OI|OTRO)\b/i.test(legacyText) || 
+                                                /\b(esf|cil|eje|add)\b/i.test(legacyText) ||
+                                                /\b[+-]\d+(?:[.,]\d+)?\b/.test(legacyText)
+                                            );
+
+                                            if (notaHasRx) {
+                                                isLegacySerialized = true;
+                                                textToParse = notaText;
+                                            } else if (legacyHasRx) {
+                                                isLegacySerialized = true;
+                                                textToParse = legacyText;
+                                            }
+                                        }
+
+                                        if (isLegacySerialized && textToParse) {
+                                            const parsed = parseLegacyRx(textToParse);
                                             if (parsed && parsed.length > 0) {
                                                 rxLinesData = parsed;
                                             }
@@ -1307,7 +1326,12 @@ try {
                                         btnRx.title = "Cargar RX anterior: " + (ultimo.rx || "");
                                         btnRx.onclick = () => {
                                             rxContainer.innerHTML = ''; // Limpiar antes de cargar
-                                            rxLinesData.forEach(line => addRxLine(line));
+                                            rxLinesData.forEach(line => {
+                                                if (line.ojo === 'ninguno' && (line.esf || line.cil || line.eje || line.add || line.rad || line.dia)) {
+                                                    line.ojo = 'OTRO';
+                                                }
+                                                addRxLine(line);
+                                            });
                                         };
                                         contRx.appendChild(btnRx);
 
@@ -1385,27 +1409,51 @@ try {
                         let rxLinesData = [];
                         if (p.rx_lineas) {
                             rxLinesData = JSON.parse(p.rx_lineas);
-                            const isLegacySerialized = (rxLinesData && rxLinesData.length === 1 && 
-                                (rxLinesData[0].ojo === 'ninguno' || !rxLinesData[0].ojo) && 
-                                rxLinesData[0].nota && (
-                                    rxLinesData[0].nota.includes('|') || 
-                                    /\b(OD|OI|OTRO)\b/i.test(rxLinesData[0].nota) || 
-                                    /\b(esf|cil|eje|add)\b/i.test(rxLinesData[0].nota) ||
-                                    /\b[+-]\d+(?:[.,]\d+)?\b/.test(rxLinesData[0].nota)
-                                )
-                            );
-                            if (isLegacySerialized) {
-                                const parsed = parseLegacyRx(rxLinesData[0].nota || p.rx);
-                                if (parsed && parsed.length > 0) {
-                                    rxLinesData = parsed;
-                                }
-                            }
-                        } else if (p.rx) {
-                            rxLinesData = parseLegacyRx(p.rx);
-                        }
+                             let isLegacySerialized = false;
+                             let textToParse = '';
 
-                        if (Array.isArray(rxLinesData) && rxLinesData.length > 0) {
-                            rxLinesData.forEach(line => addRxLine(line));
+                             if (rxLinesData && rxLinesData.length === 1 && (rxLinesData[0].ojo === 'ninguno' || !rxLinesData[0].ojo)) {
+                                 const notaText = rxLinesData[0].nota || '';
+                                 const legacyText = p.rx || '';
+                                 const notaHasRx = (
+                                     notaText.includes('|') || 
+                                     /\b(OD|OI|OTRO)\b/i.test(notaText) || 
+                                     /\b(esf|cil|eje|add)\b/i.test(notaText) ||
+                                     /\b[+-]\d+(?:[.,]\d+)?\b/.test(notaText)
+                                 );
+                                 const legacyHasRx = legacyText && (
+                                     legacyText.includes('|') || 
+                                     /\b(OD|OI|OTRO)\b/i.test(legacyText) || 
+                                     /\b(esf|cil|eje|add)\b/i.test(legacyText) ||
+                                     /\b[+-]\d+(?:[.,]\d+)?\b/.test(legacyText)
+                                 );
+
+                                 if (notaHasRx) {
+                                     isLegacySerialized = true;
+                                     textToParse = notaText;
+                                 } else if (legacyHasRx) {
+                                     isLegacySerialized = true;
+                                     textToParse = legacyText;
+                                 }
+                             }
+
+                             if (isLegacySerialized && textToParse) {
+                                 const parsed = parseLegacyRx(textToParse);
+                                 if (parsed && parsed.length > 0) {
+                                     rxLinesData = parsed;
+                                 }
+                             }
+                         } else if (p.rx) {
+                             rxLinesData = parseLegacyRx(p.rx);
+                         }
+
+                         if (Array.isArray(rxLinesData) && rxLinesData.length > 0) {
+                             rxLinesData.forEach(line => {
+                                 if (line.ojo === 'ninguno' && (line.esf || line.cil || line.eje || line.add || line.rad || line.dia)) {
+                                     line.ojo = 'OTRO';
+                                 }
+                                 addRxLine(line);
+                             });
                         } else {
                             addRxLine();
                         }
@@ -1462,17 +1510,36 @@ try {
                         let rxLinesData = [];
                         if (duplicarData.rx_lineas) {
                             rxLinesData = JSON.parse(duplicarData.rx_lineas);
-                            const isLegacySerialized = (rxLinesData && rxLinesData.length === 1 && 
-                                (rxLinesData[0].ojo === 'ninguno' || !rxLinesData[0].ojo) && 
-                                rxLinesData[0].nota && (
-                                    rxLinesData[0].nota.includes('|') || 
-                                    /\b(OD|OI|OTRO)\b/i.test(rxLinesData[0].nota) || 
-                                    /\b(esf|cil|eje|add)\b/i.test(rxLinesData[0].nota) ||
-                                    /\b[+-]\d+(?:[.,]\d+)?\b/.test(rxLinesData[0].nota)
-                                )
-                            );
-                            if (isLegacySerialized) {
-                                const parsed = parseLegacyRx(rxLinesData[0].nota || duplicarData.rx);
+                            let isLegacySerialized = false;
+                            let textToParse = '';
+
+                            if (rxLinesData && rxLinesData.length === 1 && (rxLinesData[0].ojo === 'ninguno' || !rxLinesData[0].ojo)) {
+                                const notaText = rxLinesData[0].nota || '';
+                                const legacyText = duplicarData.rx || '';
+                                const notaHasRx = (
+                                    notaText.includes('|') || 
+                                    /\b(OD|OI|OTRO)\b/i.test(notaText) || 
+                                    /\b(esf|cil|eje|add)\b/i.test(notaText) ||
+                                    /\b[+-]\d+(?:[.,]\d+)?\b/.test(notaText)
+                                );
+                                const legacyHasRx = legacyText && (
+                                    legacyText.includes('|') || 
+                                    /\b(OD|OI|OTRO)\b/i.test(legacyText) || 
+                                    /\b(esf|cil|eje|add)\b/i.test(legacyText) ||
+                                    /\b[+-]\d+(?:[.,]\d+)?\b/.test(legacyText)
+                                );
+
+                                if (notaHasRx) {
+                                    isLegacySerialized = true;
+                                    textToParse = notaText;
+                                } else if (legacyHasRx) {
+                                    isLegacySerialized = true;
+                                    textToParse = legacyText;
+                                }
+                            }
+
+                            if (isLegacySerialized && textToParse) {
+                                const parsed = parseLegacyRx(textToParse);
                                 if (parsed && parsed.length > 0) {
                                     rxLinesData = parsed;
                                 }
@@ -1485,6 +1552,9 @@ try {
                             rxContainer.innerHTML = '';
                             rxLinesData.forEach(line => {
                                 line.cantidad_recibida = 0; // reset received count
+                                if (line.ojo === 'ninguno' && (line.esf || line.cil || line.eje || line.add || line.rad || line.dia)) {
+                                    line.ojo = 'OTRO';
+                                }
                                 addRxLine(line);
                             });
                         }

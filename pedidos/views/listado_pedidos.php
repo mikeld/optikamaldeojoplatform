@@ -951,12 +951,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 try {
                     const lineas = JSON.parse(p.rx_lineas);
                     if (Array.isArray(lineas)) {
+                        const canBeParcial = lineas.length > 1 || lineas.some(l => l.cantidad > 1);
                         lineas.forEach((l, idx) => {
-                            if (l.tipo === 'caja' || l.tipo === 'blister') {
+                            if (canBeParcial) {
                                 hasPackLines = true;
                                 
-                                const eyeBadgeClass = l.ojo === 'OD' ? 'text-primary bg-primary bg-opacity-10' : (l.ojo === 'OI' ? 'text-danger bg-danger bg-opacity-10' : 'text-muted bg-secondary bg-opacity-10');
-                                const tipoIcon = l.tipo === 'caja' ? 'fa-box text-primary' : 'fa-tablets text-purple';
+                                const eyeBadge = (l.ojo && l.ojo !== 'ninguno') 
+                                    ? `<span class="badge ${l.ojo === 'OD' ? 'text-primary bg-primary bg-opacity-10' : (l.ojo === 'OI' ? 'text-danger bg-danger bg-opacity-10' : 'text-muted bg-secondary bg-opacity-10')}">${l.ojo}</span>`
+                                    : '';
+                                
+                                let tipoIcon = 'fa-glasses text-secondary';
+                                let tipoLabel = 'Gafa/Montura';
+                                if (l.tipo === 'caja') {
+                                    tipoIcon = 'fa-box text-primary';
+                                    tipoLabel = 'Caja';
+                                } else if (l.tipo === 'blister') {
+                                    tipoIcon = 'fa-tablets text-purple';
+                                    tipoLabel = 'Blister';
+                                }
+                                
                                 const noteText = l.nota ? ` <span class="small text-muted">[${l.nota}]</span>` : '';
                                 
                                 const rxPartsArray = [l.esf, l.cil, l.eje, l.add];
@@ -969,8 +982,8 @@ document.addEventListener('DOMContentLoaded', function() {
                                     <div class="d-flex align-items-center justify-content-between border-bottom pb-2 mb-2 flex-wrap gap-2">
                                         <div class="d-flex align-items-center gap-2">
                                             <i class="fas ${tipoIcon}"></i>
-                                            <span class="badge ${eyeBadgeClass}">${l.ojo}</span>
-                                            <span class="fw-semibold text-dark text-capitalize" style="font-size: 0.85rem;">${l.tipo}s${rxLabel}${noteText}</span>
+                                            ${eyeBadge}
+                                            <span class="fw-semibold text-dark" style="font-size: 0.85rem;">${tipoLabel}${rxLabel}${noteText}</span>
                                         </div>
                                         <div class="d-flex align-items-center gap-2">
                                             <span class="text-muted small">Pedidas: <strong>${l.cantidad}</strong></span>
