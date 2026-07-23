@@ -83,16 +83,28 @@ function formatearRX($rx, $rx_lineas_json = null) {
                     $tipo = $l['tipo'] ?? null;
                     $cant = isset($l['cantidad']) ? (int)$l['cantidad'] : 0;
                     $rec = isset($l['cantidad_recibida']) ? (int)$l['cantidad_recibida'] : 0;
-                    if ($tipo && $tipo !== 'ninguno' && $cant > 0) {
-                        $tipoLabel = ($tipo === 'caja') ? 'caja' : (($tipo === 'blister') ? 'blister' : $tipo);
-                        if ($rec > 0 && $rec < $cant) {
-                            $txt .= " ({$rec}/{$cant} {$tipoLabel}s)";
+                    
+                    $qtyHtml = "";
+                    $styleOverride = "";
+                    
+                    if ($cant > 0) {
+                        $tipoLabel = ($tipo === 'caja') ? 'caj.' : (($tipo === 'blister') ? 'blist.' : ($tipo === 'ninguno' ? 'gaf.' : $tipo));
+                        
+                        if ($rec >= $cant) {
+                            // Completo: Fondo verde suave, texto tachado
+                            $styleOverride = 'background-color: #e2f0d9 !important; color: #385723 !important; border-color: #c5e0b4 !important; text-decoration: line-through; opacity: 0.7;';
+                            $qtyHtml = " <span class='small' style='text-decoration: none; display: inline-block;'>[{$rec}/{$cant} {$tipoLabel}] ✓</span>";
+                        } elseif ($rec > 0) {
+                            // Parcial: Fondo amarillo/naranja suave
+                            $styleOverride = 'background-color: #fff3cd !important; color: #664d03 !important; border-color: #ffecb5 !important; font-weight: bold;';
+                            $qtyHtml = " <span>[{$rec}/{$cant} {$tipoLabel}]</span>";
                         } else {
-                            $txt .= " ({$cant} {$tipoLabel}s)";
+                            // Pendiente: Fondo gris/blanco estándar
+                            $qtyHtml = " <span class='text-muted' style='font-weight: normal;'>[0/{$cant} {$tipoLabel}]</span>";
                         }
                     }
                     
-                    $html .= '<span class="badge bg-light ' . $class . ' border">' . htmlspecialchars($txt) . '</span>';
+                    $html .= '<span class="badge bg-light ' . $class . ' border" style="' . $styleOverride . '">' . htmlspecialchars($txt) . $qtyHtml . '</span>';
                 }
                 
                 $html .= '</div></div>';
@@ -451,7 +463,8 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
 
         // WhatsApp
         $tel = urlencode($p['telefono'] ?? '');
-        $nombreCliente  = $p['referencia_cliente'] ?? 'Cliente';
+        $ref_parts = explode(' ', trim($p['referencia_cliente'] ?? ''));
+        $nombreCliente  = !empty($ref_parts[0]) ? $ref_parts[0] : 'Cliente';
         $nombreProducto = $p['lc_gafa_recambio']   ?? 'pedido';
         $msgES_custom = str_replace(['{cliente}', '{producto}'], [$nombreCliente, $nombreProducto], $msgES);
         $msgEU_custom = str_replace(['{cliente}', '{producto}'], [$nombreCliente, $nombreProducto], $msgEU);

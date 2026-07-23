@@ -13,6 +13,29 @@ $acciones_navbar = [
 require_once 'header.php';
 
 $conexion = new Conexion();
+
+// Migración automática para añadir UNIQUE index si no existe
+try {
+    $stmt_check = $conexion->pdo->query("SHOW KEYS FROM mensajes_whatsapp WHERE Key_name = 'uq_tipo_idioma'");
+    if (!$stmt_check->fetch()) {
+        // Eliminar duplicados
+        $conexion->pdo->exec("
+            DELETE m1 FROM mensajes_whatsapp m1
+            INNER JOIN mensajes_whatsapp m2 
+            ON m1.tipo = m2.tipo 
+            AND m1.idioma = m2.idioma 
+            AND m1.id < m2.id
+        ");
+        // Añadir UNIQUE
+        $conexion->pdo->exec("
+            ALTER TABLE mensajes_whatsapp 
+            ADD UNIQUE KEY uq_tipo_idioma (tipo, idioma)
+        ");
+    }
+} catch (Exception $e) {
+    // Ignorar en caso de error
+}
+
 $tipos = [
   'por_pedir' => 'Pendientes de pedir',
   'atrasado' => 'Atrasados',

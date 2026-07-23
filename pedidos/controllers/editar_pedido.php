@@ -564,11 +564,11 @@ include '../views/header.php';
                             <option value="OTRO" ${data && data.ojo === 'OTRO' ? 'selected' : ''}>Otro / Sin Especificar</option>
                         </select>
                     </div>
-                    <div class="col-6 col-md-3 rx-cantidad-wrap d-none">
+                    <div class="col-6 col-md-3 rx-cantidad-wrap">
                         <label class="form-label small mb-1">Cant. Pedida</label>
                         <input type="number" class="form-control form-control-sm rx-cantidad" min="1" value="${data ? (data.cantidad || 1) : 1}" oninput="serializeRxLines(); actualizarResumenPack();">
                     </div>
-                    <div class="col-6 col-md-3 rx-recibida-wrap d-none">
+                    <div class="col-6 col-md-3 rx-recibida-wrap">
                         <label class="form-label small mb-1">Cant. Recibida</label>
                         <input type="number" class="form-control form-control-sm rx-recibida" min="0" value="${data ? (data.cantidad_recibida || 0) : 0}" oninput="serializeRxLines(); actualizarResumenPack();">
                     </div>
@@ -667,14 +667,9 @@ include '../views/header.php';
                 rxInputsWrap.classList.add('d-none');
             }
 
-            // 2. Mostrar/ocultar cantidad pedida y recibida si es pack
-            if ((tipo === 'caja' || tipo === 'blister') && (ojo === 'OD' || ojo === 'OI' || ojo === 'OTRO')) {
-                qtyWrap.classList.remove('d-none');
-                recWrap.classList.remove('d-none');
-            } else {
-                qtyWrap.classList.add('d-none');
-                recWrap.classList.add('d-none');
-            }
+            // 2. Cantidad y cantidad recibida siempre visibles
+            qtyWrap.classList.remove('d-none');
+            recWrap.classList.remove('d-none');
 
             serializeRxLines();
             actualizarResumenPack();
@@ -737,8 +732,8 @@ include '../views/header.php';
                 const row = {
                     tipo: tipo,
                     ojo: ojo,
-                    cantidad: (tipo !== 'ninguno' && ojo !== 'ninguno') ? cantidad : 0,
-                    cantidad_recibida: (tipo !== 'ninguno' && ojo !== 'ninguno') ? cantidad_recibida : 0,
+                    cantidad: cantidad,
+                    cantidad_recibida: cantidad_recibida,
                     esf: esf,
                     cil: cil,
                     eje: eje,

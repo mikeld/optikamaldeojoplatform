@@ -96,7 +96,8 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
             3 => 'recibido',
             default => 'pendiente'
         };
-        $cliente = $p['referencia_cliente'];
+        $ref_parts = explode(' ', trim($p['referencia_cliente'] ?? ''));
+        $cliente = !empty($ref_parts[0]) ? $ref_parts[0] : 'Cliente';
         $producto = $p['lc_gafa_recambio'];
 
         // Mensaje ES

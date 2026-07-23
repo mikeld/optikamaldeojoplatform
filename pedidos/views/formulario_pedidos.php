@@ -606,7 +606,7 @@ try {
                             <option value="OTRO" ${data && data.ojo === 'OTRO' ? 'selected' : ''}>Otro / Sin Especificar</option>
                         </select>
                     </div>
-                    <div class="col-6 col-md-2 rx-cantidad-wrap d-none">
+                    <div class="col-6 col-md-2 rx-cantidad-wrap">
                         <label class="form-label small mb-1">Cantidad</label>
                         <input type="number" class="form-control form-control-sm rx-cantidad" min="1" value="${data ? (data.cantidad || 1) : 1}" oninput="serializeRxLines(); actualizarResumenPack();">
                     </div>
@@ -704,12 +704,8 @@ try {
                 rxInputsWrap.classList.add('d-none');
             }
 
-            // 2. Mostrar/ocultar cantidad si es pack y ojo
-            if ((tipo === 'caja' || tipo === 'blister') && (ojo === 'OD' || ojo === 'OI' || ojo === 'OTRO')) {
-                qtyWrap.classList.remove('d-none');
-            } else {
-                qtyWrap.classList.add('d-none');
-            }
+            // 2. Cantidad siempre visible
+            qtyWrap.classList.remove('d-none');
 
             serializeRxLines();
             actualizarResumenPack();
@@ -770,7 +766,7 @@ try {
                 const row = {
                     tipo: tipo,
                     ojo: ojo,
-                    cantidad: (tipo !== 'ninguno' && ojo !== 'ninguno') ? cantidad : 0,
+                    cantidad: cantidad,
                     cantidad_recibida: 0,
                     esf: esf,
                     cil: cil,

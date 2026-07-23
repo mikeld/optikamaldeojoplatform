@@ -203,7 +203,8 @@ foreach (['por_pedir','atrasado','pendiente','recibido'] as $t) {
                             }
                             $via_data = parsearVia($p['via'] ?? '');
                             $tel = urlencode($cliente['telefono'] ?? '');
-                            $nc  = $cliente['referencia'];
+                            $ref_parts = explode(' ', trim($cliente['referencia'] ?? ''));
+                            $nc  = !empty($ref_parts[0]) ? $ref_parts[0] : 'Cliente';
                             $np  = $p['lc_gafa_recambio'] ?? 'pedido';
                             $ws_es = urlencode(str_replace(['{cliente}','{producto}'], [$nc,$np], $ws_msgs[$ws_tipo]['es']));
                             $ws_eu = urlencode(str_replace(['{cliente}','{producto}'], [$nc,$np], $ws_msgs[$ws_tipo]['eu']));

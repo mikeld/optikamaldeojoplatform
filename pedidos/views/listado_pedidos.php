@@ -925,7 +925,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // WhatsApp en el modal — mensaje según estado
             const tel = encodeURIComponent(p.telefono || '');
-            const cliente = p.referencia_cliente || '';
+            const clienteFull = (p.referencia_cliente || '').trim();
+            const cliente = clienteFull.split(' ')[0] || 'Cliente';
             const producto = p.lc_gafa_recambio || '';
             const waBtns = document.getElementById('p-whatsapp-btns');
             if (waBtns) {
