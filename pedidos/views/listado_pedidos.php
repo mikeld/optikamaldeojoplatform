@@ -31,6 +31,13 @@ $pdo = (new Conexion())->pdo;
 $stmt_prov = $pdo->query("SELECT id, nombre FROM proveedores WHERE activo = 1 ORDER BY nombre ASC");
 $proveedores = $stmt_prov->fetchAll(PDO::FETCH_ASSOC);
 
+// Mapeo completo de nombres de proveedores (para pedidos cancelados y otros fallbacks)
+$stmt_prov_all = $pdo->query("SELECT id, nombre FROM proveedores");
+$prov_nombres_map = [];
+while ($r = $stmt_prov_all->fetch(PDO::FETCH_ASSOC)) {
+    $prov_nombres_map[(int)$r['id']] = $r['nombre'];
+}
+
 // Filtro de fechas para "Finalizados" (por defecto: últimos 90 días, sin fecha fin)
 $rec_fecha_desde = $_GET['rec_fecha_desde'] ?? date('Y-m-d', strtotime('-90 days'));
 $rec_fecha_hasta = $_GET['rec_fecha_hasta'] ?? '2099-12-31';
@@ -509,16 +516,36 @@ $proveedor_mas_atrasos = $proveedor_mas_atrasos_stmt->fetch(PDO::FETCH_ASSOC);
                     </thead>
                     <tbody>
                     <?php foreach ($pedidos_cancelados as $p): ?>
-                    <?php $p_json = htmlspecialchars(json_encode($p), ENT_QUOTES, 'UTF-8'); ?>
-                    <tr class="clickable-row" data-pedido='<?= $p_json ?>' data-proveedor-id="<?= htmlspecialchars($p['proveedor_id'] ?? '') ?>">
+                    <?php 
+                    $p_json = htmlspecialchars(json_encode($p), ENT_QUOTES, 'UTF-8'); 
+                    $cancel_badges = [];
+                    $rx_lines_dec = !empty($p['rx_lineas']) ? json_decode($p['rx_lineas'], true) : null;
+                    if (is_array($rx_lines_dec)) {
+                        foreach ($rx_lines_dec as $line) {
+                            $p_id = !empty($line['proveedor_id']) ? (int)$line['proveedor_id'] : null;
+                            if ($p_id && isset($prov_nombres_map[$p_id])) {
+                                $cancel_badges[$p_id] = $prov_nombres_map[$p_id];
+                            }
+                        }
+                    }
+                    if (empty($cancel_badges)) {
+                        $p_id = !empty($p['proveedor_id']) ? (int)$p['proveedor_id'] : null;
+                        if ($p_id && isset($prov_nombres_map[$p_id])) {
+                            $cancel_badges[$p_id] = $prov_nombres_map[$p_id];
+                        } elseif (!empty($p['proveedor_nombre'])) {
+                            $cancel_badges[0] = trim($p['proveedor_nombre']);
+                        }
+                    }
+                    ?>
+                    <tr class="clickable-row" data-pedido='<?= $p_json ?>' data-proveedor-ids="<?= implode(',', array_keys($cancel_badges)) ?>" data-proveedor-id="<?= htmlspecialchars($p['proveedor_id'] ?? '') ?>">
                         <td class="align-middle">
                             <span class="fw-bold text-muted"><?= htmlspecialchars($p['referencia_cliente']) ?></span>
                         </td>
                         <td class="align-middle">
                             <span class="fw-semibold text-muted"><?= htmlspecialchars($p['lc_gafa_recambio']) ?></span>
-                            <?php if (!empty($p['proveedor_nombre'])): ?>
-                                <div class="mt-1"><span class="badge bg-light text-secondary border" style="font-size:.65rem;"><i class="fas fa-building me-1 opacity-50"></i><?= htmlspecialchars($p['proveedor_nombre']) ?></span></div>
-                            <?php endif; ?>
+                            <?php foreach ($cancel_badges as $prov_nombre): ?>
+                                <div class="mt-1 d-inline-block me-1"><span class="badge bg-light text-secondary border" style="font-size:.65rem;"><i class="fas fa-building me-1 opacity-50"></i><?= htmlspecialchars($prov_nombre) ?></span></div>
+                            <?php endforeach; ?>
                         </td>
                         <td class="align-middle"><?= formatearRX($p['rx'], $p['rx_lineas'] ?? null) ?></td>
                         <td class="align-middle text-center font-monospace small"><?= htmlspecialchars($p['fecha_cliente'] ?? '-') ?></td>
@@ -1197,8 +1224,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const rowText = row.innerText.toLowerCase();
             const matchesText = !textTerm || rowText.includes(textTerm);
             
-            const rowProvId = row.getAttribute('data-proveedor-id') || '';
-            const matchesProv = !provTerm || (rowProvId === provTerm);
+            const rowProvIds = (row.getAttribute('data-proveedor-ids') || '').split(',');
+            const matchesProv = !provTerm || rowProvIds.includes(provTerm);
             
             let matchesQuick = true;
             if (quickFilterVal) {

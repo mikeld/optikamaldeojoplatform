@@ -27,6 +27,19 @@ try {
         $observaciones         = trim($_POST['observaciones']     ?? '');
         $proveedor_id          = $_POST['proveedor_id'] !== '' ? (int)$_POST['proveedor_id'] : null;
 
+        // Fallback: Si no hay proveedor general, usar el de la primera línea que tenga uno asignado
+        if ($proveedor_id === null && $rx_lineas) {
+            $lineas_decoded = json_decode($rx_lineas, true);
+            if (is_array($lineas_decoded)) {
+                foreach ($lineas_decoded as $line) {
+                    if (!empty($line['proveedor_id'])) {
+                        $proveedor_id = (int)$line['proveedor_id'];
+                        break;
+                    }
+                }
+            }
+        }
+
         // Convertir fechas vacías a NULL
         $fecha_pedido  = trim($_POST['fecha_pedido'] )  !== '' ? $_POST['fecha_pedido']  : null;
         $fecha_llegada = trim($_POST['fecha_llegada']) !== '' ? $_POST['fecha_llegada'] : null;

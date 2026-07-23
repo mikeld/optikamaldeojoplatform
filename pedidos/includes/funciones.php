@@ -269,7 +269,31 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
             if ($dias_fila >= 5) $row_class .= ' tr-urgente';
         }
 
-        echo '<tr class="'.$row_class.'" data-pedido=\''.$p_json.'\' data-proveedor-id="'.htmlspecialchars($p['proveedor_id'] ?? '').'">';
+        // Decodificar rx_lineas para buscar proveedores multimarca
+        $prov_badges = [];
+        $rx_lines_decoded = !empty($p['rx_lineas']) ? json_decode($p['rx_lineas'], true) : null;
+        $prov_nombres_map = obtenerNombresProveedores();
+        
+        if (is_array($rx_lines_decoded)) {
+            foreach ($rx_lines_decoded as $line) {
+                $p_id = !empty($line['proveedor_id']) ? (int)$line['proveedor_id'] : null;
+                if ($p_id && isset($prov_nombres_map[$p_id])) {
+                    $prov_badges[$p_id] = $prov_nombres_map[$p_id];
+                }
+            }
+        }
+        
+        // Si no se encontró ningún proveedor en las líneas, caer en el proveedor a nivel de pedido
+        if (empty($prov_badges)) {
+            $prov_id = !empty($p['proveedor_id']) ? (int)$p['proveedor_id'] : null;
+            if ($prov_id && isset($prov_nombres_map[$prov_id])) {
+                $prov_badges[$prov_id] = $prov_nombres_map[$prov_id];
+            } elseif (trim($p['proveedor_nombre'] ?? '') !== '') {
+                $prov_badges[0] = trim($p['proveedor_nombre']);
+            }
+        }
+
+        echo '<tr class="'.$row_class.'" data-pedido=\''.$p_json.'\' data-proveedor-ids="'.implode(',', array_keys($prov_badges)).'" data-proveedor-id="'.htmlspecialchars($p['proveedor_id'] ?? '').'">';
 
         // Columna: Cliente + indicador avisado
         $cliente_id_url = ''; // se obtiene si hubiera id del cliente; usamos referencia como búsqueda
@@ -292,9 +316,8 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
         if ($p['pack_tipo']) {
             echo '<div class="mt-1">'.formatearPackEstado($p['pack_tipo'], $p['pack_estado']).'</div>';
         }
-        $prov = trim($p['proveedor_nombre'] ?? '');
-        if ($prov !== '') {
-            echo '<div class="mt-1"><span class="badge bg-light text-secondary border" style="font-size:.65rem;"><i class="fas fa-building me-1 opacity-50"></i>'.htmlspecialchars($prov).'</span></div>';
+        foreach ($prov_badges as $prov_nombre) {
+            echo '<div class="mt-1 d-inline-block me-1"><span class="badge bg-light text-secondary border" style="font-size:.65rem;"><i class="fas fa-building me-1 opacity-50"></i>'.htmlspecialchars($prov_nombre).'</span></div>';
         }
         // Vía — badge pequeño
         $via = trim($p['via'] ?? '');
@@ -511,4 +534,21 @@ function calcularPackDesdeLineas($rx_lineas_json) {
         'pack_tipo' => $pack_tipo,
         'pack_estado' => $pack_estado
     ];
+}
+
+function obtenerNombresProveedores() {
+    static $proveedores_lookup = null;
+    if ($proveedores_lookup === null) {
+        $proveedores_lookup = [];
+        try {
+            $db = new Conexion();
+            $stmt = $db->pdo->query("SELECT id, nombre FROM proveedores");
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $proveedores_lookup[(int)$row['id']] = $row['nombre'];
+            }
+        } catch (Exception $e) {
+            // Falla silenciosa
+        }
+    }
+    return $proveedores_lookup;
 }
