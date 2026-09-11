@@ -60,13 +60,13 @@ jobs:
           test -n "$UPLOAD_TOKEN"
 
           echo "Uploading release.zip via HTTP..."
-          curl --fail --show-error --retry 3 --retry-delay 10 --max-time 600 \
+          curl -L --fail --show-error --retry 3 --retry-delay 10 --max-time 600 \
             -F "file=@deploy/dist/release.zip" \
             "$SITE_URL/upload_receiver.php?token=$UPLOAD_TOKEN&filename=release.zip"
 
           echo ""
           echo "Uploading unzip.php via HTTP..."
-          curl --fail --show-error --retry 3 --retry-delay 10 --max-time 120 \
+          curl -L --fail --show-error --retry 3 --retry-delay 10 --max-time 120 \
             -F "file=@deploy/dist/unzip.php" \
             "$SITE_URL/upload_receiver.php?token=$UPLOAD_TOKEN&filename=unzip.php"
 
@@ -75,7 +75,7 @@ jobs:
           SITE_URL: https://sienna-woodpecker-278479.hostingersite.com/test
         run: |
           echo "Triggering unzip..."
-          RESPONSE=$(curl --fail --silent --show-error --retry 3 --retry-delay 5 \
+          RESPONSE=$(curl -L --fail --silent --show-error --retry 3 --retry-delay 5 \
             "$SITE_URL/unzip.php?token=${{ env.UNZIP_TOKEN }}")
           echo "Server response: $RESPONSE"
           if [[ $(echo "$RESPONSE" | jq -r '.status') != "success" ]]; then
