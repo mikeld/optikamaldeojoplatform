@@ -737,7 +737,7 @@ $proveedor_mas_atrasos = $proveedor_mas_atrasos_stmt->fetch(PDO::FETCH_ASSOC);
                 <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Cerrar</button>
                 <?php
                 $waModalMsgs = [];
-                foreach (['por_pedir','pendiente','recibido'] as $t) {
+                foreach (['por_pedir','pendiente','recibido','atrasado'] as $t) {
                     $waModalMsgs[$t] = [
                         'es' => obtenerMensajeWhatsApp($t, 'es'),
                         'eu' => obtenerMensajeWhatsApp($t, 'eu'),
@@ -750,7 +750,9 @@ $proveedor_mas_atrasos = $proveedor_mas_atrasos_stmt->fetch(PDO::FETCH_ASSOC);
                      data-msg-pendiente-es="<?= htmlspecialchars($waModalMsgs['pendiente']['es']) ?>"
                      data-msg-pendiente-eu="<?= htmlspecialchars($waModalMsgs['pendiente']['eu']) ?>"
                      data-msg-recibido-es="<?= htmlspecialchars($waModalMsgs['recibido']['es']) ?>"
-                     data-msg-recibido-eu="<?= htmlspecialchars($waModalMsgs['recibido']['eu']) ?>">
+                     data-msg-recibido-eu="<?= htmlspecialchars($waModalMsgs['recibido']['eu']) ?>"
+                     data-msg-atrasado-es="<?= htmlspecialchars($waModalMsgs['atrasado']['es']) ?>"
+                     data-msg-atrasado-eu="<?= htmlspecialchars($waModalMsgs['atrasado']['eu']) ?>">
                 </div>
                 <a id="p-btn-editar" href="#" class="btn btn-primary rounded-pill px-4">
                     <i class="fas fa-edit me-1"></i> Editar Pedido
@@ -931,8 +933,10 @@ document.addEventListener('DOMContentLoaded', function() {
             const waBtns = document.getElementById('p-whatsapp-btns');
             if (waBtns) {
                 const recVal = parseInt(p.recibido ?? 0);
-                const sinFecha = !p.fecha_pedido;
-                const tipoKey = sinFecha ? 'porpedir' : (recVal === 1 || recVal === 2 ? 'recibido' : 'pendiente');
+                const sinPedido = !p.fecha_pedido;
+                const hoyStr = new Date().toISOString().slice(0, 10);
+                const atrasado = p.fecha_llegada && p.fecha_llegada <= hoyStr && recVal !== 1;
+                const tipoKey = recVal === 1 ? 'recibido' : (sinPedido ? 'porpedir' : (atrasado ? 'atrasado' : 'pendiente'));
                 const msgES = waBtns.dataset['msg' + tipoKey.charAt(0).toUpperCase() + tipoKey.slice(1) + 'Es'] || '';
                 const msgEU = waBtns.dataset['msg' + tipoKey.charAt(0).toUpperCase() + tipoKey.slice(1) + 'Eu'] || '';
                 const fillMsg = (t) => t.replace(/{cliente}/g, cliente).replace(/{producto}/g, producto);

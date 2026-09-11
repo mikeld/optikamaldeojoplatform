@@ -9,6 +9,7 @@ function obtenerMensajeWhatsApp($tipo, $idioma = 'es') {
     $stmt = $conexion->pdo->prepare("
         SELECT mensaje FROM mensajes_whatsapp
         WHERE tipo = :tipo AND idioma = :idioma
+        ORDER BY id DESC
         LIMIT 1
     ");
     $stmt->execute([
