@@ -9,6 +9,7 @@ function obtenerMensajeWhatsApp($tipo, $idioma = 'es') {
     $stmt = $conexion->pdo->prepare("
         SELECT mensaje FROM mensajes_whatsapp
         WHERE tipo = :tipo AND idioma = :idioma
+        ORDER BY id DESC
         LIMIT 1
     ");
     $stmt->execute([
@@ -83,16 +84,28 @@ function formatearRX($rx, $rx_lineas_json = null) {
                     $tipo = $l['tipo'] ?? null;
                     $cant = isset($l['cantidad']) ? (int)$l['cantidad'] : 0;
                     $rec = isset($l['cantidad_recibida']) ? (int)$l['cantidad_recibida'] : 0;
-                    if ($tipo && $tipo !== 'ninguno' && $cant > 0) {
-                        $tipoLabel = ($tipo === 'caja') ? 'caja' : (($tipo === 'blister') ? 'blister' : $tipo);
-                        if ($rec > 0 && $rec < $cant) {
-                            $txt .= " ({$rec}/{$cant} {$tipoLabel}s)";
+                    
+                    $qtyHtml = "";
+                    $styleOverride = "";
+                    
+                    if ($cant > 0) {
+                        $tipoLabel = ($tipo === 'caja') ? 'caj.' : (($tipo === 'blister') ? 'blist.' : ($tipo === 'ninguno' ? 'gaf.' : $tipo));
+                        
+                        if ($rec >= $cant) {
+                            // Completo: Fondo verde suave, texto tachado
+                            $styleOverride = 'background-color: #e2f0d9 !important; color: #385723 !important; border-color: #c5e0b4 !important; text-decoration: line-through; opacity: 0.7;';
+                            $qtyHtml = " <span class='small' style='text-decoration: none; display: inline-block;'>[{$rec}/{$cant} {$tipoLabel}] ✓</span>";
+                        } elseif ($rec > 0) {
+                            // Parcial: Fondo amarillo/naranja suave
+                            $styleOverride = 'background-color: #fff3cd !important; color: #664d03 !important; border-color: #ffecb5 !important; font-weight: bold;';
+                            $qtyHtml = " <span>[{$rec}/{$cant} {$tipoLabel}]</span>";
                         } else {
-                            $txt .= " ({$cant} {$tipoLabel}s)";
+                            // Pendiente: Fondo gris/blanco estándar
+                            $qtyHtml = " <span class='text-muted' style='font-weight: normal;'>[0/{$cant} {$tipoLabel}]</span>";
                         }
                     }
                     
-                    $html .= '<span class="badge bg-light ' . $class . ' border">' . htmlspecialchars($txt) . '</span>';
+                    $html .= '<span class="badge bg-light ' . $class . ' border" style="' . $styleOverride . '">' . htmlspecialchars($txt) . $qtyHtml . '</span>';
                 }
                 
                 $html .= '</div></div>';
@@ -269,7 +282,31 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
             if ($dias_fila >= 5) $row_class .= ' tr-urgente';
         }
 
-        echo '<tr class="'.$row_class.'" data-pedido=\''.$p_json.'\' data-proveedor-id="'.htmlspecialchars($p['proveedor_id'] ?? '').'">';
+        // Decodificar rx_lineas para buscar proveedores multimarca
+        $prov_badges = [];
+        $rx_lines_decoded = !empty($p['rx_lineas']) ? json_decode($p['rx_lineas'], true) : null;
+        $prov_nombres_map = obtenerNombresProveedores();
+        
+        if (is_array($rx_lines_decoded)) {
+            foreach ($rx_lines_decoded as $line) {
+                $p_id = !empty($line['proveedor_id']) ? (int)$line['proveedor_id'] : null;
+                if ($p_id && isset($prov_nombres_map[$p_id])) {
+                    $prov_badges[$p_id] = $prov_nombres_map[$p_id];
+                }
+            }
+        }
+        
+        // Si no se encontró ningún proveedor en las líneas, caer en el proveedor a nivel de pedido
+        if (empty($prov_badges)) {
+            $prov_id = !empty($p['proveedor_id']) ? (int)$p['proveedor_id'] : null;
+            if ($prov_id && isset($prov_nombres_map[$prov_id])) {
+                $prov_badges[$prov_id] = $prov_nombres_map[$prov_id];
+            } elseif (trim($p['proveedor_nombre'] ?? '') !== '') {
+                $prov_badges[0] = trim($p['proveedor_nombre']);
+            }
+        }
+
+        echo '<tr class="'.$row_class.'" data-pedido=\''.$p_json.'\' data-proveedor-ids="'.implode(',', array_keys($prov_badges)).'" data-proveedor-id="'.htmlspecialchars($p['proveedor_id'] ?? '').'">';
 
         // Columna: Cliente + indicador avisado
         $cliente_id_url = ''; // se obtiene si hubiera id del cliente; usamos referencia como búsqueda
@@ -292,9 +329,8 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
         if ($p['pack_tipo']) {
             echo '<div class="mt-1">'.formatearPackEstado($p['pack_tipo'], $p['pack_estado']).'</div>';
         }
-        $prov = trim($p['proveedor_nombre'] ?? '');
-        if ($prov !== '') {
-            echo '<div class="mt-1"><span class="badge bg-light text-secondary border" style="font-size:.65rem;"><i class="fas fa-building me-1 opacity-50"></i>'.htmlspecialchars($prov).'</span></div>';
+        foreach ($prov_badges as $prov_nombre) {
+            echo '<div class="mt-1 d-inline-block me-1"><span class="badge bg-light text-secondary border" style="font-size:.65rem;"><i class="fas fa-building me-1 opacity-50"></i>'.htmlspecialchars($prov_nombre).'</span></div>';
         }
         // Vía — badge pequeño
         $via = trim($p['via'] ?? '');
@@ -428,7 +464,8 @@ function mostrarTabla($pedidos, $tipo, $mensaje_vacio, $mostrar_botones, $orden_
 
         // WhatsApp
         $tel = urlencode($p['telefono'] ?? '');
-        $nombreCliente  = $p['referencia_cliente'] ?? 'Cliente';
+        $ref_parts = explode(' ', trim($p['referencia_cliente'] ?? ''));
+        $nombreCliente  = !empty($ref_parts[0]) ? $ref_parts[0] : 'Cliente';
         $nombreProducto = $p['lc_gafa_recambio']   ?? 'pedido';
         $msgES_custom = str_replace(['{cliente}', '{producto}'], [$nombreCliente, $nombreProducto], $msgES);
         $msgEU_custom = str_replace(['{cliente}', '{producto}'], [$nombreCliente, $nombreProducto], $msgEU);
@@ -511,4 +548,21 @@ function calcularPackDesdeLineas($rx_lineas_json) {
         'pack_tipo' => $pack_tipo,
         'pack_estado' => $pack_estado
     ];
+}
+
+function obtenerNombresProveedores() {
+    static $proveedores_lookup = null;
+    if ($proveedores_lookup === null) {
+        $proveedores_lookup = [];
+        try {
+            $db = new Conexion();
+            $stmt = $db->pdo->query("SELECT id, nombre FROM proveedores");
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $proveedores_lookup[(int)$row['id']] = $row['nombre'];
+            }
+        } catch (Exception $e) {
+            // Falla silenciosa
+        }
+    }
+    return $proveedores_lookup;
 }

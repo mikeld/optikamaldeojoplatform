@@ -378,6 +378,7 @@ include '../views/header.php';
 
     <script>
         const allProducts = <?= json_encode($productos) ?>;
+        const allProviders = <?= json_encode($proveedores) ?>;
         // --- Vía de Pedido ---
         const VIA_PLACEHOLDERS = {
             'Web':      '¿Qué portal? (ej: B+L, Marlow...)',
@@ -527,6 +528,17 @@ include '../views/header.php';
             }
             productSelectHtml += `</select>`;
 
+            // Generar el HTML para el selector de proveedor por línea
+            const defaultProveedor = document.getElementById('proveedor_id') ? document.getElementById('proveedor_id').value : '';
+            const currentProveedor = data && data.proveedor_id ? data.proveedor_id : defaultProveedor;
+            let proveedorSelectHtml = `<select class="form-select form-select-sm rx-proveedor" onchange="serializeRxLines();">`;
+            proveedorSelectHtml += `<option value="">Seleccione Proveedor</option>`;
+            allProviders.forEach(prov => {
+                const isSelected = (currentProveedor == prov.id) ? 'selected' : '';
+                proveedorSelectHtml += `<option value="${prov.id}" ${isSelected}>${prov.nombre}</option>`;
+            });
+            proveedorSelectHtml += `</select>`;
+
             div.innerHTML = `
                 <div class="rx-linea-numero">LINEA #${index}</div>
                 <div class="rx-linea-actions">
@@ -535,7 +547,7 @@ include '../views/header.php';
                 </div>
                 
                 <div class="row g-2 mb-2 mt-2">
-                    <div class="col-md-3">
+                    <div class="col-6 col-md-3">
                         <label class="form-label small mb-1">Tipo de Artículo</label>
                         <select class="form-select form-select-sm rx-tipo" onchange="toggleRxFields(this)">
                             <option value="ninguno" ${data && data.tipo === 'ninguno' ? 'selected' : ''}>Ninguno (Gafa)</option>
@@ -543,7 +555,7 @@ include '../views/header.php';
                             <option value="blister" ${data && data.tipo === 'blister' ? 'selected' : ''}>Blister</option>
                         </select>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-6 col-md-3">
                         <label class="form-label small mb-1">Ojo</label>
                         <select class="form-select form-select-sm rx-ojo" onchange="toggleRxFields(this)">
                             <option value="ninguno" ${data && data.ojo === 'ninguno' ? 'selected' : ''}>Ninguno</option>
@@ -552,15 +564,17 @@ include '../views/header.php';
                             <option value="OTRO" ${data && data.ojo === 'OTRO' ? 'selected' : ''}>Otro / Sin Especificar</option>
                         </select>
                     </div>
-                    <div class="col-md-2 rx-cantidad-wrap d-none">
+                    <div class="col-6 col-md-3 rx-cantidad-wrap">
                         <label class="form-label small mb-1">Cant. Pedida</label>
                         <input type="number" class="form-control form-control-sm rx-cantidad" min="1" value="${data ? (data.cantidad || 1) : 1}" oninput="serializeRxLines(); actualizarResumenPack();">
                     </div>
-                    <div class="col-md-2 rx-recibida-wrap d-none">
+                    <div class="col-6 col-md-3 rx-recibida-wrap">
                         <label class="form-label small mb-1">Cant. Recibida</label>
                         <input type="number" class="form-control form-control-sm rx-recibida" min="0" value="${data ? (data.cantidad_recibida || 0) : 0}" oninput="serializeRxLines(); actualizarResumenPack();">
                     </div>
-                    <div class="col-md rx-nota-column">
+                </div>
+                <div class="row g-2 mb-1">
+                    <div class="col-md-8 col-12">
                         <label class="form-label small mb-1">Notas / Tipo Lente</label>
                         <div class="d-flex rx-nota-container gap-1">
                             <div style="flex-grow: 1; min-width: 0;">
@@ -570,6 +584,10 @@ include '../views/header.php';
                                 <i class="fas fa-plus"></i>
                             </button>
                         </div>
+                    </div>
+                    <div class="col-md-4 col-12 rx-proveedor-wrap">
+                        <label class="form-label small mb-1">Proveedor de la Línea</label>
+                        ${proveedorSelectHtml}
                     </div>
                 </div>
 
@@ -649,14 +667,9 @@ include '../views/header.php';
                 rxInputsWrap.classList.add('d-none');
             }
 
-            // 2. Mostrar/ocultar cantidad pedida y recibida si es pack
-            if ((tipo === 'caja' || tipo === 'blister') && (ojo === 'OD' || ojo === 'OI' || ojo === 'OTRO')) {
-                qtyWrap.classList.remove('d-none');
-                recWrap.classList.remove('d-none');
-            } else {
-                qtyWrap.classList.add('d-none');
-                recWrap.classList.add('d-none');
-            }
+            // 2. Cantidad y cantidad recibida siempre visibles
+            qtyWrap.classList.remove('d-none');
+            recWrap.classList.remove('d-none');
 
             serializeRxLines();
             actualizarResumenPack();
@@ -683,6 +696,7 @@ include '../views/header.php';
                 add:      card.querySelector('.rx-add').value,
                 rad:      card.querySelector('.rx-rad').value,
                 dia:      card.querySelector('.rx-dia').value,
+                proveedor_id: card.querySelector('.rx-proveedor') ? card.querySelector('.rx-proveedor').value : ''
             };
             addRxLine(data);
             serializeRxLines();
@@ -706,6 +720,8 @@ include '../views/header.php';
                 const cantidad_recibida = parseInt(card.querySelector('.rx-recibida').value) || 0;
                 const nota = $(card.querySelector('.rx-input-nota')).val() ? $(card.querySelector('.rx-input-nota')).val().trim() : '';
                 
+                const lineProveedor = card.querySelector('.rx-proveedor') ? card.querySelector('.rx-proveedor').value : '';
+                
                 const esf = card.querySelector('.rx-esf').value.trim();
                 const cil = card.querySelector('.rx-cil').value.trim();
                 const eje = card.querySelector('.rx-eje').value.trim();
@@ -716,15 +732,16 @@ include '../views/header.php';
                 const row = {
                     tipo: tipo,
                     ojo: ojo,
-                    cantidad: (tipo !== 'ninguno' && ojo !== 'ninguno') ? cantidad : 0,
-                    cantidad_recibida: (tipo !== 'ninguno' && ojo !== 'ninguno') ? cantidad_recibida : 0,
+                    cantidad: cantidad,
+                    cantidad_recibida: cantidad_recibida,
                     esf: esf,
                     cil: cil,
                     eje: eje,
                     add: add,
                     rad: rad,
                     dia: dia,
-                    nota: nota
+                    nota: nota,
+                    proveedor_id: lineProveedor ? parseInt(lineProveedor) : null
                 };
 
                 if (ojo !== 'ninguno' || tipo !== 'ninguno' || nota) {
@@ -1073,6 +1090,17 @@ include '../views/header.php';
         }
 
         document.addEventListener('DOMContentLoaded', function() {
+            // Propagar el proveedor general a las líneas vacías
+            $(document).on('change', '#proveedor_id', function() {
+                const generalProvId = this.value;
+                document.querySelectorAll('.rx-proveedor').forEach(select => {
+                    if (!select.value) {
+                        select.value = generalProvId;
+                    }
+                });
+                serializeRxLines();
+            });
+
             const initialRx = document.getElementById('rx_lineas_json').value;
             const legacyRx = document.getElementById('rx').value; 
             const generalRecibido = parseInt(document.getElementById('recibido').value) || 0;

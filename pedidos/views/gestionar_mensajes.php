@@ -13,6 +13,29 @@ $acciones_navbar = [
 require_once 'header.php';
 
 $conexion = new Conexion();
+
+// Migración automática para añadir UNIQUE index si no existe
+try {
+    $stmt_check = $conexion->pdo->query("SHOW KEYS FROM mensajes_whatsapp WHERE Key_name = 'uq_tipo_idioma'");
+    if (!$stmt_check->fetch()) {
+        // Eliminar duplicados
+        $conexion->pdo->exec("
+            DELETE m1 FROM mensajes_whatsapp m1
+            INNER JOIN mensajes_whatsapp m2 
+            ON m1.tipo = m2.tipo 
+            AND m1.idioma = m2.idioma 
+            AND m1.id < m2.id
+        ");
+        // Añadir UNIQUE
+        $conexion->pdo->exec("
+            ALTER TABLE mensajes_whatsapp 
+            ADD UNIQUE KEY uq_tipo_idioma (tipo, idioma)
+        ");
+    }
+} catch (Exception $e) {
+    // Ignorar en caso de error
+}
+
 $tipos = [
   'por_pedir' => 'Pendientes de pedir',
   'atrasado' => 'Atrasados',
@@ -26,27 +49,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   foreach ($tipos as $tipo => $nombre) {
     foreach ($idiomas as $idioma => $label) {
       $campo = "{$tipo}_{$idioma}";
-      $mensaje = $_POST[$campo] ?? '';
+      $mensaje = trim($_POST[$campo] ?? '');
+      
+      // 1. Intentar actualizar todas las filas existentes para este tipo e idioma
       $stmt = $conexion->pdo->prepare("
-        INSERT INTO mensajes_whatsapp (tipo, idioma, mensaje)
-        VALUES (:tipo, :idioma, :mensaje)
-        ON DUPLICATE KEY UPDATE mensaje = VALUES(mensaje)
+        UPDATE mensajes_whatsapp 
+        SET mensaje = :mensaje 
+        WHERE tipo = :tipo AND idioma = :idioma
       ");
       $stmt->execute([
         ':tipo' => $tipo,
         ':idioma' => $idioma,
         ':mensaje' => $mensaje
       ]);
+      
+      // 2. Si no había ninguna fila para este tipo/idioma, insertarla
+      if ($stmt->rowCount() === 0) {
+        $stmt_check = $conexion->pdo->prepare("SELECT COUNT(*) FROM mensajes_whatsapp WHERE tipo = :tipo AND idioma = :idioma");
+        $stmt_check->execute([':tipo' => $tipo, ':idioma' => $idioma]);
+        if ((int)$stmt_check->fetchColumn() === 0) {
+          $stmt_ins = $conexion->pdo->prepare("
+            INSERT INTO mensajes_whatsapp (tipo, idioma, mensaje)
+            VALUES (:tipo, :idioma, :mensaje)
+          ");
+          $stmt_ins->execute([
+            ':tipo' => $tipo,
+            ':idioma' => $idioma,
+            ':mensaje' => $mensaje
+          ]);
+        }
+      }
     }
   }
   $guardado = true;
 }
 
-// Leer valores actuales
+// Leer valores actuales (el más reciente de cada tipo e idioma)
 $mensajes = [];
-$stmt = $conexion->pdo->query("SELECT * FROM mensajes_whatsapp");
+$stmt = $conexion->pdo->query("SELECT * FROM mensajes_whatsapp ORDER BY id DESC");
 foreach ($stmt as $fila) {
-  $mensajes[$fila['tipo']][$fila['idioma']] = $fila['mensaje'];
+  if (!isset($mensajes[$fila['tipo']][$fila['idioma']])) {
+    $mensajes[$fila['tipo']][$fila['idioma']] = $fila['mensaje'];
+  }
 }
 ?>
 <div class="container py-5">

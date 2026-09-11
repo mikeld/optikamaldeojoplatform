@@ -22,6 +22,19 @@ $observaciones       = trim($_POST['observaciones'] ?? '');
 $notas_recepcion     = trim($_POST['notas_recepcion'] ?? '');
 // Convertir fechas o enteros desde POST con seguridad
 $proveedor_id        = !empty($_POST['proveedor_id']) ? (int)$_POST['proveedor_id'] : null;
+
+// Fallback: Si no hay proveedor general, usar el de la primera línea que tenga uno asignado
+if ($proveedor_id === null && $rx_lineas) {
+    $lineas_decoded = json_decode($rx_lineas, true);
+    if (is_array($lineas_decoded)) {
+        foreach ($lineas_decoded as $line) {
+            if (!empty($line['proveedor_id'])) {
+                $proveedor_id = (int)$line['proveedor_id'];
+                break;
+            }
+        }
+    }
+}
 $fecha_cliente = !empty($_POST['fecha_cliente']) ? $_POST['fecha_cliente'] : null;
 $fecha_pedido  = !empty($_POST['fecha_pedido'])  ? $_POST['fecha_pedido']  : null;
 $fecha_llegada = !empty($_POST['fecha_llegada']) ? $_POST['fecha_llegada'] : null;

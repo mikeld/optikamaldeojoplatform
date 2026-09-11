@@ -428,6 +428,7 @@ try {
 
     <script>
         const allProducts = <?= json_encode($productos) ?>;
+        const allProviders = <?= json_encode($proveedores) ?>;
         // Función para validar el formulario antes de enviar
         function validarFormulario() {
             const referenciaCliente = document.getElementById('referencia_cliente').value;
@@ -569,6 +570,17 @@ try {
             }
             productSelectHtml += `</select>`;
 
+            // Generar el HTML para el selector de proveedor por línea
+            const defaultProveedor = document.getElementById('proveedor_id') ? document.getElementById('proveedor_id').value : '';
+            const currentProveedor = data && data.proveedor_id ? data.proveedor_id : defaultProveedor;
+            let proveedorSelectHtml = `<select class="form-select form-select-sm rx-proveedor" onchange="serializeRxLines();">`;
+            proveedorSelectHtml += `<option value="">Seleccione Proveedor</option>`;
+            allProviders.forEach(prov => {
+                const isSelected = (currentProveedor == prov.id) ? 'selected' : '';
+                proveedorSelectHtml += `<option value="${prov.id}" ${isSelected}>${prov.nombre}</option>`;
+            });
+            proveedorSelectHtml += `</select>`;
+
             div.innerHTML = `
                 <div class="rx-linea-numero">LINEA #${index}</div>
                 <div class="rx-linea-actions">
@@ -594,13 +606,13 @@ try {
                             <option value="OTRO" ${data && data.ojo === 'OTRO' ? 'selected' : ''}>Otro / Sin Especificar</option>
                         </select>
                     </div>
-                    <div class="col-6 col-md-2 rx-cantidad-wrap d-none">
+                    <div class="col-6 col-md-2 rx-cantidad-wrap">
                         <label class="form-label small mb-1">Cantidad</label>
                         <input type="number" class="form-control form-control-sm rx-cantidad" min="1" value="${data ? (data.cantidad || 1) : 1}" oninput="serializeRxLines(); actualizarResumenPack();">
                     </div>
                 </div>
                 <div class="row g-2 mb-1">
-                    <div class="col-12">
+                    <div class="col-md-8 col-12">
                         <label class="form-label small mb-1">Notas / Tipo Lente</label>
                         <div class="d-flex rx-nota-container gap-1">
                             <div style="flex-grow: 1; min-width: 0;">
@@ -610,6 +622,10 @@ try {
                                 <i class="fas fa-plus"></i>
                             </button>
                         </div>
+                    </div>
+                    <div class="col-md-4 col-12 rx-proveedor-wrap">
+                        <label class="form-label small mb-1">Proveedor de la Línea</label>
+                        ${proveedorSelectHtml}
                     </div>
                 </div>
 
@@ -688,12 +704,8 @@ try {
                 rxInputsWrap.classList.add('d-none');
             }
 
-            // 2. Mostrar/ocultar cantidad si es pack y ojo
-            if ((tipo === 'caja' || tipo === 'blister') && (ojo === 'OD' || ojo === 'OI' || ojo === 'OTRO')) {
-                qtyWrap.classList.remove('d-none');
-            } else {
-                qtyWrap.classList.add('d-none');
-            }
+            // 2. Cantidad siempre visible
+            qtyWrap.classList.remove('d-none');
 
             serializeRxLines();
             actualizarResumenPack();
@@ -719,6 +731,7 @@ try {
                 add:      card.querySelector('.rx-add').value,
                 rad:      card.querySelector('.rx-rad').value,
                 dia:      card.querySelector('.rx-dia').value,
+                proveedor_id: card.querySelector('.rx-proveedor') ? card.querySelector('.rx-proveedor').value : ''
             };
             addRxLine(data);
             serializeRxLines();
@@ -741,6 +754,8 @@ try {
                 const cantidad = parseInt(card.querySelector('.rx-cantidad').value) || 1;
                 const note = card.querySelector('.rx-input-nota').value.trim();
                 
+                const lineProveedor = card.querySelector('.rx-proveedor') ? card.querySelector('.rx-proveedor').value : '';
+                
                 const esf = card.querySelector('.rx-esf').value.trim();
                 const cil = card.querySelector('.rx-cil').value.trim();
                 const eje = card.querySelector('.rx-eje').value.trim();
@@ -751,7 +766,7 @@ try {
                 const row = {
                     tipo: tipo,
                     ojo: ojo,
-                    cantidad: (tipo !== 'ninguno' && ojo !== 'ninguno') ? cantidad : 0,
+                    cantidad: cantidad,
                     cantidad_recibida: 0,
                     esf: esf,
                     cil: cil,
@@ -759,7 +774,8 @@ try {
                     add: add,
                     rad: rad,
                     dia: dia,
-                    nota: note
+                    nota: note,
+                    proveedor_id: lineProveedor ? parseInt(lineProveedor) : null
                 };
 
                 if (ojo !== 'ninguno' || tipo !== 'ninguno' || note) {
@@ -1059,6 +1075,17 @@ try {
                         searchField.focus();
                     }, 50);
                 }
+            });
+
+            // Propagar el proveedor general a las líneas vacías
+            $(document).on('change', '#proveedor_id', function() {
+                const generalProvId = this.value;
+                document.querySelectorAll('.rx-proveedor').forEach(select => {
+                    if (!select.value) {
+                        select.value = generalProvId;
+                    }
+                });
+                serializeRxLines();
             });
 
         function parseLegacyRx(legacyRx, generalRecibido = 0) {
